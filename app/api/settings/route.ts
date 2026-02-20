@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { settings } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+
+const SETTINGS_KEY = "notifications";
+
+export async function GET() {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const row = await db.query.settings.findFirst({
+      where: eq(settings.key, SETTINGS_KEY),
+    });
+
+    if (!row || !row.value) {
+      return NextResponse.json({
+        emailEnabled: false,
+        emailSmtpHost: "",
+        emailSmtpPort: 587,
+        emailSmtpUser: "",
+        emailSmtpPassword: "",
+        emailRecipients: "",
+        teamsWebhookEnabled: false,
+        teamsWebhookUrl: "",
+        alertOnFailure: true,
+        alertOnConsecutiveErrors: 3,
+      });
+    }
+
+    return NextResponse.json(row.value);
+  } catch (error) {
+    console.error("[API] GET /settings:", error);
+    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const body = await req.json();
+
+    await db
+      .insert(settings)
+      .values({ key: SETTINGS_KEY, value: body })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value: body },
+      });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[API] POST /settings:", error);
+    return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
+  }
+}

@@ -1,0 +1,107 @@
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+
+export const connections = sqliteTable("connections", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  protocol: text("protocol", { enum: ["sftp", "smb"] }).notNull(),
+  host: text("host").notNull(),
+  port: integer("port").notNull(),
+  credentials: text("credentials", { mode: "json" })
+    .notNull()
+    .$type<Record<string, string>>(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const jobs = sqliteTable("jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  sourceConnectionId: integer("source_connection_id")
+    .notNull()
+    .references(() => connections.id),
+  sourcePath: text("source_path").notNull(),
+  destinationConnectionId: integer("destination_connection_id")
+    .notNull()
+    .references(() => connections.id),
+  destinationPath: text("destination_path").notNull(),
+  fileFilter: text("file_filter").notNull().default("*"),
+  schedule: text("schedule").notNull(),
+  postTransferAction: text("post_transfer_action", {
+    enum: ["retain", "delete", "move"],
+  })
+    .notNull()
+    .default("retain"),
+  movePath: text("move_path"),
+  overwriteExisting: integer("overwrite_existing", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  skipHiddenFiles: integer("skip_hidden_files", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  extractArchives: integer("extract_archives", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  status: text("status", {
+    enum: ["active", "inactive", "running", "error"],
+  })
+    .notNull()
+    .default("inactive"),
+  lastRunAt: text("last_run_at"),
+  nextRunAt: text("next_run_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const jobRuns = sqliteTable("job_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobs.id),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  status: text("status", { enum: ["success", "failure", "running"] }).notNull(),
+  errorMessage: text("error_message"),
+  filesTransferred: integer("files_transferred").notNull().default(0),
+  bytesTransferred: integer("bytes_transferred").notNull().default(0),
+});
+
+export const transferLogs = sqliteTable("transfer_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobs.id),
+  jobRunId: integer("job_run_id")
+    .notNull()
+    .references(() => jobRuns.id),
+  fileName: text("file_name").notNull(),
+  sourcePath: text("source_path").notNull(),
+  destinationPath: text("destination_path").notNull(),
+  fileSize: integer("file_size").notNull().default(0),
+  transferredAt: text("transferred_at").notNull(),
+  status: text("status", { enum: ["success", "failure"] }).notNull(),
+  errorMessage: text("error_message"),
+});
+
+export const settings = sqliteTable("settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull().unique(),
+  value: text("value", { mode: "json" }),
+});
+
+export type Connection = typeof connections.$inferSelect;
+export type NewConnection = typeof connections.$inferInsert;
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;
+export type JobRun = typeof jobRuns.$inferSelect;
+export type NewJobRun = typeof jobRuns.$inferInsert;
+export type TransferLog = typeof transferLogs.$inferSelect;
+export type NewTransferLog = typeof transferLogs.$inferInsert;

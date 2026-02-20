@@ -1,0 +1,204 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ChevronRight, Folder, FolderOpen, File, Home, AlertCircle, ArrowLeft,
+} from "lucide-react";
+import type { FileInfo } from "@/lib/storage/interface";
+
+interface FolderBrowserProps {
+  open: boolean;
+  onClose: () => void;
+  /** ID of the connection to browse */
+  connectionId: number;
+  /** Display name shown in the dialog title */
+  connectionName: string;
+  /** Starting path when the dialog opens */
+  initialPath?: string;
+  /** Called with the chosen path when the user clicks "Select" */
+  onSelect: (path: string) => void;
+}
+
+function Breadcrumb({
+  path,
+  onNavigate,
+}: {
+  path: string;
+  onNavigate: (p: string) => void;
+}) {
+  const parts = path.split("/").filter(Boolean);
+
+  return (
+    <div className="flex items-center gap-1 text-sm flex-wrap min-h-[24px]">
+      <button
+        onClick={() => onNavigate("/")}
+        className="text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Home className="h-3.5 w-3.5" />
+      </button>
+      {parts.map((part, i) => {
+        const href = "/" + parts.slice(0, i + 1).join("/");
+        return (
+          <span key={href} className="flex items-center gap-1">
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+            <button
+              onClick={() => onNavigate(href)}
+              className={
+                i === parts.length - 1
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground hover:text-foreground transition-colors"
+              }
+            >
+              {part}
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+export function FolderBrowser({
+  open,
+  onClose,
+  connectionId,
+  connectionName,
+  initialPath = "/",
+  onSelect,
+}: FolderBrowserProps) {
+  const [currentPath, setCurrentPath] = useState(initialPath);
+
+  // Reset path when dialog opens
+  useEffect(() => {
+    if (open) setCurrentPath(initialPath);
+  }, [open, initialPath]);
+
+  const { data, isLoading, error } = useQuery<{
+    path: string;
+    entries: FileInfo[];
+  }>({
+    queryKey: ["browse", connectionId, currentPath],
+    queryFn: () =>
+      axios
+        .get(
+          `/api/connections/${connectionId}/browse?path=${encodeURIComponent(currentPath)}`
+        )
+        .then((r) => r.data),
+    enabled: open && !!connectionId,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const navigate = (entry: FileInfo) => {
+    if (!entry.isDirectory) return;
+    const next =
+      currentPath.endsWith("/")
+        ? `${currentPath}${entry.name}`
+        : `${currentPath}/${entry.name}`;
+    setCurrentPath(next);
+  };
+
+  const goUp = () => {
+    const parts = currentPath.split("/").filter(Boolean);
+    parts.pop();
+    setCurrentPath(parts.length === 0 ? "/" : "/" + parts.join("/"));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Browse — {connectionName}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Breadcrumb + Up button */}
+        <div className="flex items-center gap-2 border rounded-md px-3 py-2 bg-muted/40">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={goUp}
+            disabled={currentPath === "/"}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </Button>
+          <Breadcrumb path={currentPath} onNavigate={setCurrentPath} />
+        </div>
+
+        {/* Directory listing */}
+        <ScrollArea className="h-72 border rounded-md">
+          {isLoading ? (
+            <div className="p-3 space-y-1.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive p-6 text-center">
+              <AlertCircle className="h-6 w-6" />
+              <p className="text-sm font-medium">Failed to load directory</p>
+              <p className="text-xs text-muted-foreground">
+                {(error as { response?: { data?: { error?: string } } }).response?.data?.error ??
+                  "Check your connection credentials and that the path exists"}
+              </p>
+            </div>
+          ) : !data?.entries?.length ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground p-6">
+              <Folder className="h-6 w-6" />
+              <p className="text-sm">This folder is empty</p>
+            </div>
+          ) : (
+            <div className="p-1">
+              {data.entries.map((entry) => (
+                <button
+                  key={entry.name}
+                  onClick={() => navigate(entry)}
+                  disabled={!entry.isDirectory}
+                  className={[
+                    "w-full flex items-center gap-2.5 px-3 py-2 rounded-sm text-sm text-left transition-colors",
+                    entry.isDirectory
+                      ? "hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                      : "text-muted-foreground cursor-default opacity-60",
+                  ].join(" ")}
+                >
+                  {entry.isDirectory ? (
+                    <Folder className="h-4 w-4 shrink-0 text-primary/70" />
+                  ) : (
+                    <File className="h-4 w-4 shrink-0" />
+                  )}
+                  <span className="truncate">{entry.name}</span>
+                  {entry.isDirectory && (
+                    <ChevronRight className="h-3.5 w-3.5 ml-auto shrink-0 text-muted-foreground/50" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+
+        <DialogFooter className="items-center gap-2">
+          <div className="flex-1 text-xs text-muted-foreground truncate font-mono">
+            {currentPath}
+          </div>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => { onSelect(currentPath); onClose(); }}>
+            Select This Folder
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
