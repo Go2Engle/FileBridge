@@ -359,7 +359,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                 <Separator />
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Transfer Rules</p>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 items-start">
                   <FormField
                     control={form.control}
                     name="fileFilter"
