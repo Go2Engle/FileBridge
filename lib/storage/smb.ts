@@ -221,26 +221,58 @@ export class SmbProvider implements StorageProvider {
   async downloadFile(remotePath: string): Promise<Buffer> {
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] downloadFile "${smbPath}"`);
-    try {
-      const data = await this.readFileAsync(smbPath);
-      // Record when the read completed so waitForHandleRelease() knows how long
-      // to wait before any subsequent delete/move on this connection.
-      this.lastDownloadAt = Date.now();
-      return data;
-    } catch (err) {
-      console.error(`[SMB] downloadFile FAILED for "${smbPath}":`, err);
-      throw err;
+    // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
+    // while the connection was idle; reconnect creates a fresh session.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const data = await this.readFileAsync(smbPath);
+        // Record when the read completed so sharingViolationWaitMs() knows how
+        // long to wait before any subsequent delete/move on this connection.
+        this.lastDownloadAt = Date.now();
+        return data;
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        const isStaleSession =
+          code === "STATUS_FILE_CLOSED" ||
+          code === "ERR_STREAM_WRITE_AFTER_END" ||
+          (err instanceof Error && err.message?.includes("write after end"));
+        if (isStaleSession && attempt < 3) {
+          console.log(`[SMB] downloadFile "${smbPath}": session expired (${code}), reconnecting (attempt ${attempt}/2)...`);
+          await this.reconnect();
+          continue;
+        }
+        console.error(`[SMB] downloadFile FAILED for "${smbPath}":`, err);
+        throw err;
+      }
     }
+    // Unreachable, but satisfies TypeScript
+    throw new Error("[SMB] downloadFile: exceeded retry limit");
   }
 
   async uploadFile(content: Buffer, remotePath: string): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] uploadFile "${smbPath}" (${content.length}B)`);
-    try {
-      await this.writeFileAsync(smbPath, content);
-    } catch (err) {
-      console.error(`[SMB] uploadFile FAILED for "${smbPath}":`, err);
-      throw err;
+    // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
+    // while the SMB connection was idle (e.g. during a long SFTP extraction loop);
+    // reconnect creates a fresh session and the upload succeeds immediately.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this.writeFileAsync(smbPath, content);
+        return;
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        const isStaleSession =
+          code === "STATUS_FILE_CLOSED" ||
+          code === "ERR_STREAM_WRITE_AFTER_END" ||
+          (err instanceof Error && err.message?.includes("write after end"));
+        if (isStaleSession && attempt < 3) {
+          console.log(`[SMB] uploadFile "${smbPath}": session expired (${code}), reconnecting (attempt ${attempt}/2)...`);
+          await this.reconnect();
+          continue;
+        }
+        console.error(`[SMB] uploadFile FAILED for "${smbPath}":`, err);
+        throw err;
+      }
     }
   }
 
