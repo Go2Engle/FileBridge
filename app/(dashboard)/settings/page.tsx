@@ -1,4 +1,6 @@
 import { NotificationSettings } from "@/components/settings/notification-settings";
+import { PurgeLogsSettings } from "@/components/settings/purge-logs-settings";
+import { Separator } from "@/components/ui/separator";
 
 export const metadata = { title: "Settings — FileBridge" };
 
@@ -8,10 +10,12 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground text-sm">
-          Configure notifications and alerting rules
+          Configure notifications, alerting rules, and data management
         </p>
       </div>
       <NotificationSettings />
+      <Separator />
+      <PurgeLogsSettings />
     </div>
   );
 }
