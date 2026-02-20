@@ -1,3 +1,8 @@
+
+<div align="center">
+  <img src="images/FileBridgeLogo.png" alt="FileBridge Logo" width="600" />
+</div>
+
 # FileBridge
 
 A self-hosted web application for automated file transfer scheduling and monitoring. FileBridge connects your SFTP and SMB/CIFS storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging — all packaged as a single lightweight container.
