@@ -33,8 +33,10 @@ export class SmbProvider implements StorageProvider {
    * When it fires it properly sends CLOSE for every open FID, then TREE_DISCONNECT,
    * then SESSION_LOGOFF, then drops the TCP socket — releasing all server-side
    * handles. Must be kept in sync with the autoCloseTimeout value in connect().
+   * Kept short so the handles are released quickly after a readFile, avoiding
+   * long waits before destructive operations (delete / move).
    */
-  private static readonly AUTO_CLOSE_MS = 2000;
+  private static readonly AUTO_CLOSE_MS = 100;
 
   constructor(host: string, _port: number, credentials: SmbCredentials) {
     this.host = host;
@@ -106,27 +108,27 @@ export class SmbProvider implements StorageProvider {
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   /**
-   * Wait until the library's auto-close mechanism has had time to fire since
-   * the last readFile call.
-   *
-   * With autoCloseTimeout set, v9u-smb2 will, after AUTO_CLOSE_MS of idleness:
-   *   1. Send SMB2 CLOSE for every open FID
-   *   2. Send TREE_DISCONNECT + SESSION_LOGOFF
-   *   3. Close the TCP socket
-   *
-   * This is the only reliable way to release server-side file handles without
-   * closing the connection manually (which doesn't consistently send CLOSE PDUs).
-   * We add a small margin so the server has time to process the LOGOFF.
+   * On STATUS_SHARING_VIOLATION, compute how long to wait before retrying so
+   * that the auto-close timeout has had time to fire from the last readFile.
+   * Auto-close sends proper SMB2 CLOSE PDUs for every open FID, releasing
+   * server-side handles. The library then auto-reconnects on the next call.
    */
-  private async waitForHandleRelease(): Promise<void> {
-    if (this.lastDownloadAt === 0) return;
-    const elapsed = Date.now() - this.lastDownloadAt;
-    const target = SmbProvider.AUTO_CLOSE_MS + 500; // 500ms margin after auto-close
-    const remaining = target - elapsed;
-    if (remaining > 0) {
-      console.log(`[SMB] Waiting ${remaining}ms for server to release file handles (auto-close)...`);
-      await new Promise((r) => setTimeout(r, remaining));
-    }
+  private sharingViolationWaitMs(): number {
+    const elapsed = this.lastDownloadAt > 0 ? Date.now() - this.lastDownloadAt : 0;
+    // Add 200ms margin for server-side processing after the CLOSE PDUs are sent.
+    return Math.max(200, SmbProvider.AUTO_CLOSE_MS + 200 - elapsed);
+  }
+
+  /**
+   * Tear down and re-establish the SMB client.
+   * Used when STATUS_FILE_CLOSED is returned, indicating the library's internal
+   * session state is stale (auto-close fired during a long operation like extracting
+   * an archive + uploading 100+ files). A fresh client resolves this immediately.
+   */
+  private async reconnect(): Promise<void> {
+    console.log(`[SMB] Reconnecting to ${this.host} to reset stale session state...`);
+    await this.disconnect();
+    await this.connect();
   }
 
   // ── StorageProvider implementation ────────────────────────────────────────
@@ -243,20 +245,34 @@ export class SmbProvider implements StorageProvider {
   }
 
   async deleteFile(remotePath: string): Promise<void> {
-    // Wait for the library's auto-close to have fired so all FIDs from any
-    // recent readFile are cleanly closed on the server before we try to unlink.
-    await this.waitForHandleRelease();
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] deleteFile "${smbPath}"`);
-    // Retry on STATUS_PENDING (transient server state, distinct from handle issues).
+    // Try immediately — no proactive wait. Handle errors reactively:
+    //   STATUS_FILE_CLOSED:      auto-close fired during a long inter-operation gap
+    //                            (e.g. extracting a large ZIP + uploading many files);
+    //                            reconnect to get a fresh session, then retry.
+    //   STATUS_SHARING_VIOLATION: our FID is still open on the server; wait for
+    //                            auto-close to send proper CLOSE PDUs, then retry.
+    //   STATUS_PENDING:          transient server state; short backoff, then retry.
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         await this.unlinkAsync(smbPath);
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
+        if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
+          console.log(`[SMB] deleteFile "${smbPath}": STATUS_FILE_CLOSED (session expired), reconnecting (attempt ${attempt}/4)...`);
+          await this.reconnect();
+          continue;
+        }
+        if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
+          const waitMs = this.sharingViolationWaitMs();
+          console.log(`[SMB] deleteFile "${smbPath}": STATUS_SHARING_VIOLATION, waiting ${waitMs}ms for auto-close (attempt ${attempt}/4)...`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
         if (code === "STATUS_PENDING" && attempt < 5) {
-          const delay = attempt * 2000;
+          const delay = attempt * 1000;
           console.log(`[SMB] deleteFile "${smbPath}": STATUS_PENDING, retrying in ${delay / 1000}s (attempt ${attempt}/4)...`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
@@ -267,21 +283,33 @@ export class SmbProvider implements StorageProvider {
   }
 
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
-    // Wait for the library's auto-close to have fired so all FIDs from any
-    // recent readFile are cleanly closed on the server before we try to rename.
-    await this.waitForHandleRelease();
     const smbSrc = this.toSmbPath(sourcePath);
     const smbDst = this.toSmbPath(destinationPath);
     console.log(`[SMB] moveFile "${smbSrc}" → "${smbDst}"`);
-    // Retry on STATUS_PENDING (transient server state, distinct from handle issues).
+    // Try immediately — no proactive wait. Handle errors reactively:
+    //   STATUS_FILE_CLOSED:      auto-close fired during a long inter-operation gap;
+    //                            reconnect to get a fresh session, then retry.
+    //   STATUS_SHARING_VIOLATION: FID still open; wait for auto-close, then retry.
+    //   STATUS_PENDING:          transient server state; short backoff, then retry.
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         await this.renameAsync(smbSrc, smbDst);
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
+        if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
+          console.log(`[SMB] moveFile "${smbSrc}": STATUS_FILE_CLOSED (session expired), reconnecting (attempt ${attempt}/4)...`);
+          await this.reconnect();
+          continue;
+        }
+        if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
+          const waitMs = this.sharingViolationWaitMs();
+          console.log(`[SMB] moveFile "${smbSrc}": STATUS_SHARING_VIOLATION, waiting ${waitMs}ms for auto-close (attempt ${attempt}/4)...`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
         if (code === "STATUS_PENDING" && attempt < 5) {
-          const delay = attempt * 2000;
+          const delay = attempt * 1000;
           console.log(`[SMB] moveFile "${smbSrc}": STATUS_PENDING, retrying in ${delay / 1000}s (attempt ${attempt}/4)...`);
           await new Promise((r) => setTimeout(r, delay));
           continue;
