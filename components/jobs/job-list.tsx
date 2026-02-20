@@ -14,7 +14,6 @@ import { AlertCircle, Edit2, Play, Plus, Trash2, ToggleLeft, ToggleRight } from 
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import Link from "next/link";
 import type { Job, JobRun } from "@/lib/db/schema";
 
 const statusVariant: Record<
@@ -48,7 +47,12 @@ function JobErrorInfo({ jobId }: { jobId: number }) {
   );
 }
 
-export function JobList() {
+interface JobListProps {
+  onNew: () => void;
+  onEdit: (job: Job) => void;
+}
+
+export function JobList({ onNew, onEdit }: JobListProps) {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery<Job[]>({
@@ -90,11 +94,9 @@ export function JobList() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button asChild>
-          <Link href="/jobs/new">
-            <Plus className="h-4 w-4 mr-2" />
-            New Job
-          </Link>
+        <Button onClick={onNew}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Job
         </Button>
       </div>
 
@@ -176,10 +178,8 @@ export function JobList() {
                       </TooltipTrigger>
                       <TooltipContent>Run now</TooltipContent>
                     </Tooltip>
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link href={`/jobs/${job.id}/edit`}>
-                        <Edit2 className="h-4 w-4" />
-                      </Link>
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(job)}>
+                      <Edit2 className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
