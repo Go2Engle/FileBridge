@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import axios from "axios";
 import { formatDistanceToNow } from "date-fns";
+import { parseDBDate } from "@/lib/utils";
 
 interface JobStatus {
   id: number;
@@ -62,7 +63,7 @@ export function JobStatusList() {
                   <p className="text-sm font-medium truncate">{job.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {job.lastRunAt
-                      ? `Last run ${formatDistanceToNow(new Date(job.lastRunAt), { addSuffix: true })}`
+                      ? `Last run ${formatDistanceToNow(parseDBDate(job.lastRunAt), { addSuffix: true })}`
                       : "Never run"}
                   </p>
                 </div>

@@ -27,8 +27,8 @@ sqlite.exec(`
     host TEXT NOT NULL,
     port INTEGER NOT NULL,
     credentials TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
   CREATE TABLE IF NOT EXISTS jobs (
@@ -48,8 +48,8 @@ sqlite.exec(`
     status TEXT NOT NULL DEFAULT 'inactive' CHECK(status IN ('active', 'inactive', 'running', 'error')),
     last_run_at TEXT,
     next_run_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
   CREATE TABLE IF NOT EXISTS job_runs (
@@ -90,6 +90,8 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN overwrite_existing INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE jobs ADD COLUMN skip_hidden_files INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE jobs ADD COLUMN extract_archives INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE job_runs ADD COLUMN total_files INTEGER`,
+  `ALTER TABLE job_runs ADD COLUMN current_file TEXT`,
 ];
 
 for (const sql of migrations) {

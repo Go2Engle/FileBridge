@@ -15,6 +15,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import type { Job, JobRun } from "@/lib/db/schema";
+import { parseDBDate } from "@/lib/utils";
 
 const statusVariant: Record<
   Job["status"],
@@ -50,9 +51,10 @@ function JobErrorInfo({ jobId }: { jobId: number }) {
 interface JobListProps {
   onNew: () => void;
   onEdit: (job: Job) => void;
+  onSelect: (job: Job) => void;
 }
 
-export function JobList({ onNew, onEdit }: JobListProps) {
+export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery<Job[]>({
@@ -125,7 +127,11 @@ export function JobList({ onNew, onEdit }: JobListProps) {
           </TableHeader>
           <TableBody>
             {data.map((job) => (
-              <TableRow key={job.id}>
+              <TableRow
+                key={job.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onSelect(job)}
+              >
                 <TableCell className="font-medium">{job.name}</TableCell>
                 <TableCell className="font-mono text-sm">{job.schedule}</TableCell>
                 <TableCell className="font-mono text-sm">{job.fileFilter}</TableCell>
@@ -139,11 +145,11 @@ export function JobList({ onNew, onEdit }: JobListProps) {
                 </TableCell>
                 <TableCell className="text-muted-foreground text-sm">
                   {job.lastRunAt
-                    ? formatDistanceToNow(new Date(job.lastRunAt), { addSuffix: true })
+                    ? formatDistanceToNow(parseDBDate(job.lastRunAt), { addSuffix: true })
                     : "Never"}
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

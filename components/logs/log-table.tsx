@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import axios from "axios";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes, parseDBDate } from "@/lib/utils";
 import { format } from "date-fns";
 import { AlertCircle, Search } from "lucide-react";
 import type { TransferLog } from "@/lib/db/schema";
@@ -176,7 +176,7 @@ export function LogTable() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {format(new Date(log.transferredAt), "MMM d, HH:mm:ss")}
+                    {format(parseDBDate(log.transferredAt), "MMM d, HH:mm:ss")}
                   </TableCell>
                 </TableRow>
               ))}

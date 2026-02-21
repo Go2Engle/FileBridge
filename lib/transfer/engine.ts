@@ -184,6 +184,12 @@ export async function runJob(jobId: number): Promise<void> {
       console.log(`[Engine] Job ${jobId}: files to transfer:`, files.map((f) => `${f.name} (${f.size}B)`).join(", "));
     }
 
+    // Update totalFiles on the run so the UI can show progress
+    await db
+      .update(jobRuns)
+      .set({ totalFiles: files.length })
+      .where(eq(jobRuns.id, run.id));
+
     // Build a set of existing destination file names so we can skip duplicates
     // without downloading first (avoids unnecessary network I/O).
     let existingDestFiles: Set<string> | null = null;
@@ -205,6 +211,12 @@ export async function runJob(jobId: number): Promise<void> {
     for (const file of files) {
       const srcFilePath = path.posix.join(job.sourcePath, file.name);
       const dstFilePath = path.posix.join(job.destinationPath, file.name);
+
+      // Update currentFile so the UI shows what's being processed
+      await db
+        .update(jobRuns)
+        .set({ currentFile: file.name })
+        .where(eq(jobRuns.id, run.id));
 
       // Skip files that already exist at destination (when overwrite is off)
       if (existingDestFiles?.has(file.name)) {
@@ -262,6 +274,10 @@ export async function runJob(jobId: number): Promise<void> {
 
                 filesTransferred++;
                 bytesTransferred += entry.content.length;
+                await db
+                  .update(jobRuns)
+                  .set({ filesTransferred, bytesTransferred })
+                  .where(eq(jobRuns.id, run.id));
               } catch (entryError) {
                 console.error(`[Engine] Job ${jobId}: FAILED to upload extracted "${entry.name}":`, entryError);
                 await db.insert(transferLogs).values({
@@ -343,6 +359,10 @@ export async function runJob(jobId: number): Promise<void> {
 
         filesTransferred++;
         bytesTransferred += actualSize;
+        await db
+          .update(jobRuns)
+          .set({ filesTransferred, bytesTransferred })
+          .where(eq(jobRuns.id, run.id));
       } catch (fileError) {
         // Skip directories that slipped through the listing filter
         if (isDirectoryError(fileError)) {
@@ -378,6 +398,7 @@ export async function runJob(jobId: number): Promise<void> {
         status: "success",
         filesTransferred,
         bytesTransferred,
+        currentFile: null,
       })
       .where(eq(jobRuns.id, run.id));
 
@@ -409,6 +430,7 @@ export async function runJob(jobId: number): Promise<void> {
         completedAt: new Date().toISOString(),
         status: "failure",
         errorMessage,
+        currentFile: null,
       })
       .where(eq(jobRuns.id, run.id));
 

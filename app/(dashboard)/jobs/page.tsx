@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { JobList } from "@/components/jobs/job-list";
 import { JobForm } from "@/components/jobs/job-form";
+import { JobDetailSheet } from "@/components/jobs/job-detail-sheet";
 import type { Job } from "@/lib/db/schema";
 
 export default function JobsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   return (
     <div className="space-y-6">
@@ -27,6 +29,7 @@ export default function JobsPage() {
           setEditJob(job);
           setFormOpen(true);
         }}
+        onSelect={(job) => setSelectedJob(job)}
       />
 
       <JobForm
@@ -36,6 +39,17 @@ export default function JobsPage() {
           setEditJob(null);
         }}
         editJob={editJob}
+      />
+
+      <JobDetailSheet
+        job={selectedJob}
+        open={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onEdit={(job) => {
+          setSelectedJob(null);
+          setEditJob(job);
+          setFormOpen(true);
+        }}
       />
     </div>
   );

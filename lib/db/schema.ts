@@ -12,10 +12,10 @@ export const connections = sqliteTable("connections", {
     .$type<Record<string, string>>(),
   createdAt: text("created_at")
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
   updatedAt: text("updated_at")
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
 });
 
 export const jobs = sqliteTable("jobs", {
@@ -55,10 +55,10 @@ export const jobs = sqliteTable("jobs", {
   nextRunAt: text("next_run_at"),
   createdAt: text("created_at")
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
   updatedAt: text("updated_at")
     .notNull()
-    .default(sql`(datetime('now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
 });
 
 export const jobRuns = sqliteTable("job_runs", {
@@ -72,6 +72,8 @@ export const jobRuns = sqliteTable("job_runs", {
   errorMessage: text("error_message"),
   filesTransferred: integer("files_transferred").notNull().default(0),
   bytesTransferred: integer("bytes_transferred").notNull().default(0),
+  totalFiles: integer("total_files"),
+  currentFile: text("current_file"),
 });
 
 export const transferLogs = sqliteTable("transfer_logs", {

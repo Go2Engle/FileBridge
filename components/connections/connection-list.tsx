@@ -13,6 +13,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import type { Connection } from "@/lib/db/schema";
+import { parseDBDate } from "@/lib/utils";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 
 interface ConnectionListProps {
@@ -88,7 +89,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                 <TableCell className="font-mono text-sm">{conn.host}</TableCell>
                 <TableCell>{conn.port}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">
-                  {formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })}
+                  {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">

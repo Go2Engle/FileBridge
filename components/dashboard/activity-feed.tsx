@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import axios from "axios";
-import { formatBytes } from "@/lib/utils";
+import { formatBytes, parseDBDate } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
 interface LogEntry {
@@ -89,7 +89,7 @@ export function ActivityFeed() {
                       {formatBytes(log.fileSize)}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      {formatDistanceToNow(new Date(log.transferredAt), {
+                      {formatDistanceToNow(parseDBDate(log.transferredAt), {
                         addSuffix: true,
                       })}
                     </span>

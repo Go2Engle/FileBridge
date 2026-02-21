@@ -19,3 +19,12 @@ export function formatDuration(ms: number): string {
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
 }
+
+/**
+ * Parse a DB timestamp as UTC. SQLite's datetime('now') stores UTC but omits
+ * the timezone indicator, causing `new Date()` to treat it as local time.
+ */
+export function parseDBDate(value: string): Date {
+  if (/[Z+-]/.test(value.slice(-6))) return new Date(value);
+  return new Date(value.replace(" ", "T") + "Z");
+}
