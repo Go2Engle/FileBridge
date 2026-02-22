@@ -81,6 +81,14 @@ sqlite.exec(`
     key TEXT NOT NULL UNIQUE,
     value TEXT
   );
+
+  -- Performance indexes
+  CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+  CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id);
+  CREATE INDEX IF NOT EXISTS idx_transfer_logs_job_id ON transfer_logs(job_id);
+  CREATE INDEX IF NOT EXISTS idx_transfer_logs_status ON transfer_logs(status);
+  CREATE INDEX IF NOT EXISTS idx_transfer_logs_transferred_at ON transfer_logs(transferred_at);
+  CREATE INDEX IF NOT EXISTS idx_transfer_logs_job_run_id_status ON transfer_logs(job_run_id, status);
 `);
 
 // Lightweight migrations for columns added after initial release.
