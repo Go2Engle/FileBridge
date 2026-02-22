@@ -285,6 +285,10 @@ export async function runJob(jobId: number): Promise<void> {
     return;
   }
 
+  // Remember the pre-run status so a manual run of an inactive job doesn't
+  // silently re-enable it when the run completes.
+  const previousStatus = job.status;
+
   // Load connections
   const srcConn = await db.query.connections.findFirst({
     where: eq(connections.id, job.sourceConnectionId),
@@ -605,7 +609,7 @@ export async function runJob(jobId: number): Promise<void> {
     await db
       .update(jobs)
       .set({
-        status: "active",
+        status: previousStatus === "inactive" ? "inactive" : "active",
         lastRunAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
@@ -636,7 +640,10 @@ export async function runJob(jobId: number): Promise<void> {
 
     await db
       .update(jobs)
-      .set({ status: "error", updatedAt: new Date().toISOString() })
+      .set({
+        status: previousStatus === "inactive" ? "inactive" : "error",
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(jobs.id, jobId));
 
     throw error;
