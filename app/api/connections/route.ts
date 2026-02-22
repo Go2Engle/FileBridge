@@ -9,7 +9,12 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rows = await db.select().from(connections).orderBy(desc(connections.createdAt));
-  return NextResponse.json(rows);
+  // Strip credentials — return only safe display fields
+  const safeRows = rows.map(({ credentials, ...rest }) => ({
+    ...rest,
+    username: (credentials as Record<string, string>)?.username ?? "",
+  }));
+  return NextResponse.json(safeRows);
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +30,9 @@ export async function POST(req: NextRequest) {
       .values({ name, protocol, host, port, credentials })
       .returning();
 
-    return NextResponse.json(row, { status: 201 });
+    // Strip credentials from the response
+    const { credentials: _creds, ...safeRow } = row;
+    return NextResponse.json(safeRow, { status: 201 });
   } catch (error) {
     console.error("[API] POST /connections:", error);
     return NextResponse.json({ error: "Failed to create connection" }, { status: 500 });

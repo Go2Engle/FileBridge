@@ -13,20 +13,23 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import type { Connection } from "@/lib/db/schema";
+
+// The list endpoint strips credentials and adds a top-level username for display
+type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
 import { parseDBDate } from "@/lib/utils";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 
 interface ConnectionListProps {
-  onEdit: (connection: Connection) => void;
+  onEdit: (connection: ConnectionSummary) => void;
   onNew: () => void;
 }
 
 export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   const queryClient = useQueryClient();
-  const [browser, setBrowser] = useState<{ conn: Connection } | null>(null);
+  const [browser, setBrowser] = useState<{ conn: ConnectionSummary } | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
 
-  async function testConnection(conn: Connection) {
+  async function testConnection(conn: ConnectionSummary) {
     setTestingId(conn.id);
     try {
       const { data } = await axios.post(`/api/connections/${conn.id}/test`);
@@ -42,7 +45,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
     }
   }
 
-  const { data, isLoading } = useQuery<Connection[]>({
+  const { data, isLoading } = useQuery<ConnectionSummary[]>({
     queryKey: ["connections"],
     queryFn: () => axios.get("/api/connections").then((r) => r.data),
   });

@@ -4,6 +4,23 @@ import { db } from "@/lib/db";
 import { connections, jobs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const [conn] = await db
+    .select()
+    .from(connections)
+    .where(eq(connections.id, Number(id)));
+
+  if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(conn);
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -30,7 +47,8 @@ export async function PUT(
       .returning();
 
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(row);
+    const { credentials: _creds, ...safeRow } = row;
+    return NextResponse.json(safeRow);
   } catch (error) {
     console.error("[API] PUT /connections/[id]:", error);
     return NextResponse.json({ error: "Failed to update connection" }, { status: 500 });

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -42,7 +42,7 @@ type FormValues = z.infer<typeof baseSchema>;
 interface ConnectionFormProps {
   open: boolean;
   onClose: () => void;
-  editConnection?: Connection | null;
+  editConnection?: Pick<Connection, "id"> | null;
 }
 
 export function ConnectionForm({ open, onClose, editConnection }: ConnectionFormProps) {
@@ -68,14 +68,22 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
 
   const protocol = form.watch("protocol");
 
+  // Fetch the full connection (including credentials) when editing.
+  // The list endpoint strips credentials for security, so we need a dedicated fetch.
+  const { data: fullConnection } = useQuery<Connection>({
+    queryKey: ["connections", editConnection?.id],
+    queryFn: () => axios.get(`/api/connections/${editConnection!.id}`).then((r) => r.data),
+    enabled: !!editConnection,
+  });
+
   useEffect(() => {
-    if (editConnection) {
-      const creds = editConnection.credentials as Record<string, string>;
+    if (editConnection && fullConnection) {
+      const creds = fullConnection.credentials as Record<string, string>;
       form.reset({
-        name: editConnection.name,
-        protocol: editConnection.protocol,
-        host: editConnection.host,
-        port: editConnection.port,
+        name: fullConnection.name,
+        protocol: fullConnection.protocol,
+        host: fullConnection.host,
+        port: fullConnection.port,
         username: creds.username ?? "",
         password: creds.password ?? "",
         privateKey: creds.privateKey ?? "",
@@ -83,7 +91,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         domain: creds.domain ?? "",
         share: creds.share ?? "",
       });
-    } else {
+    } else if (!editConnection) {
       form.reset({
         name: "",
         protocol: "sftp",
@@ -97,7 +105,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         share: "",
       });
     }
-  }, [editConnection, form]);
+  }, [editConnection, fullConnection, form]);
 
   // Auto-update default port when protocol changes
   useEffect(() => {

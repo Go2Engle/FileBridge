@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { ConnectionList } from "@/components/connections/connection-list";
 import { ConnectionForm } from "@/components/connections/connection-form";
-import type { Connection } from "@/lib/db/schema";
 
 export default function ConnectionsPage() {
   const [formOpen, setFormOpen] = useState(false);
-  const [editConnection, setEditConnection] = useState<Connection | null>(null);
+  const [editConnectionId, setEditConnectionId] = useState<number | null>(null);
 
   return (
     <div className="space-y-6">
@@ -20,11 +19,11 @@ export default function ConnectionsPage() {
 
       <ConnectionList
         onNew={() => {
-          setEditConnection(null);
+          setEditConnectionId(null);
           setFormOpen(true);
         }}
         onEdit={(conn) => {
-          setEditConnection(conn);
+          setEditConnectionId(conn.id);
           setFormOpen(true);
         }}
       />
@@ -33,9 +32,9 @@ export default function ConnectionsPage() {
         open={formOpen}
         onClose={() => {
           setFormOpen(false);
-          setEditConnection(null);
+          setEditConnectionId(null);
         }}
-        editConnection={editConnection}
+        editConnection={editConnectionId !== null ? { id: editConnectionId } : null}
       />
     </div>
   );
