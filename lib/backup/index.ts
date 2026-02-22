@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import cron from "node-cron";
-import { db } from "@/lib/db";
+import { db, sqlite } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -157,6 +157,76 @@ function pruneBackups(localPath: string, retentionCount: number): void {
       console.error(`[Backup] Failed to prune ${oldest}:`, err);
     }
   }
+}
+
+// Tables to restore in dependency-safe order (FK checks disabled during restore)
+const RESTORE_TABLES = [
+  "connections",
+  "jobs",
+  "job_runs",
+  "transfer_logs",
+  "settings",
+];
+
+export async function restoreBackup(filename: string): Promise<void> {
+  const config = await getBackupConfig();
+
+  // Validate the filename stays within the backup directory (prevent path traversal)
+  const backupPath = path.join(config.localPath, filename);
+  const resolvedBackup = path.resolve(backupPath);
+  const resolvedDir = path.resolve(config.localPath);
+  if (!resolvedBackup.startsWith(resolvedDir + path.sep)) {
+    throw new Error("Invalid backup filename");
+  }
+
+  if (!fs.existsSync(backupPath)) {
+    throw new Error(`Backup file not found: ${filename}`);
+  }
+
+  // Verify backup integrity before doing anything destructive
+  const verify = new Database(backupPath, { readonly: true });
+  try {
+    const result = verify.pragma("integrity_check") as Array<{
+      integrity_check: string;
+    }>;
+    if (result[0]?.integrity_check !== "ok") {
+      throw new Error("Backup file failed integrity check — restore aborted");
+    }
+  } finally {
+    verify.close();
+  }
+
+  // Create a safety snapshot of the current DB before overwriting
+  try {
+    console.log("[Backup] Creating pre-restore safety backup...");
+    await runBackup(config);
+  } catch (err) {
+    console.warn("[Backup] Pre-restore safety backup failed (continuing):", err);
+  }
+
+  // Use ATTACH DATABASE to copy all tables from the backup into the live DB.
+  // This works without a server restart and is fully transactional.
+  console.log(`[Backup] Restoring from ${filename}...`);
+  const safePath = backupPath.replace(/'/g, "''");
+  sqlite.exec(`ATTACH DATABASE '${safePath}' AS restore_src`);
+
+  try {
+    sqlite.pragma("foreign_keys = OFF");
+    const doRestore = sqlite.transaction(() => {
+      for (const table of RESTORE_TABLES) {
+        sqlite.exec(`DELETE FROM main."${table}"`);
+        sqlite.exec(
+          `INSERT INTO main."${table}" SELECT * FROM restore_src."${table}"`
+        );
+      }
+    });
+    doRestore();
+  } finally {
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.exec("DETACH DATABASE restore_src");
+  }
+
+  console.log(`[Backup] Restore complete from ${filename}`);
 }
 
 export async function initializeBackupScheduler(): Promise<void> {

@@ -144,3 +144,6 @@ sqlite.exec(
 );
 
 export const db = drizzle(sqlite, { schema });
+
+// Export the raw better-sqlite3 instance for low-level operations (e.g. backup restore)
+export { sqlite };
