@@ -106,7 +106,7 @@ export class AzureBlobProvider implements StorageProvider {
     // Azure Blob SDK is stateless (HTTPS) — no persistent connection to close
   }
 
-  async listFiles(remotePath: string, filter = "*"): Promise<FileInfo[]> {
+  async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
     const prefix = toBlobPrefix(remotePath);
     console.log(`[AzureBlob] listFiles prefix="${prefix}" filter="${filter}"`);
     try {

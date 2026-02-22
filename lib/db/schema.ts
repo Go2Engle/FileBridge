@@ -29,7 +29,7 @@ export const jobs = sqliteTable("jobs", {
     .notNull()
     .references(() => connections.id),
   destinationPath: text("destination_path").notNull(),
-  fileFilter: text("file_filter").notNull().default("*"),
+  fileFilter: text("file_filter").notNull().default(""),
   schedule: text("schedule").notNull(),
   postTransferAction: text("post_transfer_action", {
     enum: ["retain", "delete", "move"],

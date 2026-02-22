@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         sourcePath,
         destinationConnectionId: Number(destinationConnectionId),
         destinationPath,
-        fileFilter: fileFilter || "*",
+        fileFilter: fileFilter ?? "",
         schedule,
         postTransferAction: postTransferAction || "retain",
         movePath: movePath || null,

@@ -31,7 +31,7 @@ const jobSchema = z.object({
   sourcePath: z.string().min(1, "Source path is required"),
   destinationConnectionId: z.coerce.number().min(1, "Destination connection required"),
   destinationPath: z.string().min(1, "Destination path is required"),
-  fileFilter: z.string().default("*"),
+  fileFilter: z.string().default(""),
   schedule: z.string().min(1, "Schedule is required"),
   postTransferAction: z.enum(["retain", "delete", "move"]).default("retain"),
   movePath: z.string().optional(),
@@ -133,7 +133,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
       sourcePath: "",
       destinationConnectionId: 0,
       destinationPath: "",
-      fileFilter: "*",
+      fileFilter: "",
       schedule: "0 * * * *",
       postTransferAction: "retain",
       movePath: "",
@@ -152,7 +152,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         sourcePath: editJob.sourcePath,
         destinationConnectionId: editJob.destinationConnectionId,
         destinationPath: editJob.destinationPath,
-        fileFilter: editJob.fileFilter ?? "*",
+        fileFilter: editJob.fileFilter ?? "",
         schedule: editJob.schedule,
         postTransferAction: (editJob.postTransferAction as FormValues["postTransferAction"]) ?? "retain",
         movePath: editJob.movePath ?? "",
@@ -373,10 +373,10 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                       <FormItem>
                         <FormLabel>File Filter</FormLabel>
                         <FormControl>
-                          <Input placeholder="*.csv" {...field} />
+                          <Input placeholder="*.csv, *.txt" {...field} />
                         </FormControl>
                         <FormDescription>
-                          Wildcard pattern (e.g. *.csv, *)
+                          Comma-separated patterns (e.g. *.csv, *.txt). Leave empty to transfer all files.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

@@ -51,7 +51,7 @@ export class SftpProvider implements StorageProvider {
     }
   }
 
-  async listFiles(remotePath: string, filter = "*"): Promise<FileInfo[]> {
+  async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
     console.log(`[SFTP] Listing "${remotePath}" with filter "${filter}"`);
     try {
       const listing = await this.client.list(remotePath);

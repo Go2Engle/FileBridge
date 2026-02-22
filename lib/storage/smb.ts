@@ -183,7 +183,7 @@ export class SmbProvider implements StorageProvider {
     }
   }
 
-  async listFiles(remotePath: string, filter = "*"): Promise<FileInfo[]> {
+  async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] listFiles "${smbPath}" (unix: "${remotePath}") filter="${filter}"`);
     try {
