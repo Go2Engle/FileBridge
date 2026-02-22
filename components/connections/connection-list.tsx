@@ -23,7 +23,7 @@ type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
 import { parseDBDate } from "@/lib/utils";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 
-type ProtocolFilter = "all" | "sftp" | "smb";
+type ProtocolFilter = "all" | "sftp" | "smb" | "azure-blob";
 type SortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc";
 
 interface ConnectionListProps {
@@ -75,11 +75,12 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   });
 
   const protocolCounts = useMemo(() => {
-    if (!data) return { all: 0, sftp: 0, smb: 0 };
+    if (!data) return { all: 0, sftp: 0, smb: 0, "azure-blob": 0 };
     return {
       all: data.length,
       sftp: data.filter((c) => c.protocol === "sftp").length,
       smb: data.filter((c) => c.protocol === "smb").length,
+      "azure-blob": data.filter((c) => c.protocol === "azure-blob").length,
     };
   }, [data]);
 
@@ -144,7 +145,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
             />
           </div>
           <div className="flex items-center rounded-md border bg-muted/40 p-0.5">
-            {(["all", "sftp", "smb"] as const).map((p) => (
+            {(["all", "sftp", "smb", "azure-blob"] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setProtocolFilter(p)}
@@ -154,7 +155,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {p === "all" ? "All" : p.toUpperCase()}
+                {p === "all" ? "All" : p === "azure-blob" ? "Azure" : p.toUpperCase()}
                 <span className="ml-1 text-muted-foreground">
                   {protocolCounts[p]}
                 </span>

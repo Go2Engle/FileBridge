@@ -23,7 +23,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS connections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb')),
+    protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob')),
     host TEXT NOT NULL,
     port INTEGER NOT NULL,
     credentials TEXT NOT NULL,
@@ -109,6 +109,32 @@ for (const sql of migrations) {
   } catch {
     // Column already exists — safe to ignore
   }
+}
+
+// Migrate: update protocol CHECK constraint to include 'azure-blob'.
+// SQLite doesn't support ALTER COLUMN, so we must recreate the connections table.
+// The check against sqlite_master ensures this only runs once on existing databases.
+const connDef = sqlite
+  .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='connections'")
+  .get() as { sql: string } | undefined;
+if (connDef && !connDef.sql.includes("'azure-blob'")) {
+  sqlite.pragma("foreign_keys = OFF");
+  sqlite.exec(`
+    CREATE TABLE connections_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob')),
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      credentials TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO connections_new SELECT * FROM connections;
+    DROP TABLE connections;
+    ALTER TABLE connections_new RENAME TO connections;
+  `);
+  sqlite.pragma("foreign_keys = ON");
 }
 
 // One-time cleanup: remove spurious transfer log entries created when

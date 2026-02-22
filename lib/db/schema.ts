@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 export const connections = sqliteTable("connections", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  protocol: text("protocol", { enum: ["sftp", "smb"] }).notNull(),
+  protocol: text("protocol", { enum: ["sftp", "smb", "azure-blob"] }).notNull(),
   host: text("host").notNull(),
   port: integer("port").notNull(),
   credentials: text("credentials", { mode: "json" })

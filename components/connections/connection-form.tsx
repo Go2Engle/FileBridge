@@ -24,17 +24,47 @@ import type { Connection } from "@/lib/db/schema";
 
 const baseSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  protocol: z.enum(["sftp", "smb"]),
+  protocol: z.enum(["sftp", "smb", "azure-blob"]),
   host: z.string().min(1, "Host is required"),
   port: z.coerce.number().int().min(1).max(65535),
-  // SFTP fields
-  username: z.string().min(1, "Username is required"),
+  // SFTP / SMB fields
+  username: z.string().optional(),
   password: z.string().optional(),
   privateKey: z.string().optional(),
   passphrase: z.string().optional(),
   // SMB extra fields
   domain: z.string().optional(),
   share: z.string().optional(),
+  // Azure Blob fields
+  container: z.string().optional(),
+  accountKey: z.string().optional(),
+  connectionString: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.protocol === "sftp" || data.protocol === "smb") {
+    if (!data.username?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Username is required",
+        path: ["username"],
+      });
+    }
+  }
+  if (data.protocol === "azure-blob") {
+    if (!data.container?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Container is required",
+        path: ["container"],
+      });
+    }
+    if (!data.accountKey?.trim() && !data.connectionString?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Account Key or Connection String is required",
+        path: ["accountKey"],
+      });
+    }
+  }
 });
 
 type FormValues = z.infer<typeof baseSchema>;
@@ -63,6 +93,9 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       passphrase: "",
       domain: "",
       share: "",
+      container: "",
+      accountKey: "",
+      connectionString: "",
     },
   });
 
@@ -81,7 +114,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       const creds = fullConnection.credentials as Record<string, string>;
       form.reset({
         name: fullConnection.name,
-        protocol: fullConnection.protocol,
+        protocol: fullConnection.protocol as FormValues["protocol"],
         host: fullConnection.host,
         port: fullConnection.port,
         username: creds.username ?? "",
@@ -90,6 +123,9 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         passphrase: creds.passphrase ?? "",
         domain: creds.domain ?? "",
         share: creds.share ?? "",
+        container: creds.container ?? "",
+        accountKey: creds.accountKey ?? "",
+        connectionString: creds.connectionString ?? "",
       });
     } else if (!editConnection) {
       form.reset({
@@ -103,6 +139,9 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         passphrase: "",
         domain: "",
         share: "",
+        container: "",
+        accountKey: "",
+        connectionString: "",
       });
     }
   }, [editConnection, fullConnection, form]);
@@ -110,26 +149,47 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   // Auto-update default port when protocol changes
   useEffect(() => {
     if (!isEditing) {
-      form.setValue("port", protocol === "smb" ? 445 : 22);
+      if (protocol === "smb") form.setValue("port", 445);
+      else if (protocol === "azure-blob") form.setValue("port", 443);
+      else form.setValue("port", 22);
     }
   }, [protocol, isEditing, form]);
 
-  async function testConnection() {
-    const values = form.getValues();
-    const { protocol, host, port, username, password, privateKey, passphrase, domain, share } = values;
-    const credentials: Record<string, string> = { username };
+  function buildCredentials(values: FormValues): Record<string, string> {
+    const { protocol, host, username, password, privateKey, passphrase, domain, share, container, accountKey, connectionString } = values;
+    const credentials: Record<string, string> = {};
+
     if (protocol === "sftp") {
+      credentials.username = username ?? "";
       if (password) credentials.password = password;
       if (privateKey) credentials.privateKey = privateKey;
       if (passphrase) credentials.passphrase = passphrase;
-    } else {
+    } else if (protocol === "smb") {
+      credentials.username = username ?? "";
       if (password) credentials.password = password;
       credentials.domain = domain ?? "";
       credentials.share = share ?? "";
+    } else if (protocol === "azure-blob") {
+      credentials.accountName = host;
+      credentials.container = container ?? "";
+      if (accountKey) credentials.accountKey = accountKey;
+      if (connectionString) credentials.connectionString = connectionString;
     }
+
+    return credentials;
+  }
+
+  async function testConnection() {
+    const values = form.getValues();
+    const credentials = buildCredentials(values);
     setIsTesting(true);
     try {
-      const { data } = await axios.post("/api/connections/test", { protocol, host, port, credentials });
+      const { data } = await axios.post("/api/connections/test", {
+        protocol: values.protocol,
+        host: values.host,
+        port: values.port,
+        credentials,
+      });
       if (data.success) {
         toast.success(data.message);
       } else {
@@ -144,18 +204,8 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-      const { name, protocol, host, port, username, password, privateKey, passphrase, domain, share } = values;
-      const credentials: Record<string, string> = { username };
-      if (protocol === "sftp") {
-        if (password) credentials.password = password;
-        if (privateKey) credentials.privateKey = privateKey;
-        if (passphrase) credentials.passphrase = passphrase;
-      } else {
-        if (password) credentials.password = password;
-        // Always persist domain and share even when empty so they're never undefined
-        credentials.domain = domain ?? "";
-        credentials.share = share ?? "";
-      }
+      const { name, protocol, host, port } = values;
+      const credentials = buildCredentials(values);
       const payload = { name, protocol, host, port, credentials };
       return isEditing
         ? axios.put(`/api/connections/${editConnection!.id}`, payload)
@@ -207,6 +257,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                       <SelectContent>
                         <SelectItem value="sftp">SFTP</SelectItem>
                         <SelectItem value="smb">SMB</SelectItem>
+                        <SelectItem value="azure-blob">Azure Blob</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -233,9 +284,18 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               name="host"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Host</FormLabel>
+                  <FormLabel>
+                    {protocol === "azure-blob" ? "Storage Account Name" : "Host"}
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="192.168.1.100 or server.example.com" {...field} />
+                    <Input
+                      placeholder={
+                        protocol === "azure-blob"
+                          ? "myaccount"
+                          : "192.168.1.100 or server.example.com"
+                      }
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -247,33 +307,37 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               Credentials
             </p>
 
-            <FormField
-              control={form.control}
-              name="username"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {(protocol === "sftp" || protocol === "smb") && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : ""} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : ""} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
 
             {protocol === "sftp" && (
               <>
@@ -336,6 +400,69 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                       </FormControl>
                       <FormDescription>
                         The share portion of \\server\share
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            {protocol === "azure-blob" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="container"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Container</FormLabel>
+                      <FormControl>
+                        <Input placeholder="my-container" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        The blob container within the storage account
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="accountKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Key</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder={isEditing ? "Leave blank to keep current" : "Base64 access key"}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        The base64 storage account key. Not required if Connection String is provided.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="connectionString"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Connection String{" "}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="DefaultEndpointsProtocol=https;AccountName=..."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        If provided, overrides Account Name and Account Key. Found in Azure Portal under Access keys.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

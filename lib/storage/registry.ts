@@ -1,6 +1,7 @@
 import type { StorageProvider } from "./interface";
 import { SftpProvider } from "./sftp";
 import { SmbProvider } from "./smb";
+import { AzureBlobProvider } from "./azure-blob";
 
 interface ConnectionRecord {
   protocol: string;
@@ -26,6 +27,13 @@ export function createStorageProvider(
         password: connection.credentials.password,
         domain: connection.credentials.domain,
         share: connection.credentials.share,
+      });
+    case "azure-blob":
+      return new AzureBlobProvider(connection.host, connection.port, {
+        accountName: connection.host,
+        accountKey: connection.credentials.accountKey,
+        connectionString: connection.credentials.connectionString,
+        container: connection.credentials.container,
       });
     default:
       throw new Error(`Unsupported protocol: ${connection.protocol}`);
