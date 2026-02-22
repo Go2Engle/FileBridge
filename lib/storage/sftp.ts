@@ -2,6 +2,9 @@ import SftpClient from "ssh2-sftp-client";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
 import path from "path";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("sftp");
 
 export interface SftpCredentials {
   username: string;
@@ -24,7 +27,13 @@ export class SftpProvider implements StorageProvider {
   }
 
   async connect(): Promise<void> {
-    console.log(`[SFTP] Connecting to ${this.host}:${this.port} as "${this.credentials.username}" (key=${!!this.credentials.privateKey}, pass=${!!this.credentials.password})`);
+    log.info("Connecting", {
+      host: this.host,
+      port: this.port,
+      username: this.credentials.username,
+      hasKey: !!this.credentials.privateKey,
+      hasPassword: !!this.credentials.password,
+    });
     try {
       await this.client.connect({
         host: this.host,
@@ -35,9 +44,9 @@ export class SftpProvider implements StorageProvider {
         passphrase: this.credentials.passphrase,
         readyTimeout: 20000,
       });
-      console.log(`[SFTP] Connected to ${this.host}:${this.port}`);
+      log.info("Connected", { host: this.host, port: this.port });
     } catch (err) {
-      console.error(`[SFTP] Connection FAILED to ${this.host}:${this.port}:`, err);
+      log.error("Connection failed", { host: this.host, port: this.port, error: err });
       throw err;
     }
   }
@@ -45,14 +54,14 @@ export class SftpProvider implements StorageProvider {
   async disconnect(): Promise<void> {
     try {
       await this.client.end();
-      console.log(`[SFTP] Disconnected from ${this.host}`);
+      log.info("Disconnected", { host: this.host });
     } catch (err) {
-      console.warn(`[SFTP] Error during disconnect from ${this.host}:`, err);
+      log.warn("Error during disconnect", { host: this.host, error: err });
     }
   }
 
   async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
-    console.log(`[SFTP] Listing "${remotePath}" with filter "${filter}"`);
+    log.info("Listing files", { remotePath, filter });
     try {
       const listing = await this.client.list(remotePath);
       const regex = globToRegex(filter);
@@ -64,16 +73,16 @@ export class SftpProvider implements StorageProvider {
           modifiedAt: new Date(item.modifyTime),
           isDirectory: false,
         }));
-      console.log(`[SFTP] listFiles "${remotePath}": ${listing.length} total, ${filtered.length} matched filter`);
+      log.info("Files listed", { remotePath, total: listing.length, matched: filtered.length });
       return filtered;
     } catch (err) {
-      console.error(`[SFTP] listFiles FAILED for "${remotePath}":`, err);
+      log.error("listFiles failed", { remotePath, error: err });
       throw err;
     }
   }
 
   async listDirectory(remotePath: string): Promise<FileInfo[]> {
-    console.log(`[SFTP] listDirectory "${remotePath}"`);
+    log.info("Listing directory", { remotePath });
     try {
       const listing = await this.client.list(remotePath);
       return listing.map((item) => ({
@@ -83,7 +92,7 @@ export class SftpProvider implements StorageProvider {
         isDirectory: item.type === "d",
       }));
     } catch (err) {
-      console.error(`[SFTP] listDirectory FAILED for "${remotePath}":`, err);
+      log.error("listDirectory failed", { remotePath, error: err });
       throw err;
     }
   }

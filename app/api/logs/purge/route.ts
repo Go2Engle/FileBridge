@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { transferLogs, jobRuns } from "@/lib/db/schema";
 import { lt, sql, and, ne } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 /** GET /api/logs/purge?cutoffDate=<ISO> — preview counts */
 export async function GET(req: NextRequest) {
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest) {
       runsCount: Number(runsCount),
     });
   } catch (error) {
-    console.error("[API] GET /logs/purge:", error);
+    log.error("GET /logs/purge failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json(
       { error: "Failed to count records" },
       { status: 500 }
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
       deletedRuns: runsResult.changes ?? 0,
     });
   } catch (error) {
-    console.error("[API] POST /logs/purge:", error);
+    log.error("POST /logs/purge failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json(
       { error: "Failed to purge logs" },
       { status: 500 }

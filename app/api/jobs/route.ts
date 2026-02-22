@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET() {
   const session = await getSession();
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(row, { status: 201 });
   } catch (error) {
-    console.error("[API] POST /jobs:", error);
+    log.error("POST /jobs failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to create job" }, { status: 500 });
   }
 }

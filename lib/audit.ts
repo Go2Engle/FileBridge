@@ -3,6 +3,9 @@ import { auditLogs } from "@/lib/db/schema";
 import type { NewAuditLog } from "@/lib/db/schema";
 import type { NextRequest } from "next/server";
 import type { Session } from "next-auth";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("audit");
 
 type AuditAction = NewAuditLog["action"];
 type AuditResource = NewAuditLog["resource"];
@@ -71,6 +74,6 @@ export async function logAudit(opts: LogAuditOptions): Promise<void> {
       details: opts.details ?? null,
     });
   } catch (err) {
-    console.error("[Audit] Failed to write audit log:", err);
+    log.error("Failed to write audit log", { error: err });
   }
 }

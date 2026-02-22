@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth";
 import { restoreBackup } from "@/lib/backup";
 import { initializeScheduler } from "@/lib/scheduler";
 import { initializeBackupScheduler } from "@/lib/backup";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
-    console.log(`[API] Restore requested: ${filename}`);
+    log.info("Restore requested", { filename, requestId: req.headers.get("x-request-id") ?? undefined });
     await restoreBackup(filename);
 
     // Re-initialize schedulers so in-memory state matches the restored DB
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[API] POST /backup/restore:", error);
+    log.error("POST /backup/restore failed", { error });
     const message = error instanceof Error ? error.message : "Restore failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -5,6 +5,9 @@ import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function POST(
   req: NextRequest,
@@ -31,7 +34,7 @@ export async function POST(
 
   // Run asynchronously — don't block the response
   runJob(jobId).catch((err) =>
-    console.error(`[API] Manual run of job ${jobId} failed:`, err)
+    log.error("Manual job run failed", { jobId, requestId: req.headers.get("x-request-id") ?? undefined, error: err })
   );
 
   return NextResponse.json({ message: "Job triggered" });

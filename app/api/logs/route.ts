@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { transferLogs, jobs } from "@/lib/db/schema";
 import { eq, desc, like, and, sql } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -52,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ logs: rows, total: Number(count) });
   } catch (error) {
-    console.error("[API] GET /logs:", error);
+    log.error("GET /logs failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to fetch logs" }, { status: 500 });
   }
 }

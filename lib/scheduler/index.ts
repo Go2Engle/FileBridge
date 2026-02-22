@@ -4,11 +4,13 @@ import { jobs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { runJob } from "@/lib/transfer/engine";
 import { logAudit } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
 
+const log = createLogger("scheduler");
 const scheduledTasks = new Map<number, cron.ScheduledTask>();
 
 export async function initializeScheduler(): Promise<void> {
-  console.log("[Scheduler] Initializing...");
+  log.info("Initializing");
 
   // Reset any jobs that were stuck in 'running' state from a previous crash
   await db
@@ -26,14 +28,14 @@ export async function initializeScheduler(): Promise<void> {
     scheduleJob(job.id, job.schedule);
   }
 
-  console.log(`[Scheduler] Scheduled ${activeJobs.length} active job(s)`);
+  log.info("Initialization complete", { scheduledJobs: activeJobs.length });
 }
 
 export function scheduleJob(jobId: number, cronExpression: string): void {
   unscheduleJob(jobId);
 
   if (!cron.validate(cronExpression)) {
-    console.error(`[Scheduler] Invalid cron expression for job ${jobId}: "${cronExpression}"`);
+    log.error("Invalid cron expression", { jobId, cronExpression });
     return;
   }
 
@@ -42,10 +44,10 @@ export function scheduleJob(jobId: number, cronExpression: string): void {
     // out of sync in Next.js where API routes may use separate module instances.
     const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
     if (!job || job.status !== "active") {
-      console.log(`[Scheduler] Skipping job ${jobId} — status is "${job?.status ?? "deleted"}"`);
+      log.info("Skipping job — not active", { jobId, status: job?.status ?? "deleted" });
       return;
     }
-    console.log(`[Scheduler] Triggering job ${jobId}`);
+    log.info("Triggering scheduled job", { jobId });
     logAudit({
       userId: "scheduler",
       action: "execute",
@@ -57,12 +59,12 @@ export function scheduleJob(jobId: number, cronExpression: string): void {
     try {
       await runJob(jobId);
     } catch (error) {
-      console.error(`[Scheduler] Job ${jobId} failed:`, error);
+      log.error("Scheduled job failed", { jobId, error });
     }
   });
 
   scheduledTasks.set(jobId, task);
-  console.log(`[Scheduler] Job ${jobId} scheduled: "${cronExpression}"`);
+  log.info("Job scheduled", { jobId, cronExpression });
 }
 
 export function unscheduleJob(jobId: number): void {
@@ -70,7 +72,7 @@ export function unscheduleJob(jobId: number): void {
   if (task) {
     task.stop();
     scheduledTasks.delete(jobId);
-    console.log(`[Scheduler] Job ${jobId} unscheduled`);
+    log.info("Job unscheduled", { jobId });
   }
 }
 

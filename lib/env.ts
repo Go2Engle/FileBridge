@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("env");
 
 /**
  * Server-side environment variable validation.
@@ -39,12 +42,9 @@ export function validateEnv(): void {
       .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
 
-    console.error(
-      `\n[FileBridge] ❌ Invalid environment configuration — server cannot start:\n${errors}\n` +
-      `  Copy .env.example to .env and fill in the required values.\n`
-    );
+    log.error("Invalid environment configuration — server cannot start", { errors });
     process.exit(1);
   }
 
-  console.log(`[FileBridge] ✓ Environment validated${devBypass ? " (auth bypass active)" : ""}`);
+  log.info("Environment validated", { authBypass: devBypass });
 }

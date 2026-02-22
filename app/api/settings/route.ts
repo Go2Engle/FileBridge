@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 const SETTINGS_KEY = "notifications";
 
@@ -33,7 +36,7 @@ export async function GET() {
 
     return NextResponse.json(row.value);
   } catch (error) {
-    console.error("[API] GET /settings:", error);
+    log.error("GET /settings failed", { error });
     return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }
 }
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[API] POST /settings:", error);
+    log.error("POST /settings failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
   }
 }

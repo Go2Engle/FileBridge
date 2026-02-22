@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { jobRuns, transferLogs, jobs } from "@/lib/db/schema";
 import { eq, gte, sql, and } from "drizzle-orm";
 import { subDays, format, startOfDay } from "date-fns";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -104,7 +107,7 @@ export async function GET(req: NextRequest) {
       activeJobs: Number(activeJobCount.count),
     });
   } catch (error) {
-    console.error("[API] GET /dashboard/stats:", error);
+    log.error("GET /dashboard/stats failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to fetch stats" }, { status: 500 });
   }
 }

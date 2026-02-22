@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { auditLogs } from "@/lib/db/schema";
 import { desc, like, eq, and, sql } from "drizzle-orm";
 import type { AuditLog } from "@/lib/db/schema";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 const PAGE_SIZE = 50;
 
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ logs: rows, total: Number(count) });
   } catch (error) {
-    console.error("[API] GET /audit-logs:", error);
+    log.error("GET /audit-logs failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 });
   }
 }

@@ -7,6 +7,9 @@ import path from "path";
 import { gunzipSync } from "zlib";
 import AdmZip from "adm-zip";
 import * as tar from "tar-stream";
+import { createLogger, withJobContext } from "@/lib/logger";
+
+const log = createLogger("engine");
 
 interface ExtractedFile {
   name: string;
@@ -269,19 +272,19 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
 }
 
 export async function runJob(jobId: number): Promise<void> {
-  console.log(`[Engine] ▶ Starting job ${jobId}`);
+  log.info("Starting job", { jobId });
 
   // Load job
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
   if (!job) {
-    console.error(`[Engine] Job ${jobId} not found in database`);
+    log.error("Job not found in database", { jobId });
     throw new Error(`Job ${jobId} not found`);
   }
-  console.log(`[Engine] Job ${jobId} "${job.name}" — status: ${job.status}, schedule: ${job.schedule}`);
+  log.info("Job loaded", { jobId, jobName: job.name, status: job.status, schedule: job.schedule });
 
   // Prevent concurrent runs
   if (job.status === "running") {
-    console.log(`[Engine] Job ${jobId} is already running — skipping`);
+    log.info("Job already running — skipping", { jobId });
     return;
   }
 
@@ -303,7 +306,11 @@ export async function runJob(jobId: number): Promise<void> {
   if (!dstConn) {
     throw new Error(`Destination connection ${job.destinationConnectionId} not found for job ${jobId}`);
   }
-  console.log(`[Engine] Job ${jobId}: src="${srcConn.name}" (${srcConn.protocol}://${srcConn.host}:${srcConn.port}${job.sourcePath}) → dst="${dstConn.name}" (${dstConn.protocol}://${dstConn.host}:${dstConn.port}${job.destinationPath})`);
+  log.info("Connections resolved", {
+    jobId,
+    src: { name: srcConn.name, protocol: srcConn.protocol, host: srcConn.host, port: srcConn.port, path: job.sourcePath },
+    dst: { name: dstConn.name, protocol: dstConn.protocol, host: dstConn.host, port: dstConn.port, path: job.destinationPath },
+  });
 
   // Create job run record
   const [run] = await db
@@ -316,336 +323,346 @@ export async function runJob(jobId: number): Promise<void> {
       bytesTransferred: 0,
     })
     .returning();
-  console.log(`[Engine] Job ${jobId}: created run #${run.id}`);
 
-  // Mark job as running
-  await db
-    .update(jobs)
-    .set({ status: "running", updatedAt: new Date().toISOString() })
-    .where(eq(jobs.id, jobId));
+  // From here on, all log lines will automatically include jobId + runId
+  return withJobContext(jobId, run.id, async () => {
+    log.info("Job run created", { runId: run.id });
 
-  const source = createStorageProvider(srcConn as Parameters<typeof createStorageProvider>[0]);
-  const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
-
-  try {
-    console.log(`[Engine] Job ${jobId}: connecting to source (${srcConn.protocol})...`);
-    await source.connect();
-    console.log(`[Engine] Job ${jobId}: source connected`);
-
-    console.log(`[Engine] Job ${jobId}: connecting to destination (${dstConn.protocol})...`);
-    await dest.connect();
-    console.log(`[Engine] Job ${jobId}: destination connected`);
-
-    console.log(`[Engine] Job ${jobId}: listing files at "${job.sourcePath}" with filter "${job.fileFilter}"...`);
-    let files = await source.listFiles(job.sourcePath, job.fileFilter);
-    console.log(`[Engine] Job ${jobId}: found ${files.length} file(s) matching "${job.fileFilter}"`);
-
-    // Filter hidden files (names starting with ".")
-    if (job.skipHiddenFiles) {
-      const before = files.length;
-      files = files.filter((f) => !f.name.startsWith("."));
-      if (before !== files.length) {
-        console.log(`[Engine] Job ${jobId}: skipped ${before - files.length} hidden file(s)`);
-      }
-    }
-
-    // Filter out entries that match the move folder when it's a subdirectory
-    // of the source path (e.g. source=/data, movePath=/data/processed →
-    // skip the "processed" entry that readdir returns as a directory name).
-    if (job.postTransferAction === "move" && job.movePath) {
-      const srcNorm = job.sourcePath.replace(/\/+$/, "") + "/";
-      const moveNorm = job.movePath.replace(/\/+$/, "");
-      if (moveNorm.startsWith(srcNorm)) {
-        const relSegment = moveNorm.slice(srcNorm.length).split("/")[0];
-        if (relSegment) {
-          const before = files.length;
-          files = files.filter((f) => f.name !== relSegment);
-          if (before !== files.length) {
-            console.log(`[Engine] Job ${jobId}: filtered out move folder "${relSegment}" from source listing`);
-          }
-        }
-      }
-    }
-
-    if (files.length > 0) {
-      console.log(`[Engine] Job ${jobId}: files to transfer:`, files.map((f) => `${f.name} (${f.size}B)`).join(", "));
-    }
-
-    // Update totalFiles on the run so the UI can show progress
-    await db
-      .update(jobRuns)
-      .set({ totalFiles: files.length })
-      .where(eq(jobRuns.id, run.id));
-
-    // Build a set of existing destination file names so we can skip duplicates
-    // without downloading first (avoids unnecessary network I/O).
-    // For delta sync we also track modifiedAt to compare timestamps.
-    let existingDestFiles: Set<string> | null = null;
-    let destFileTimes: Map<string, Date> = new Map();
-    if (!job.overwriteExisting || job.deltaSync) {
-      try {
-        const destListing = await dest.listFiles(job.destinationPath);
-        existingDestFiles = new Set(destListing.map((f) => f.name));
-        if (job.deltaSync) {
-          for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
-        }
-        console.log(`[Engine] Job ${jobId}: ${existingDestFiles.size} file(s) already at destination`);
-      } catch {
-        // Destination dir may not exist yet — that's fine, nothing to skip
-        existingDestFiles = new Set();
-      }
-    }
-
-    let filesTransferred = 0;
-    let bytesTransferred = 0;
-    let filesSkipped = 0;
-
-    for (const file of files) {
-      const srcFilePath = path.posix.join(job.sourcePath, file.name);
-      const dstFilePath = path.posix.join(job.destinationPath, file.name);
-
-      // Update currentFile so the UI shows what's being processed
-      await db
-        .update(jobRuns)
-        .set({ currentFile: file.name })
-        .where(eq(jobRuns.id, run.id));
-
-      // Delta sync: skip if destination file is the same age or newer than the source.
-      if (job.deltaSync && existingDestFiles?.has(file.name)) {
-        const destTime = destFileTimes.get(file.name);
-        if (destTime && destTime >= file.modifiedAt) {
-          console.log(`[Engine] Job ${jobId}: skipping "${file.name}" — destination is up to date (src: ${file.modifiedAt.toISOString()}, dst: ${destTime.toISOString()})`);
-          filesSkipped++;
-          continue;
-        }
-        console.log(`[Engine] Job ${jobId}: "${file.name}" — source is newer, transferring (src: ${file.modifiedAt.toISOString()}, dst: ${destFileTimes.get(file.name)?.toISOString() ?? "n/a"})`);
-      }
-
-      // Skip files that already exist at destination (when overwrite is off and delta sync is off)
-      if (!job.deltaSync && existingDestFiles?.has(file.name)) {
-        console.log(`[Engine] Job ${jobId}: skipping "${file.name}" — already exists at destination`);
-        filesSkipped++;
-        continue;
-      }
-
-      console.log(`[Engine] Job ${jobId}: transferring "${file.name}" (${file.size}B)...`);
-
-      try {
-        const content = await source.downloadFile(srcFilePath);
-        const actualSize = content.length;
-        console.log(`[Engine] Job ${jobId}: downloaded "${file.name}" (${actualSize}B)`);
-
-        // Archive extraction: if enabled and file is an archive, extract and upload individual files
-        if (job.extractArchives && isArchive(file.name)) {
-          const extracted = await extractArchive(file.name, content);
-          if (extracted && extracted.length > 0) {
-            console.log(`[Engine] Job ${jobId}: extracted ${extracted.length} file(s) from "${file.name}"`);
-
-            for (const entry of extracted) {
-              const entryDstPath = path.posix.join(job.destinationPath, entry.name);
-
-              // Skip existing files at destination (when overwrite is off)
-              if (existingDestFiles?.has(entry.name)) {
-                console.log(`[Engine] Job ${jobId}: skipping extracted "${entry.name}" — already exists at destination`);
-                filesSkipped++;
-                continue;
-              }
-
-              try {
-                // If overwrite is enabled, delete existing destination file first
-                if (job.overwriteExisting) {
-                  try {
-                    await dest.deleteFile(entryDstPath);
-                  } catch {
-                    // File doesn't exist yet — that's fine
-                  }
-                }
-
-                await dest.uploadFile(entry.content, entryDstPath);
-                console.log(`[Engine] Job ${jobId}: uploaded extracted "${entry.name}" → "${entryDstPath}"`);
-
-                await db.insert(transferLogs).values({
-                  jobId,
-                  jobRunId: run.id,
-                  fileName: entry.name,
-                  sourcePath: `${srcFilePath}!${entry.name}`,
-                  destinationPath: entryDstPath,
-                  fileSize: entry.content.length,
-                  transferredAt: new Date().toISOString(),
-                  status: "success",
-                });
-
-                filesTransferred++;
-                bytesTransferred += entry.content.length;
-                await db
-                  .update(jobRuns)
-                  .set({ filesTransferred, bytesTransferred })
-                  .where(eq(jobRuns.id, run.id));
-              } catch (entryError) {
-                console.error(`[Engine] Job ${jobId}: FAILED to upload extracted "${entry.name}":`, entryError);
-                await db.insert(transferLogs).values({
-                  jobId,
-                  jobRunId: run.id,
-                  fileName: entry.name,
-                  sourcePath: `${srcFilePath}!${entry.name}`,
-                  destinationPath: entryDstPath,
-                  fileSize: 0,
-                  transferredAt: new Date().toISOString(),
-                  status: "failure",
-                  errorMessage: entryError instanceof Error ? entryError.message : "Unknown error",
-                });
-              }
-            }
-
-            // Post-transfer action applies to the original archive
-            try {
-              if (job.postTransferAction === "delete") {
-                console.log(`[Engine] Job ${jobId}: deleting source archive "${srcFilePath}"`);
-                await source.deleteFile(srcFilePath);
-              } else if (job.postTransferAction === "move" && job.movePath) {
-                const moveDest = path.posix.join(job.movePath, file.name);
-                console.log(`[Engine] Job ${jobId}: moving source archive "${srcFilePath}" → "${moveDest}"`);
-                await source.moveFile(srcFilePath, moveDest);
-              }
-            } catch (postErr) {
-              console.error(`[Engine] Job ${jobId}: post-transfer action failed for archive "${file.name}":`, postErr);
-            }
-
-            continue; // Skip normal upload — we already handled this file
-          }
-          // If extraction returned null or empty, fall through to normal transfer
-          console.log(`[Engine] Job ${jobId}: "${file.name}" matched archive extension but extraction yielded no files, transferring as-is`);
-        }
-
-        // Normal transfer (non-archive or extraction not enabled)
-        console.log(`[Engine] Job ${jobId}: uploading "${file.name}"...`);
-
-        // Delete existing destination file first when overwrite is enabled, or when
-        // delta sync is replacing a file that passed the timestamp check (source is newer).
-        // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
-        if (job.overwriteExisting || job.deltaSync) {
-          try {
-            await dest.deleteFile(dstFilePath);
-            console.log(`[Engine] Job ${jobId}: deleted existing "${dstFilePath}" (overwrite enabled)`);
-          } catch {
-            // File doesn't exist yet — that's fine
-          }
-        }
-
-        await dest.uploadFile(content, dstFilePath);
-        console.log(`[Engine] Job ${jobId}: uploaded "${file.name}" → "${dstFilePath}"`);
-
-        // Log success
-        await db.insert(transferLogs).values({
-          jobId,
-          jobRunId: run.id,
-          fileName: file.name,
-          sourcePath: srcFilePath,
-          destinationPath: dstFilePath,
-          fileSize: actualSize,
-          transferredAt: new Date().toISOString(),
-          status: "success",
-        });
-
-        // Post-transfer action
-        try {
-          if (job.postTransferAction === "delete") {
-            console.log(`[Engine] Job ${jobId}: deleting source "${srcFilePath}"`);
-            await source.deleteFile(srcFilePath);
-          } else if (job.postTransferAction === "move" && job.movePath) {
-            const moveDest = path.posix.join(job.movePath, file.name);
-            console.log(`[Engine] Job ${jobId}: moving source "${srcFilePath}" → "${moveDest}"`);
-            await source.moveFile(srcFilePath, moveDest);
-          }
-        } catch (postErr) {
-          console.error(`[Engine] Job ${jobId}: post-transfer action failed for "${file.name}":`, postErr);
-        }
-
-        filesTransferred++;
-        bytesTransferred += actualSize;
-        await db
-          .update(jobRuns)
-          .set({ filesTransferred, bytesTransferred })
-          .where(eq(jobRuns.id, run.id));
-      } catch (fileError) {
-        // Skip directories that slipped through the listing filter
-        if (isDirectoryError(fileError)) {
-          console.log(`[Engine] Job ${jobId}: skipping "${file.name}" — is a directory, not a file`);
-          filesSkipped++;
-          continue;
-        }
-        console.error(`[Engine] Job ${jobId}: FAILED to transfer "${file.name}":`, fileError);
-        await db.insert(transferLogs).values({
-          jobId,
-          jobRunId: run.id,
-          fileName: file.name,
-          sourcePath: srcFilePath,
-          destinationPath: dstFilePath,
-          fileSize: 0,
-          transferredAt: new Date().toISOString(),
-          status: "failure",
-          errorMessage:
-            fileError instanceof Error ? fileError.message : "Unknown error",
-        });
-      }
-    }
-
-    console.log(`[Engine] Job ${jobId}: disconnecting...`);
-    await source.disconnect();
-    await dest.disconnect();
-
-    // Complete the job run
-    await db
-      .update(jobRuns)
-      .set({
-        completedAt: new Date().toISOString(),
-        status: "success",
-        filesTransferred,
-        bytesTransferred,
-        currentFile: null,
-      })
-      .where(eq(jobRuns.id, run.id));
-
+    // Mark job as running
     await db
       .update(jobs)
-      .set({
-        status: previousStatus === "inactive" ? "inactive" : "active",
-        lastRunAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
+      .set({ status: "running", updatedAt: new Date().toISOString() })
       .where(eq(jobs.id, jobId));
 
-    console.log(
-      `[Engine] ✓ Job ${jobId} completed: ${filesTransferred} transferred, ${filesSkipped} skipped, ${bytesTransferred} bytes`
-    );
-  } catch (error) {
-    console.error(`[Engine] ✗ Job ${jobId} FAILED:`, error);
+    const source = createStorageProvider(srcConn as Parameters<typeof createStorageProvider>[0]);
+    const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
 
     try {
+      log.info("Connecting to source", { protocol: srcConn.protocol });
+      await source.connect();
+      log.info("Source connected");
+
+      log.info("Connecting to destination", { protocol: dstConn.protocol });
+      await dest.connect();
+      log.info("Destination connected");
+
+      log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
+      let files = await source.listFiles(job.sourcePath, job.fileFilter);
+      log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
+
+      // Filter hidden files (names starting with ".")
+      if (job.skipHiddenFiles) {
+        const before = files.length;
+        files = files.filter((f) => !f.name.startsWith("."));
+        if (before !== files.length) {
+          log.info("Hidden files skipped", { skipped: before - files.length });
+        }
+      }
+
+      // Filter out entries that match the move folder when it's a subdirectory
+      // of the source path (e.g. source=/data, movePath=/data/processed →
+      // skip the "processed" entry that readdir returns as a directory name).
+      if (job.postTransferAction === "move" && job.movePath) {
+        const srcNorm = job.sourcePath.replace(/\/+$/, "") + "/";
+        const moveNorm = job.movePath.replace(/\/+$/, "");
+        if (moveNorm.startsWith(srcNorm)) {
+          const relSegment = moveNorm.slice(srcNorm.length).split("/")[0];
+          if (relSegment) {
+            const before = files.length;
+            files = files.filter((f) => f.name !== relSegment);
+            if (before !== files.length) {
+              log.info("Move folder filtered from source listing", { folder: relSegment });
+            }
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        log.debug("Files to transfer", { files: files.map((f) => ({ name: f.name, size: f.size })) });
+      }
+
+      // Update totalFiles on the run so the UI can show progress
+      await db
+        .update(jobRuns)
+        .set({ totalFiles: files.length })
+        .where(eq(jobRuns.id, run.id));
+
+      // Build a set of existing destination file names so we can skip duplicates
+      // without downloading first (avoids unnecessary network I/O).
+      // For delta sync we also track modifiedAt to compare timestamps.
+      let existingDestFiles: Set<string> | null = null;
+      let destFileTimes: Map<string, Date> = new Map();
+      if (!job.overwriteExisting || job.deltaSync) {
+        try {
+          const destListing = await dest.listFiles(job.destinationPath);
+          existingDestFiles = new Set(destListing.map((f) => f.name));
+          if (job.deltaSync) {
+            for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
+          }
+          log.info("Destination files listed", { existingCount: existingDestFiles.size });
+        } catch {
+          // Destination dir may not exist yet — that's fine, nothing to skip
+          existingDestFiles = new Set();
+        }
+      }
+
+      let filesTransferred = 0;
+      let bytesTransferred = 0;
+      let filesSkipped = 0;
+
+      for (const file of files) {
+        const srcFilePath = path.posix.join(job.sourcePath, file.name);
+        const dstFilePath = path.posix.join(job.destinationPath, file.name);
+
+        // Update currentFile so the UI shows what's being processed
+        await db
+          .update(jobRuns)
+          .set({ currentFile: file.name })
+          .where(eq(jobRuns.id, run.id));
+
+        // Delta sync: skip if destination file is the same age or newer than the source.
+        if (job.deltaSync && existingDestFiles?.has(file.name)) {
+          const destTime = destFileTimes.get(file.name);
+          if (destTime && destTime >= file.modifiedAt) {
+            log.info("Skipping file — destination up to date", {
+              fileName: file.name,
+              srcModified: file.modifiedAt.toISOString(),
+              dstModified: destTime.toISOString(),
+            });
+            filesSkipped++;
+            continue;
+          }
+          log.info("File source is newer — transferring", {
+            fileName: file.name,
+            srcModified: file.modifiedAt.toISOString(),
+            dstModified: destFileTimes.get(file.name)?.toISOString() ?? "n/a",
+          });
+        }
+
+        // Skip files that already exist at destination (when overwrite is off and delta sync is off)
+        if (!job.deltaSync && existingDestFiles?.has(file.name)) {
+          log.info("Skipping file — already exists at destination", { fileName: file.name });
+          filesSkipped++;
+          continue;
+        }
+
+        log.info("Transferring file", { fileName: file.name, fileSize: file.size });
+
+        try {
+          const content = await source.downloadFile(srcFilePath);
+          const actualSize = content.length;
+          log.info("File downloaded", { fileName: file.name, actualSize });
+
+          // Archive extraction: if enabled and file is an archive, extract and upload individual files
+          if (job.extractArchives && isArchive(file.name)) {
+            const extracted = await extractArchive(file.name, content);
+            if (extracted && extracted.length > 0) {
+              log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
+
+              for (const entry of extracted) {
+                const entryDstPath = path.posix.join(job.destinationPath, entry.name);
+
+                // Skip existing files at destination (when overwrite is off)
+                if (existingDestFiles?.has(entry.name)) {
+                  log.info("Skipping extracted entry — already exists", { entryName: entry.name });
+                  filesSkipped++;
+                  continue;
+                }
+
+                try {
+                  // If overwrite is enabled, delete existing destination file first
+                  if (job.overwriteExisting) {
+                    try {
+                      await dest.deleteFile(entryDstPath);
+                    } catch {
+                      // File doesn't exist yet — that's fine
+                    }
+                  }
+
+                  await dest.uploadFile(entry.content, entryDstPath);
+                  log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
+
+                  await db.insert(transferLogs).values({
+                    jobId,
+                    jobRunId: run.id,
+                    fileName: entry.name,
+                    sourcePath: `${srcFilePath}!${entry.name}`,
+                    destinationPath: entryDstPath,
+                    fileSize: entry.content.length,
+                    transferredAt: new Date().toISOString(),
+                    status: "success",
+                  });
+
+                  filesTransferred++;
+                  bytesTransferred += entry.content.length;
+                  await db
+                    .update(jobRuns)
+                    .set({ filesTransferred, bytesTransferred })
+                    .where(eq(jobRuns.id, run.id));
+                } catch (entryError) {
+                  log.error("Failed to upload extracted entry", { entryName: entry.name, error: entryError });
+                  await db.insert(transferLogs).values({
+                    jobId,
+                    jobRunId: run.id,
+                    fileName: entry.name,
+                    sourcePath: `${srcFilePath}!${entry.name}`,
+                    destinationPath: entryDstPath,
+                    fileSize: 0,
+                    transferredAt: new Date().toISOString(),
+                    status: "failure",
+                    errorMessage: entryError instanceof Error ? entryError.message : "Unknown error",
+                  });
+                }
+              }
+
+              // Post-transfer action applies to the original archive
+              try {
+                if (job.postTransferAction === "delete") {
+                  log.info("Deleting source archive", { srcPath: srcFilePath });
+                  await source.deleteFile(srcFilePath);
+                } else if (job.postTransferAction === "move" && job.movePath) {
+                  const moveDest = path.posix.join(job.movePath, file.name);
+                  log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
+                  await source.moveFile(srcFilePath, moveDest);
+                }
+              } catch (postErr) {
+                log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
+              }
+
+              continue; // Skip normal upload — we already handled this file
+            }
+            // If extraction returned null or empty, fall through to normal transfer
+            log.info("Archive yielded no entries — transferring as-is", { fileName: file.name });
+          }
+
+          // Normal transfer (non-archive or extraction not enabled)
+          log.info("Uploading file", { fileName: file.name });
+
+          // Delete existing destination file first when overwrite is enabled, or when
+          // delta sync is replacing a file that passed the timestamp check (source is newer).
+          // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
+          if (job.overwriteExisting || job.deltaSync) {
+            try {
+              await dest.deleteFile(dstFilePath);
+              log.debug("Deleted existing destination file", { dstPath: dstFilePath });
+            } catch {
+              // File doesn't exist yet — that's fine
+            }
+          }
+
+          await dest.uploadFile(content, dstFilePath);
+          log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+
+          // Log success
+          await db.insert(transferLogs).values({
+            jobId,
+            jobRunId: run.id,
+            fileName: file.name,
+            sourcePath: srcFilePath,
+            destinationPath: dstFilePath,
+            fileSize: actualSize,
+            transferredAt: new Date().toISOString(),
+            status: "success",
+          });
+
+          // Post-transfer action
+          try {
+            if (job.postTransferAction === "delete") {
+              log.info("Deleting source file", { srcPath: srcFilePath });
+              await source.deleteFile(srcFilePath);
+            } else if (job.postTransferAction === "move" && job.movePath) {
+              const moveDest = path.posix.join(job.movePath, file.name);
+              log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
+              await source.moveFile(srcFilePath, moveDest);
+            }
+          } catch (postErr) {
+            log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
+          }
+
+          filesTransferred++;
+          bytesTransferred += actualSize;
+          await db
+            .update(jobRuns)
+            .set({ filesTransferred, bytesTransferred })
+            .where(eq(jobRuns.id, run.id));
+        } catch (fileError) {
+          // Skip directories that slipped through the listing filter
+          if (isDirectoryError(fileError)) {
+            log.info("Skipping directory entry", { fileName: file.name });
+            filesSkipped++;
+            continue;
+          }
+          log.error("Failed to transfer file", { fileName: file.name, error: fileError });
+          await db.insert(transferLogs).values({
+            jobId,
+            jobRunId: run.id,
+            fileName: file.name,
+            sourcePath: srcFilePath,
+            destinationPath: dstFilePath,
+            fileSize: 0,
+            transferredAt: new Date().toISOString(),
+            status: "failure",
+            errorMessage:
+              fileError instanceof Error ? fileError.message : "Unknown error",
+          });
+        }
+      }
+
+      log.info("Disconnecting");
       await source.disconnect();
       await dest.disconnect();
-    } catch {}
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      // Complete the job run
+      await db
+        .update(jobRuns)
+        .set({
+          completedAt: new Date().toISOString(),
+          status: "success",
+          filesTransferred,
+          bytesTransferred,
+          currentFile: null,
+        })
+        .where(eq(jobRuns.id, run.id));
 
-    await db
-      .update(jobRuns)
-      .set({
-        completedAt: new Date().toISOString(),
-        status: "failure",
-        errorMessage,
-        currentFile: null,
-      })
-      .where(eq(jobRuns.id, run.id));
+      await db
+        .update(jobs)
+        .set({
+          status: previousStatus === "inactive" ? "inactive" : "active",
+          lastRunAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(jobs.id, jobId));
 
-    await db
-      .update(jobs)
-      .set({
-        status: previousStatus === "inactive" ? "inactive" : "error",
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(jobs.id, jobId));
+      log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
+    } catch (error) {
+      log.error("Job failed", { error });
 
-    throw error;
-  }
+      try {
+        await source.disconnect();
+        await dest.disconnect();
+      } catch {}
+
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+      await db
+        .update(jobRuns)
+        .set({
+          completedAt: new Date().toISOString(),
+          status: "failure",
+          errorMessage,
+          currentFile: null,
+        })
+        .where(eq(jobRuns.id, run.id));
+
+      await db
+        .update(jobs)
+        .set({
+          status: previousStatus === "inactive" ? "inactive" : "error",
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(jobs.id, jobId));
+
+      throw error;
+    }
+  });
 }

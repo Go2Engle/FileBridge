@@ -5,6 +5,9 @@ import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { scheduleJob, unscheduleJob } from "@/lib/scheduler";
 import { logAudit, getUserId, getIpFromRequest, diffChanges } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET(
   _req: NextRequest,
@@ -100,7 +103,7 @@ export async function PUT(
 
     return NextResponse.json(row);
   } catch (error) {
-    console.error("[API] PUT /jobs/[id]:", error);
+    log.error("PUT /jobs/[id] failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
   }
 }
@@ -145,7 +148,7 @@ export async function PATCH(
 
     return NextResponse.json(row);
   } catch (error) {
-    console.error("[API] PATCH /jobs/[id]:", error);
+    log.error("PATCH /jobs/[id] failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
   }
 }
@@ -180,7 +183,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("[API] DELETE /jobs/[id]:", error);
+    log.error("DELETE /jobs/[id] failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to delete job" }, { status: 500 });
   }
 }

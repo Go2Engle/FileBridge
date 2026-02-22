@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { connections, jobs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest, diffChanges } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET(
   _req: NextRequest,
@@ -76,7 +79,7 @@ export async function PUT(
     const { credentials: _creds, ...safeRow } = row;
     return NextResponse.json(safeRow);
   } catch (error) {
-    console.error("[API] PUT /connections/[id]:", error);
+    log.error("PUT /connections/[id] failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to update connection" }, { status: 500 });
   }
 }
@@ -126,7 +129,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("[API] DELETE /connections/[id]:", error);
+    log.error("DELETE /connections/[id] failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to delete connection" }, { status: 500 });
   }
 }

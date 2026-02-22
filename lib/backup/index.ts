@@ -5,6 +5,9 @@ import cron from "node-cron";
 import { db, sqlite } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("backup");
 
 const DB_PATH =
   process.env.DATABASE_PATH ||
@@ -152,9 +155,9 @@ function pruneBackups(localPath: string, retentionCount: number): void {
     const oldest = files.shift()!;
     try {
       fs.unlinkSync(path.join(localPath, oldest));
-      console.log(`[Backup] Pruned old backup: ${oldest}`);
+      log.info("Pruned old backup", { filename: oldest });
     } catch (err) {
-      console.error(`[Backup] Failed to prune ${oldest}:`, err);
+      log.error("Failed to prune old backup", { filename: oldest, error: err });
     }
   }
 }
@@ -198,15 +201,15 @@ export async function restoreBackup(filename: string): Promise<void> {
 
   // Create a safety snapshot of the current DB before overwriting
   try {
-    console.log("[Backup] Creating pre-restore safety backup...");
+    log.info("Creating pre-restore safety backup");
     await runBackup(config);
   } catch (err) {
-    console.warn("[Backup] Pre-restore safety backup failed (continuing):", err);
+    log.warn("Pre-restore safety backup failed — continuing", { error: err });
   }
 
   // Use ATTACH DATABASE to copy all tables from the backup into the live DB.
   // This works without a server restart and is fully transactional.
-  console.log(`[Backup] Restoring from ${filename}...`);
+  log.info("Restoring from backup", { filename });
   const safePath = backupPath.replace(/'/g, "''");
   sqlite.exec(`ATTACH DATABASE '${safePath}' AS restore_src`);
 
@@ -226,7 +229,7 @@ export async function restoreBackup(filename: string): Promise<void> {
     sqlite.exec("DETACH DATABASE restore_src");
   }
 
-  console.log(`[Backup] Restore complete from ${filename}`);
+  log.info("Restore complete", { filename });
 }
 
 export async function initializeBackupScheduler(): Promise<void> {
@@ -238,36 +241,35 @@ export async function initializeBackupScheduler(): Promise<void> {
   }
 
   if (!config.enabled) {
-    console.log("[Backup] Scheduled backups disabled — skipping");
+    log.info("Scheduled backups disabled — skipping");
     return;
   }
 
   if (!cron.validate(config.schedule)) {
-    console.error(
-      `[Backup] Invalid cron expression: "${config.schedule}" — backups not scheduled`
-    );
+    log.error("Invalid cron expression — backups not scheduled", { schedule: config.schedule });
     return;
   }
 
   backupTask = cron.schedule(config.schedule, async () => {
-    console.log("[Backup] Starting scheduled backup...");
+    log.info("Starting scheduled backup");
     try {
       const result = await runBackup(config);
-      console.log(
-        `[Backup] Completed: ${result.filename} (${(result.sizeBytes / 1024).toFixed(1)} KB)`
-      );
+      log.info("Scheduled backup complete", {
+        filename: result.filename,
+        sizeKB: (result.sizeBytes / 1024).toFixed(1),
+      });
     } catch (err) {
-      console.error("[Backup] Scheduled backup failed:", err);
+      log.error("Scheduled backup failed", { error: err });
     }
   });
 
-  console.log(`[Backup] Scheduled: "${config.schedule}"`);
+  log.info("Backup scheduler initialized", { schedule: config.schedule });
 }
 
 export function stopBackupScheduler(): void {
   if (backupTask) {
     backupTask.stop();
     backupTask = null;
-    console.log("[Backup] Scheduler stopped");
+    log.info("Backup scheduler stopped");
   }
 }

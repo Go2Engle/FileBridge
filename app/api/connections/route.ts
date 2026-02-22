@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET() {
   const session = await getSession();
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
     const { credentials: _creds, ...safeRow } = row;
     return NextResponse.json(safeRow, { status: 201 });
   } catch (error) {
-    console.error("[API] POST /connections:", error);
+    log.error("POST /connections failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to create connection" }, { status: 500 });
   }
 }

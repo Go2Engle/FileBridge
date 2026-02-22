@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createStorageProvider } from "@/lib/storage/registry";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET(
   req: NextRequest,
@@ -39,7 +42,7 @@ export async function GET(
     return NextResponse.json({ path: browsePath, entries });
   } catch (error) {
     try { await provider.disconnect(); } catch {}
-    console.error(`[API] Browse ${conn.name} at "${browsePath}":`, error);
+    log.error("Browse failed", { connectionName: conn.name, browsePath, requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to browse" },
       { status: 500 }

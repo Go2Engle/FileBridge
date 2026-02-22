@@ -6,6 +6,9 @@ import {
 import path from "path";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("azure-blob");
 
 export interface AzureBlobCredentials {
   accountName: string;
@@ -74,10 +77,11 @@ export class AzureBlobProvider implements StorageProvider {
 
   async connect(): Promise<void> {
     const { accountName, accountKey, connectionString, container } = this.credentials;
-    console.log(
-      `[AzureBlob] Connecting to account="${accountName}" container="${container}" ` +
-        `auth=${connectionString ? "connectionString" : "accountKey"}`
-    );
+    log.info("Connecting", {
+      accountName,
+      container,
+      authMethod: connectionString ? "connectionString" : "accountKey",
+    });
     try {
       let serviceClient: BlobServiceClient;
 
@@ -97,7 +101,7 @@ export class AzureBlobProvider implements StorageProvider {
 
       this.containerClient = serviceClient.getContainerClient(container);
     } catch (err) {
-      console.error(`[AzureBlob] connect failed:`, err);
+      log.error("connect failed", { accountName, container, error: err });
       throw err;
     }
   }
@@ -108,7 +112,7 @@ export class AzureBlobProvider implements StorageProvider {
 
   async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
     const prefix = toBlobPrefix(remotePath);
-    console.log(`[AzureBlob] listFiles prefix="${prefix}" filter="${filter}"`);
+    log.info("Listing files", { prefix, filter });
     try {
       const regex = globToRegex(filter);
       const results: FileInfo[] = [];
@@ -130,17 +134,17 @@ export class AzureBlobProvider implements StorageProvider {
         });
       }
 
-      console.log(`[AzureBlob] listFiles: ${results.length} matched`);
+      log.info("Files listed", { prefix, matched: results.length });
       return results;
     } catch (err) {
-      console.error(`[AzureBlob] listFiles failed for prefix="${prefix}":`, err);
+      log.error("listFiles failed", { prefix, error: err });
       throw err;
     }
   }
 
   async listDirectory(remotePath: string): Promise<FileInfo[]> {
     const prefix = toBlobPrefix(remotePath);
-    console.log(`[AzureBlob] listDirectory prefix="${prefix}"`);
+    log.info("Listing directory", { prefix });
     try {
       const results: FileInfo[] = [];
 
@@ -167,17 +171,17 @@ export class AzureBlobProvider implements StorageProvider {
         }
       }
 
-      console.log(`[AzureBlob] listDirectory: ${results.length} entries`);
+      log.info("Directory listed", { prefix, entryCount: results.length });
       return results;
     } catch (err) {
-      console.error(`[AzureBlob] listDirectory failed for prefix="${prefix}":`, err);
+      log.error("listDirectory failed", { prefix, error: err });
       throw err;
     }
   }
 
   async downloadFile(remotePath: string): Promise<Buffer> {
     const blobName = toBlobName(remotePath);
-    console.log(`[AzureBlob] downloadFile "${blobName}"`);
+    log.info("Downloading blob", { blobName });
     try {
       const blobClient = this.containerClient.getBlobClient(blobName);
       const response = await blobClient.download(0);
@@ -194,14 +198,14 @@ export class AzureBlobProvider implements StorageProvider {
       }
       return Buffer.concat(chunks);
     } catch (err) {
-      console.error(`[AzureBlob] downloadFile failed for "${blobName}":`, err);
+      log.error("downloadFile failed", { blobName, error: err });
       throw err;
     }
   }
 
   async uploadFile(content: Buffer, remotePath: string): Promise<void> {
     const blobName = toBlobName(remotePath);
-    console.log(`[AzureBlob] uploadFile "${blobName}" (${content.length}B)`);
+    log.info("Uploading blob", { blobName, size: content.length });
     try {
       const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
       await blockBlobClient.upload(content, content.length, {
@@ -210,19 +214,19 @@ export class AzureBlobProvider implements StorageProvider {
         },
       });
     } catch (err) {
-      console.error(`[AzureBlob] uploadFile failed for "${blobName}":`, err);
+      log.error("uploadFile failed", { blobName, error: err });
       throw err;
     }
   }
 
   async deleteFile(remotePath: string): Promise<void> {
     const blobName = toBlobName(remotePath);
-    console.log(`[AzureBlob] deleteFile "${blobName}"`);
+    log.info("Deleting blob", { blobName });
     try {
       const blobClient = this.containerClient.getBlobClient(blobName);
       await blobClient.delete();
     } catch (err) {
-      console.error(`[AzureBlob] deleteFile failed for "${blobName}":`, err);
+      log.error("deleteFile failed", { blobName, error: err });
       throw err;
     }
   }
@@ -230,7 +234,7 @@ export class AzureBlobProvider implements StorageProvider {
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
     const srcName = toBlobName(sourcePath);
     const dstName = toBlobName(destinationPath);
-    console.log(`[AzureBlob] moveFile "${srcName}" → "${dstName}"`);
+    log.info("Moving blob", { srcName, dstName });
     try {
       const srcClient = this.containerClient.getBlobClient(srcName);
       const dstClient = this.containerClient.getBlockBlobClient(dstName);
@@ -242,7 +246,7 @@ export class AzureBlobProvider implements StorageProvider {
       // Delete source after successful copy
       await srcClient.delete();
     } catch (err) {
-      console.error(`[AzureBlob] moveFile failed "${srcName}" → "${dstName}":`, err);
+      log.error("moveFile failed", { srcName, dstName, error: err });
       throw err;
     }
   }

@@ -9,6 +9,9 @@ import {
 } from "@/lib/backup";
 import cron from "node-cron";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api");
 
 export async function GET() {
   const session = await getSession();
@@ -18,7 +21,7 @@ export async function GET() {
     const config = await getBackupConfig();
     return NextResponse.json(config);
   } catch (error) {
-    console.error("[API] GET /settings/backup:", error);
+    log.error("GET /settings/backup failed", { error });
     return NextResponse.json({ error: "Failed to fetch backup settings" }, { status: 500 });
   }
 }
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[API] POST /settings/backup:", error);
+    log.error("POST /settings/backup failed", { requestId: req.headers.get("x-request-id") ?? undefined, error });
     return NextResponse.json({ error: "Failed to save backup settings" }, { status: 500 });
   }
 }

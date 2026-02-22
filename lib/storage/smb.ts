@@ -1,5 +1,8 @@
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("smb");
 
 export interface SmbCredentials {
   username: string;
@@ -136,7 +139,7 @@ export class SmbProvider implements StorageProvider {
    * an archive + uploading 100+ files). A fresh client resolves this immediately.
    */
   private async reconnect(): Promise<void> {
-    console.log(`[SMB] Reconnecting to ${this.host} to reset stale session state...`);
+    log.info("Reconnecting to reset stale session state", { host: this.host });
     await this.disconnect();
     await this.connect();
   }
@@ -145,10 +148,12 @@ export class SmbProvider implements StorageProvider {
 
   async connect(): Promise<void> {
     const share = `\\\\${this.host}\\${this.credentials.share}`;
-    console.log(
-      `[SMB] Creating client for ${share} as "${this.credentials.username}" ` +
-      `domain="${this.credentials.domain || "(empty — local/NAS account)"}"`
-    );
+    log.info("Creating SMB client", {
+      host: this.host,
+      share: this.credentials.share,
+      username: this.credentials.username,
+      domain: this.credentials.domain || "(local/NAS account)",
+    });
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const SMB2 = require("v9u-smb2");
@@ -162,9 +167,9 @@ export class SmbProvider implements StorageProvider {
         // Must stay in sync with SmbProvider.AUTO_CLOSE_MS.
         autoCloseTimeout: SmbProvider.AUTO_CLOSE_MS,
       });
-      console.log(`[SMB] Client ready for ${share} (actual TCP handshake happens on first operation)`);
+      log.info("SMB client ready (TCP handshake deferred to first operation)", { host: this.host });
     } catch (err) {
-      console.error(`[SMB] Failed to create client for ${share}:`, err);
+      log.error("Failed to create SMB client", { host: this.host, error: err });
       throw err;
     }
   }
@@ -174,7 +179,7 @@ export class SmbProvider implements StorageProvider {
       try {
         // close() can throw if authentication never completed and internal state is uninitialized
         this.client.close();
-        console.log(`[SMB] Disconnected from ${this.host}`);
+        log.info("Disconnected", { host: this.host });
       } catch {
         // Silently ignore — happens when auth failed before a session was established
       } finally {
@@ -185,7 +190,7 @@ export class SmbProvider implements StorageProvider {
 
   async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
     const smbPath = this.toSmbPath(remotePath);
-    console.log(`[SMB] listFiles "${smbPath}" (unix: "${remotePath}") filter="${filter}"`);
+    log.info("Listing files", { smbPath, remotePath, filter });
     try {
       const entries = await this.readdirWithStatsAsync(smbPath);
       const regex = globToRegex(filter);
@@ -197,20 +202,20 @@ export class SmbProvider implements StorageProvider {
           modifiedAt: new Date(e.mtime),
           isDirectory: false,
         }));
-      console.log(`[SMB] listFiles "${smbPath}": ${entries.length} total, ${filtered.length} matched filter`);
+      log.info("Files listed", { smbPath, total: entries.length, matched: filtered.length });
       return filtered;
     } catch (err) {
-      console.error(`[SMB] listFiles FAILED for "${smbPath}":`, err);
+      log.error("listFiles failed", { smbPath, error: err });
       throw err;
     }
   }
 
   async listDirectory(remotePath: string): Promise<FileInfo[]> {
     const smbPath = this.toSmbPath(remotePath);
-    console.log(`[SMB] listDirectory "${smbPath}" (unix: "${remotePath}")`);
+    log.info("Listing directory", { smbPath, remotePath });
     try {
       const entries = await this.readdirWithStatsAsync(smbPath);
-      console.log(`[SMB] listDirectory "${smbPath}": ${entries.length} entries`);
+      log.info("Directory listed", { smbPath, entryCount: entries.length });
       return entries.map((e) => ({
         name: e.name,
         size: e.size,
@@ -218,14 +223,14 @@ export class SmbProvider implements StorageProvider {
         isDirectory: e.isDirectory(),
       }));
     } catch (err) {
-      console.error(`[SMB] listDirectory FAILED for "${smbPath}":`, err);
+      log.error("listDirectory failed", { smbPath, error: err });
       throw err;
     }
   }
 
   async downloadFile(remotePath: string): Promise<Buffer> {
     const smbPath = this.toSmbPath(remotePath);
-    console.log(`[SMB] downloadFile "${smbPath}"`);
+    log.info("Downloading file", { smbPath });
     // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
     // while the connection was idle; reconnect creates a fresh session.
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -242,11 +247,11 @@ export class SmbProvider implements StorageProvider {
           code === "ERR_STREAM_WRITE_AFTER_END" ||
           (err instanceof Error && err.message?.includes("write after end"));
         if (isStaleSession && attempt < 3) {
-          console.log(`[SMB] downloadFile "${smbPath}": session expired (${code}), reconnecting (attempt ${attempt}/2)...`);
+          log.info("Session expired during download — reconnecting", { smbPath, code, attempt });
           await this.reconnect();
           continue;
         }
-        console.error(`[SMB] downloadFile FAILED for "${smbPath}":`, err);
+        log.error("downloadFile failed", { smbPath, error: err });
         throw err;
       }
     }
@@ -256,7 +261,7 @@ export class SmbProvider implements StorageProvider {
 
   async uploadFile(content: Buffer, remotePath: string): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
-    console.log(`[SMB] uploadFile "${smbPath}" (${content.length}B)`);
+    log.info("Uploading file", { smbPath, size: content.length });
     // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
     // while the SMB connection was idle (e.g. during a long SFTP extraction loop);
     // reconnect creates a fresh session and the upload succeeds immediately.
@@ -271,11 +276,11 @@ export class SmbProvider implements StorageProvider {
           code === "ERR_STREAM_WRITE_AFTER_END" ||
           (err instanceof Error && err.message?.includes("write after end"));
         if (isStaleSession && attempt < 3) {
-          console.log(`[SMB] uploadFile "${smbPath}": session expired (${code}), reconnecting (attempt ${attempt}/2)...`);
+          log.info("Session expired during upload — reconnecting", { smbPath, code, attempt });
           await this.reconnect();
           continue;
         }
-        console.error(`[SMB] uploadFile FAILED for "${smbPath}":`, err);
+        log.error("uploadFile failed", { smbPath, error: err });
         throw err;
       }
     }
@@ -283,7 +288,7 @@ export class SmbProvider implements StorageProvider {
 
   async deleteFile(remotePath: string): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
-    console.log(`[SMB] deleteFile "${smbPath}"`);
+    log.info("Deleting file", { smbPath });
     // Try immediately — no proactive wait. Handle errors reactively:
     //   STATUS_FILE_CLOSED:      auto-close fired during a long inter-operation gap
     //                            (e.g. extracting a large ZIP + uploading many files);
@@ -298,19 +303,19 @@ export class SmbProvider implements StorageProvider {
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
-          console.log(`[SMB] deleteFile "${smbPath}": STATUS_FILE_CLOSED (session expired), reconnecting (attempt ${attempt}/4)...`);
+          log.info("STATUS_FILE_CLOSED on delete — reconnecting", { smbPath, attempt });
           await this.reconnect();
           continue;
         }
         if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
           const waitMs = this.sharingViolationWaitMs();
-          console.log(`[SMB] deleteFile "${smbPath}": STATUS_SHARING_VIOLATION, waiting ${waitMs}ms for auto-close (attempt ${attempt}/4)...`);
+          log.info("STATUS_SHARING_VIOLATION on delete — waiting for auto-close", { smbPath, waitMs, attempt });
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
         if (code === "STATUS_PENDING" && attempt < 5) {
           const delay = attempt * 1000;
-          console.log(`[SMB] deleteFile "${smbPath}": STATUS_PENDING, retrying in ${delay / 1000}s (attempt ${attempt}/4)...`);
+          log.info("STATUS_PENDING on delete — retrying", { smbPath, delayMs: delay, attempt });
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -322,7 +327,7 @@ export class SmbProvider implements StorageProvider {
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
     const smbSrc = this.toSmbPath(sourcePath);
     const smbDst = this.toSmbPath(destinationPath);
-    console.log(`[SMB] moveFile "${smbSrc}" → "${smbDst}"`);
+    log.info("Moving file", { smbSrc, smbDst });
     // Try immediately — no proactive wait. Handle errors reactively:
     //   STATUS_FILE_CLOSED:      auto-close fired during a long inter-operation gap;
     //                            reconnect to get a fresh session, then retry.
@@ -335,19 +340,19 @@ export class SmbProvider implements StorageProvider {
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
-          console.log(`[SMB] moveFile "${smbSrc}": STATUS_FILE_CLOSED (session expired), reconnecting (attempt ${attempt}/4)...`);
+          log.info("STATUS_FILE_CLOSED on move — reconnecting", { smbSrc, attempt });
           await this.reconnect();
           continue;
         }
         if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
           const waitMs = this.sharingViolationWaitMs();
-          console.log(`[SMB] moveFile "${smbSrc}": STATUS_SHARING_VIOLATION, waiting ${waitMs}ms for auto-close (attempt ${attempt}/4)...`);
+          log.info("STATUS_SHARING_VIOLATION on move — waiting for auto-close", { smbSrc, waitMs, attempt });
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
         if (code === "STATUS_PENDING" && attempt < 5) {
           const delay = attempt * 1000;
-          console.log(`[SMB] moveFile "${smbSrc}": STATUS_PENDING, retrying in ${delay / 1000}s (attempt ${attempt}/4)...`);
+          log.info("STATUS_PENDING on move — retrying", { smbSrc, delayMs: delay, attempt });
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
