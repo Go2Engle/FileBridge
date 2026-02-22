@@ -65,6 +65,16 @@ export class SmbProvider implements StorageProvider {
     });
   }
 
+  private readdirWithStatsAsync(smbPath: string): Promise<Array<{ name: string; size: number; mtime: Date; isDirectory: () => boolean }>> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.client.readdir(smbPath, { stats: true }, (err: any, files: any[]) => {
+        if (err) reject(err);
+        else resolve(files ?? []);
+      });
+    });
+  }
+
   private readFileAsync(smbPath: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -177,21 +187,17 @@ export class SmbProvider implements StorageProvider {
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] listFiles "${smbPath}" (unix: "${remotePath}") filter="${filter}"`);
     try {
-      const files = await this.readdirAsync(smbPath);
+      const entries = await this.readdirWithStatsAsync(smbPath);
       const regex = globToRegex(filter);
-      const filtered = files
-        // SMB readdir returns directory names too — filter them out using
-        // the same extension heuristic as listDirectory (entries without a
-        // file extension are treated as directories).
-        .filter((name) => /\.[a-zA-Z0-9]{1,8}$/.test(name))
-        .filter((name) => regex.test(name))
-        .map((name) => ({
-          name,
-          size: 0,
-          modifiedAt: new Date(),
+      const filtered = entries
+        .filter((e) => !e.isDirectory() && regex.test(e.name))
+        .map((e) => ({
+          name: e.name,
+          size: e.size,
+          modifiedAt: new Date(e.mtime),
           isDirectory: false,
         }));
-      console.log(`[SMB] listFiles "${smbPath}": ${files.length} total, ${filtered.length} matched filter`);
+      console.log(`[SMB] listFiles "${smbPath}": ${entries.length} total, ${filtered.length} matched filter`);
       return filtered;
     } catch (err) {
       console.error(`[SMB] listFiles FAILED for "${smbPath}":`, err);
@@ -203,14 +209,13 @@ export class SmbProvider implements StorageProvider {
     const smbPath = this.toSmbPath(remotePath);
     console.log(`[SMB] listDirectory "${smbPath}" (unix: "${remotePath}")`);
     try {
-      const names = await this.readdirAsync(smbPath);
-      console.log(`[SMB] listDirectory "${smbPath}": ${names.length} entries`);
-      // Heuristic: names without a short file extension are treated as directories.
-      return names.map((name) => ({
-        name,
-        size: 0,
-        modifiedAt: new Date(),
-        isDirectory: !/\.[a-zA-Z0-9]{1,8}$/.test(name),
+      const entries = await this.readdirWithStatsAsync(smbPath);
+      console.log(`[SMB] listDirectory "${smbPath}": ${entries.length} entries`);
+      return entries.map((e) => ({
+        name: e.name,
+        size: e.size,
+        modifiedAt: new Date(e.mtime),
+        isDirectory: e.isDirectory(),
       }));
     } catch (err) {
       console.error(`[SMB] listDirectory FAILED for "${smbPath}":`, err);
