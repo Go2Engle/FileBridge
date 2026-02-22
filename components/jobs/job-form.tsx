@@ -183,6 +183,8 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
   const postAction = form.watch("postTransferAction");
   const sourceConnectionId = form.watch("sourceConnectionId");
   const destinationConnectionId = form.watch("destinationConnectionId");
+  const extractArchives = form.watch("extractArchives");
+  const deltaSync = form.watch("deltaSync");
 
   const getConnectionName = (id: number) =>
     connections?.find((c) => c.id === id)?.name ?? "Connection";
@@ -557,6 +559,13 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                     </FormItem>
                   )}
                 />
+
+                {extractArchives && deltaSync && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
+                    Delta sync does not apply to archive files. When both options are enabled,
+                    archives are always downloaded and extracted on every run.
+                  </p>
+                )}
               </form>
             </Form>
           </ScrollArea>

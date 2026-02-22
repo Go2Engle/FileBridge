@@ -31,6 +31,16 @@ function isArchive(fileName: string): boolean {
   return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
+/**
+ * WARNING: Delta sync does not apply to archive extraction.
+ * When extractArchives is enabled, files land at the destination under their
+ * extracted names (e.g. "report.csv"), not the archive name ("data.zip").
+ * The source listing only exposes the archive file itself, so there is no way
+ * to compare individual entry timestamps against the destination without first
+ * downloading and unpacking the archive — which defeats the purpose of delta sync.
+ * When both options are enabled together, delta sync is silently ignored for
+ * archive files and all archives will be downloaded and extracted on every run.
+ */
 function extractArchive(fileName: string, content: Buffer): Promise<ExtractedFile[] | null> {
   const lower = fileName.toLowerCase();
 
@@ -506,9 +516,10 @@ export async function runJob(jobId: number): Promise<void> {
         // Normal transfer (non-archive or extraction not enabled)
         console.log(`[Engine] Job ${jobId}: uploading "${file.name}"...`);
 
-        // If overwrite is enabled, delete existing destination file first
-        // (SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on duplicates).
-        if (job.overwriteExisting) {
+        // Delete existing destination file first when overwrite is enabled, or when
+        // delta sync is replacing a file that passed the timestamp check (source is newer).
+        // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
+        if (job.overwriteExisting || job.deltaSync) {
           try {
             await dest.deleteFile(dstFilePath);
             console.log(`[Engine] Job ${jobId}: deleted existing "${dstFilePath}" (overwrite enabled)`);
