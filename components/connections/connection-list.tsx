@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Edit2, FolderSearch, Plus, Trash2 } from "lucide-react";
+import { Edit2, FolderSearch, Loader2, Plus, PlugZap, Trash2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -24,6 +24,23 @@ interface ConnectionListProps {
 export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   const queryClient = useQueryClient();
   const [browser, setBrowser] = useState<{ conn: Connection } | null>(null);
+  const [testingId, setTestingId] = useState<number | null>(null);
+
+  async function testConnection(conn: Connection) {
+    setTestingId(conn.id);
+    try {
+      const { data } = await axios.post(`/api/connections/${conn.id}/test`);
+      if (data.success) {
+        toast.success(`${conn.name}: ${data.message}`);
+      } else {
+        toast.error(`${conn.name}: ${data.error}`);
+      }
+    } catch {
+      toast.error(`${conn.name}: Test request failed`);
+    } finally {
+      setTestingId(null);
+    }
+  }
 
   const { data, isLoading } = useQuery<Connection[]>({
     queryKey: ["connections"],
@@ -93,6 +110,17 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Test connection"
+                      disabled={testingId === conn.id}
+                      onClick={() => testConnection(conn)}
+                    >
+                      {testingId === conn.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <PlugZap className="h-4 w-4" />}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

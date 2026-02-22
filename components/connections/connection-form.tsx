@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Loader2, PlugZap } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -47,6 +48,7 @@ interface ConnectionFormProps {
 export function ConnectionForm({ open, onClose, editConnection }: ConnectionFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!editConnection;
+  const [isTesting, setIsTesting] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -103,6 +105,34 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       form.setValue("port", protocol === "smb" ? 445 : 22);
     }
   }, [protocol, isEditing, form]);
+
+  async function testConnection() {
+    const values = form.getValues();
+    const { protocol, host, port, username, password, privateKey, passphrase, domain, share } = values;
+    const credentials: Record<string, string> = { username };
+    if (protocol === "sftp") {
+      if (password) credentials.password = password;
+      if (privateKey) credentials.privateKey = privateKey;
+      if (passphrase) credentials.passphrase = passphrase;
+    } else {
+      if (password) credentials.password = password;
+      credentials.domain = domain ?? "";
+      credentials.share = share ?? "";
+    }
+    setIsTesting(true);
+    try {
+      const { data } = await axios.post("/api/connections/test", { protocol, host, port, credentials });
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.error ?? "Connection test failed");
+      }
+    } catch {
+      toast.error("Test request failed");
+    } finally {
+      setIsTesting(false);
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
@@ -306,13 +336,25 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               </>
             )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isTesting}
+                onClick={testConnection}
+              >
+                {isTesting
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Testing...</>
+                  : <><PlugZap className="h-4 w-4 mr-2" />Test Connection</>}
               </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Saving..." : isEditing ? "Update" : "Create"}
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending ? "Saving..." : isEditing ? "Update" : "Create"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </Form>
