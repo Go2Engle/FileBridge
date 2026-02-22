@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { scheduleJob, unscheduleJob } from "@/lib/scheduler";
-import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { logAudit, getUserId, getIpFromRequest, diffChanges } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -46,6 +46,9 @@ export async function PUT(
       status,
     } = body;
 
+    // Snapshot current state before update for diffing
+    const before = await db.query.jobs.findFirst({ where: eq(jobs.id, Number(id)) });
+
     const [row] = await db
       .update(jobs)
       .set({
@@ -77,6 +80,14 @@ export async function PUT(
       unscheduleJob(row.id);
     }
 
+    const changes = before
+      ? diffChanges(
+          before as unknown as Record<string, unknown>,
+          row as unknown as Record<string, unknown>,
+          ["id", "createdAt", "updatedAt", "lastRunAt", "nextRunAt"]
+        )
+      : {};
+
     logAudit({
       userId: getUserId(session),
       action: "update",
@@ -84,7 +95,7 @@ export async function PUT(
       resourceId: row.id,
       resourceName: row.name,
       ipAddress: getIpFromRequest(req),
-      details: { schedule: row.schedule, status: row.status },
+      details: Object.keys(changes).length > 0 ? changes : null,
     });
 
     return NextResponse.json(row);
@@ -105,6 +116,8 @@ export async function PATCH(
   try {
     const body = await req.json();
     const { status } = body;
+
+    const before = await db.query.jobs.findFirst({ where: eq(jobs.id, Number(id)) });
 
     const [row] = await db
       .update(jobs)
@@ -127,7 +140,7 @@ export async function PATCH(
       resourceId: row.id,
       resourceName: row.name,
       ipAddress: getIpFromRequest(req),
-      details: { statusChange: status },
+      details: before ? { status: { from: before.status, to: row.status } } : { status: { to: row.status } },
     });
 
     return NextResponse.json(row);

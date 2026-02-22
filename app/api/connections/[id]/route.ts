@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { connections, jobs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
-import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
+import { logAudit, getUserId, getIpFromRequest, diffChanges } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -34,6 +34,12 @@ export async function PUT(
     const body = await req.json();
     const { name, protocol, host, port, credentials } = body;
 
+    // Snapshot current state before update for diffing (exclude credentials from diff)
+    const [before] = await db
+      .select({ name: connections.name, protocol: connections.protocol, host: connections.host, port: connections.port })
+      .from(connections)
+      .where(eq(connections.id, Number(id)));
+
     const [row] = await db
       .update(connections)
       .set({
@@ -49,6 +55,14 @@ export async function PUT(
 
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const changes = before
+      ? diffChanges(
+          before as unknown as Record<string, unknown>,
+          { name: row.name, protocol: row.protocol, host: row.host, port: row.port },
+          []
+        )
+      : {};
+
     logAudit({
       userId: getUserId(session),
       action: "update",
@@ -56,7 +70,7 @@ export async function PUT(
       resourceId: row.id,
       resourceName: row.name,
       ipAddress: getIpFromRequest(req),
-      details: { protocol: row.protocol, host: row.host },
+      details: Object.keys(changes).length > 0 ? changes : null,
     });
 
     const { credentials: _creds, ...safeRow } = row;

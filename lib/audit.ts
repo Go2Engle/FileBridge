@@ -32,6 +32,30 @@ export function getUserId(session: Session): string {
 }
 
 /**
+ * Compare two objects and return only the fields that changed,
+ * in the form { fieldName: { from: oldValue, to: newValue } }.
+ * Fields listed in `skip` are excluded (e.g. credentials, timestamps).
+ */
+export function diffChanges(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  skip: string[] = []
+): Record<string, { from: unknown; to: unknown }> {
+  const changed: Record<string, { from: unknown; to: unknown }> = {};
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  for (const key of keys) {
+    if (skip.includes(key)) continue;
+    const bv = before[key];
+    const av = after[key];
+    // Loose equality check covers null vs undefined and number coercion
+    if (String(bv) !== String(av)) {
+      changed[key] = { from: bv, to: av };
+    }
+  }
+  return changed;
+}
+
+/**
  * Write a single audit log entry. Fire-and-forget — errors are caught and
  * logged to stderr so they never interrupt the calling request.
  */
