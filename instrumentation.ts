@@ -5,5 +5,8 @@ export async function register() {
 
     const { initializeScheduler } = await import("./lib/scheduler/index");
     await initializeScheduler();
+
+    const { initializeBackupScheduler } = await import("./lib/backup/index");
+    await initializeBackupScheduler();
   }
 }
