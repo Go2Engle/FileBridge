@@ -54,3 +54,6 @@ drizzle/
 
 # Sample code (local reference only)
 samplecode/
+
+# Local planning docs
+ENTERPRISE_ROADMAP.md
