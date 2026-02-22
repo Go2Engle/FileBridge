@@ -89,9 +89,15 @@ function extractTar(content: Buffer): Promise<ExtractedFile[]> {
 export interface DryRunFile {
   name: string;
   size: number;
+  modifiedAt: string | null;
   wouldSkip: boolean;
-  /** Why the file is skipped, or null if it will be transferred. */
-  skipReason: "filter" | "exists" | null;
+  /**
+   * Why the file is skipped, or null if it will be transferred.
+   * - "filter"  — does not match the job's file filter
+   * - "exists"  — already exists at destination and overwrite is disabled
+   * - "delta"   — destination file is same age or newer (delta sync enabled)
+   */
+  skipReason: "filter" | "exists" | "delta" | null;
   /** What happens to the source file after a successful transfer. */
   postAction: "retain" | "delete" | "move";
   /** Full destination path when postAction is "move". */
@@ -117,8 +123,10 @@ export interface DryRunResult {
   wouldSkip: number;
   /** Files excluded because they don't match the file filter. */
   skippedByFilter: number;
-  /** Files excluded because they already exist at the destination. */
+  /** Files excluded because they already exist at the destination (overwrite disabled, delta sync off). */
   skippedByExists: number;
+  /** Files excluded because the destination copy is the same age or newer (delta sync enabled). */
+  skippedByDelta: number;
   totalBytes: number;
 }
 
@@ -164,14 +172,19 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       allFiles.filter((f) => filterRegex.test(f.name)).map((f) => f.name)
     );
 
-    // Check destination for existing files when overwrite is disabled.
+    // Check destination for existing files when overwrite is disabled or delta sync is on.
+    // For delta sync we also need modifiedAt to compare timestamps.
     let existingDestFiles: Set<string> = new Set();
-    if (!job.overwriteExisting) {
+    let destFileTimes: Map<string, Date> = new Map();
+    if (!job.overwriteExisting || job.deltaSync) {
       const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
       try {
         await dest.connect();
         const destListing = await dest.listFiles(job.destinationPath);
         existingDestFiles = new Set(destListing.map((f) => f.name));
+        if (job.deltaSync) {
+          for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
+        }
         await dest.disconnect();
       } catch {
         // Destination dir may not exist yet — nothing to skip
@@ -185,7 +198,14 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       let skipReason: DryRunFile["skipReason"] = null;
       if (!matchesFilter) {
         skipReason = "filter";
-      } else if (existingDestFiles.has(f.name)) {
+      } else if (job.deltaSync && existingDestFiles.has(f.name)) {
+        // Delta sync: skip if destination is same age or newer than source.
+        const destTime = destFileTimes.get(f.name);
+        if (destTime && destTime >= f.modifiedAt) {
+          skipReason = "delta";
+        }
+        // If source is newer, fall through → will transfer (skipReason stays null).
+      } else if (!job.overwriteExisting && !job.deltaSync && existingDestFiles.has(f.name)) {
         skipReason = "exists";
       }
 
@@ -198,6 +218,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       return {
         name: f.name,
         size: f.size,
+        modifiedAt: f.modifiedAt.toISOString(),
         wouldSkip,
         skipReason,
         postAction: job.postTransferAction,
@@ -209,7 +230,8 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
 
     const skippedByFilter = dryRunFiles.filter((f) => f.skipReason === "filter").length;
     const skippedByExists = dryRunFiles.filter((f) => f.skipReason === "exists").length;
-    const wouldSkipCount = skippedByFilter + skippedByExists;
+    const skippedByDelta = dryRunFiles.filter((f) => f.skipReason === "delta").length;
+    const wouldSkipCount = skippedByFilter + skippedByExists + skippedByDelta;
     const wouldTransfer = dryRunFiles.length - wouldSkipCount;
     const totalBytes = dryRunFiles
       .filter((f) => !f.wouldSkip)
@@ -228,6 +250,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       wouldSkip: wouldSkipCount,
       skippedByFilter,
       skippedByExists,
+      skippedByDelta,
       totalBytes,
     };
   } finally {
@@ -342,11 +365,16 @@ export async function runJob(jobId: number): Promise<void> {
 
     // Build a set of existing destination file names so we can skip duplicates
     // without downloading first (avoids unnecessary network I/O).
+    // For delta sync we also track modifiedAt to compare timestamps.
     let existingDestFiles: Set<string> | null = null;
-    if (!job.overwriteExisting) {
+    let destFileTimes: Map<string, Date> = new Map();
+    if (!job.overwriteExisting || job.deltaSync) {
       try {
         const destListing = await dest.listFiles(job.destinationPath);
         existingDestFiles = new Set(destListing.map((f) => f.name));
+        if (job.deltaSync) {
+          for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
+        }
         console.log(`[Engine] Job ${jobId}: ${existingDestFiles.size} file(s) already at destination`);
       } catch {
         // Destination dir may not exist yet — that's fine, nothing to skip
@@ -368,8 +396,19 @@ export async function runJob(jobId: number): Promise<void> {
         .set({ currentFile: file.name })
         .where(eq(jobRuns.id, run.id));
 
-      // Skip files that already exist at destination (when overwrite is off)
-      if (existingDestFiles?.has(file.name)) {
+      // Delta sync: skip if destination file is the same age or newer than the source.
+      if (job.deltaSync && existingDestFiles?.has(file.name)) {
+        const destTime = destFileTimes.get(file.name);
+        if (destTime && destTime >= file.modifiedAt) {
+          console.log(`[Engine] Job ${jobId}: skipping "${file.name}" — destination is up to date (src: ${file.modifiedAt.toISOString()}, dst: ${destTime.toISOString()})`);
+          filesSkipped++;
+          continue;
+        }
+        console.log(`[Engine] Job ${jobId}: "${file.name}" — source is newer, transferring (src: ${file.modifiedAt.toISOString()}, dst: ${destFileTimes.get(file.name)?.toISOString() ?? "n/a"})`);
+      }
+
+      // Skip files that already exist at destination (when overwrite is off and delta sync is off)
+      if (!job.deltaSync && existingDestFiles?.has(file.name)) {
         console.log(`[Engine] Job ${jobId}: skipping "${file.name}" — already exists at destination`);
         filesSkipped++;
         continue;

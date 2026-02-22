@@ -38,6 +38,7 @@ const jobSchema = z.object({
   overwriteExisting: z.boolean().default(false),
   skipHiddenFiles: z.boolean().default(true),
   extractArchives: z.boolean().default(false),
+  deltaSync: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof jobSchema>;
@@ -139,6 +140,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
       overwriteExisting: false,
       skipHiddenFiles: true,
       extractArchives: false,
+      deltaSync: false,
     },
   });
 
@@ -157,6 +159,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         overwriteExisting: editJob.overwriteExisting ?? false,
         skipHiddenFiles: editJob.skipHiddenFiles ?? true,
         extractArchives: editJob.extractArchives ?? false,
+        deltaSync: editJob.deltaSync ?? false,
       });
     } else {
       form.reset({
@@ -172,6 +175,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         overwriteExisting: false,
         skipHiddenFiles: true,
         extractArchives: false,
+        deltaSync: false,
       });
     }
   }, [editJob, form]);
@@ -526,6 +530,25 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                         <FormDescription>
                           Extract .zip, .tar, .tar.gz, and .tgz files and transfer
                           their contents instead of the archive itself.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="deltaSync"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Delta sync</FormLabel>
+                        <FormDescription>
+                          Only transfer files that are new or modified since the last sync.
+                          Files whose destination copy is the same age or newer are skipped.
                         </FormDescription>
                       </div>
                       <FormControl>

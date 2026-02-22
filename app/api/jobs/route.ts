@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       overwriteExisting,
       skipHiddenFiles,
       extractArchives,
+      deltaSync,
     } = body;
 
     const [row] = await db
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
         overwriteExisting: overwriteExisting ?? false,
         skipHiddenFiles: skipHiddenFiles ?? true,
         extractArchives: extractArchives ?? false,
+        deltaSync: deltaSync ?? false,
         status: "inactive",
       })
       .returning();

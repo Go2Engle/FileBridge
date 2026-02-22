@@ -100,6 +100,7 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN extract_archives INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE job_runs ADD COLUMN total_files INTEGER`,
   `ALTER TABLE job_runs ADD COLUMN current_file TEXT`,
+  `ALTER TABLE jobs ADD COLUMN delta_sync INTEGER NOT NULL DEFAULT 0`,
 ];
 
 for (const sql of migrations) {

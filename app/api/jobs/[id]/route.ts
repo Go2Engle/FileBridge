@@ -41,6 +41,7 @@ export async function PUT(
       overwriteExisting,
       skipHiddenFiles,
       extractArchives,
+      deltaSync,
       status,
     } = body;
 
@@ -59,6 +60,7 @@ export async function PUT(
         overwriteExisting: overwriteExisting ?? false,
         skipHiddenFiles: skipHiddenFiles ?? true,
         extractArchives: extractArchives ?? false,
+        deltaSync: deltaSync ?? false,
         status,
         updatedAt: new Date().toISOString(),
       })

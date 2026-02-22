@@ -22,6 +22,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertCircle,
   ArrowRight,
+  CheckCheck,
   Filter,
   FlaskConical,
   FolderInput,
@@ -55,6 +56,14 @@ function DestinationBadge({ file }: { file: DryRunFile }) {
       <Badge variant="secondary" className="text-xs gap-1 whitespace-nowrap">
         <SkipForward className="h-3 w-3" />
         Exists
+      </Badge>
+    );
+  }
+  if (file.skipReason === "delta") {
+    return (
+      <Badge variant="secondary" className="text-xs gap-1 whitespace-nowrap">
+        <CheckCheck className="h-3 w-3" />
+        Unchanged
       </Badge>
     );
   }
@@ -201,6 +210,7 @@ export function DryRunDialog({ job, open, onClose }: DryRunDialogProps) {
                     {[
                       result.skippedByFilter > 0 && `${result.skippedByFilter} filtered`,
                       result.skippedByExists > 0 && `${result.skippedByExists} exist`,
+                      result.skippedByDelta > 0 && `${result.skippedByDelta} unchanged`,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -237,7 +247,7 @@ export function DryRunDialog({ job, open, onClose }: DryRunDialogProps) {
                         className={
                           f.skipReason === "filter"
                             ? "opacity-35"
-                            : f.skipReason === "exists"
+                            : f.skipReason === "exists" || f.skipReason === "delta"
                             ? "opacity-60"
                             : undefined
                         }

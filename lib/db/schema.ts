@@ -46,6 +46,9 @@ export const jobs = sqliteTable("jobs", {
   extractArchives: integer("extract_archives", { mode: "boolean" })
     .notNull()
     .default(false),
+  deltaSync: integer("delta_sync", { mode: "boolean" })
+    .notNull()
+    .default(false),
   status: text("status", {
     enum: ["active", "inactive", "running", "error"],
   })
