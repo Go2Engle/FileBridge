@@ -781,7 +781,7 @@
 
     .mock-kpi-sub {
       font-size: 0.65rem;
-      color: #22c55e;
+      color: var(--text-dim);
       margin-top: 2px;
     }
 
@@ -807,31 +807,148 @@
       letter-spacing: 0.04em;
     }
 
-    .mock-bars {
+    .mock-chart-sub {
+      font-size: 0.61rem;
+      color: var(--text-dim);
+      margin-top: -8px;
+      margin-bottom: 10px;
+    }
+
+    .mock-line-chart {
+      width: 100%;
+      height: 64px;
+      display: block;
+    }
+
+    .mock-chart-dates {
       display: flex;
-      align-items: flex-end;
-      gap: 6px;
-      height: 60px;
+      justify-content: space-between;
+      margin-top: 4px;
     }
 
-    .mock-bar {
-      flex: 1;
-      border-radius: 4px 4px 0 0;
-      background: var(--accent-grad);
-      opacity: 0.7;
-      transition: opacity 0.2s;
+    .mock-chart-date {
+      font-size: 0.58rem;
+      color: var(--text-dim);
     }
 
-    .mock-bar:hover { opacity: 1; }
+    .mock-job-items { display: flex; flex-direction: column; gap: 10px; }
 
-    .mock-activity-items { display: flex; flex-direction: column; gap: 8px; }
+    .mock-job-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
 
-    .mock-activity-item {
+    .mock-job-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .mock-job-name {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-job-time {
+      font-size: 0.61rem;
+      color: var(--text-dim);
+    }
+
+    .mock-job-badge {
+      font-size: 0.6rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .mock-badge-inactive {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .mock-badge-active {
+      background: rgba(34,197,94,0.12);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #22c55e;
+    }
+
+    .mock-badge-running {
+      background: rgba(245,158,11,0.12);
+      border: 1px solid rgba(245,158,11,0.3);
+      color: #f59e0b;
+    }
+
+    .mock-badge-error {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #ef4444;
+    }
+
+    .mock-activity-full {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .mock-activity-rows { display: flex; flex-direction: column; }
+
+    .mock-activity-row {
       display: flex;
       align-items: center;
       gap: 8px;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mock-activity-row:last-child { border-bottom: none; }
+
+    .mock-activity-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .mock-activity-filename {
       font-size: 0.72rem;
-      color: var(--text-muted);
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-activity-path {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-activity-end {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .mock-activity-meta {
+      font-size: 0.6rem;
+      color: var(--text-dim);
     }
 
     .mock-status-dot {
@@ -1413,57 +1530,129 @@
           <div class="mock-content">
             <div class="mock-kpis">
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Files (24h)</div>
-                <div class="mock-kpi-value" style="color:var(--accent-1)">1,284</div>
-                <div class="mock-kpi-sub">↑ 12% vs yesterday</div>
+                <div class="mock-kpi-label">Files Transferred</div>
+                <div class="mock-kpi-value">1,284</div>
+                <div class="mock-kpi-sub">2,200 this week</div>
               </div>
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Data Volume</div>
-                <div class="mock-kpi-value" style="color:var(--accent-2)">4.7 GB</div>
-                <div class="mock-kpi-sub">↑ 8% vs yesterday</div>
+                <div class="mock-kpi-label">Data Volume (7d)</div>
+                <div class="mock-kpi-value">4.7 GB</div>
+                <div class="mock-kpi-sub">2,200 files all-time</div>
               </div>
               <div class="mock-kpi">
                 <div class="mock-kpi-label">Success Rate</div>
                 <div class="mock-kpi-value" style="color:#22c55e">99.8%</div>
-                <div class="mock-kpi-sub">↑ 0.2% vs last week</div>
+                <div class="mock-kpi-sub">Last 7 days</div>
               </div>
               <div class="mock-kpi">
                 <div class="mock-kpi-label">Active Jobs</div>
-                <div class="mock-kpi-value" style="color:var(--accent-3)">7</div>
-                <div class="mock-kpi-sub">2 running now</div>
+                <div class="mock-kpi-value">7</div>
+                <div class="mock-kpi-sub">Scheduled transfers</div>
               </div>
             </div>
             <div class="mock-chart-row">
               <div class="mock-chart">
-                <div class="mock-chart-title">7-Day Transfer Volume</div>
-                <div class="mock-bars">
-                  <div class="mock-bar" style="height:40%"></div>
-                  <div class="mock-bar" style="height:55%"></div>
-                  <div class="mock-bar" style="height:35%"></div>
-                  <div class="mock-bar" style="height:70%"></div>
-                  <div class="mock-bar" style="height:62%"></div>
-                  <div class="mock-bar" style="height:80%"></div>
-                  <div class="mock-bar" style="height:95%"></div>
+                <div class="mock-chart-title">Transfer Volume</div>
+                <div class="mock-chart-sub">Files and data transferred over the last 7 days</div>
+                <svg class="mock-line-chart" viewBox="0 0 220 64" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>
+                      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.02"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M 0,62 C 30,61 55,58 80,46 C 95,38 105,14 115,4 C 125,14 140,52 165,59 C 185,63 205,62 220,62 L 220,64 L 0,64 Z" fill="url(#lineGrad)"/>
+                  <path d="M 0,62 C 30,61 55,58 80,46 C 95,38 105,14 115,4 C 125,14 140,52 165,59 C 185,63 205,62 220,62" fill="none" stroke="#6366f1" stroke-width="1.5"/>
+                </svg>
+                <div class="mock-chart-dates">
+                  <span class="mock-chart-date">Feb 16</span>
+                  <span class="mock-chart-date">Feb 17</span>
+                  <span class="mock-chart-date">Feb 18</span>
+                  <span class="mock-chart-date">Feb 19</span>
+                  <span class="mock-chart-date">Feb 20</span>
+                  <span class="mock-chart-date">Feb 21</span>
+                  <span class="mock-chart-date">Feb 22</span>
                 </div>
               </div>
               <div class="mock-activity">
-                <div class="mock-activity-title">Recent Activity</div>
-                <div class="mock-activity-items">
-                  <div class="mock-activity-item">
-                    <div class="mock-status-dot" style="background:#22c55e"></div>
-                    report_2026_02.csv
+                <div class="mock-activity-title">Job Status</div>
+                <div class="mock-job-items">
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">reports-sftp</div>
+                      <div class="mock-job-time">Last run 2 min ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-active">Active</div>
                   </div>
-                  <div class="mock-activity-item">
-                    <div class="mock-status-dot" style="background:#22c55e"></div>
-                    export_users.xlsx
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">archive-backup</div>
+                      <div class="mock-job-time">Last run 14 min ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-inactive">Inactive</div>
                   </div>
-                  <div class="mock-activity-item">
-                    <div class="mock-status-dot" style="background:#f59e0b"></div>
-                    archive_feb.zip
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">user-export</div>
+                      <div class="mock-job-time">Last run 1 hour ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-inactive">Inactive</div>
                   </div>
-                  <div class="mock-activity-item">
-                    <div class="mock-status-dot" style="background:#22c55e"></div>
-                    invoice_0291.pdf
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">daily-sync</div>
+                      <div class="mock-job-time">Last run 3 hours ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-running">Running</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mock-activity-full">
+              <div class="mock-activity-title" style="padding:12px 12px 6px;margin-bottom:0">Recent Activity</div>
+              <div class="mock-activity-rows">
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">report_2026_02.csv</div>
+                    <div class="mock-activity-path">/reports/report.csv → /archive/report.csv</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">2.3 MB · 2 min ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">export_users.xlsx</div>
+                    <div class="mock-activity-path">/exports/users.xlsx → /smb/users.xlsx</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">1.1 MB · 14 min ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#ef4444"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">archive_feb.zip</div>
+                    <div class="mock-activity-path">/source/archive.zip → /backup/archive.zip</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-error">failure</div>
+                    <div class="mock-activity-meta">45.2 MB · 1 hr ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">invoice_0291.pdf</div>
+                    <div class="mock-activity-path">/invoices/inv.pdf → /sftp/inv.pdf</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">234 KB · 2 hr ago</div>
                   </div>
                 </div>
               </div>
