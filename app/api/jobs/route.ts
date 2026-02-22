@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 export async function GET() {
   const session = await getSession();
@@ -53,6 +54,16 @@ export async function POST(req: NextRequest) {
         status: "inactive",
       })
       .returning();
+
+    logAudit({
+      userId: getUserId(session),
+      action: "create",
+      resource: "job",
+      resourceId: row.id,
+      resourceName: row.name,
+      ipAddress: getIpFromRequest(req),
+      details: { schedule: row.schedule, postTransferAction: row.postTransferAction },
+    });
 
     return NextResponse.json(row, { status: 201 });
   } catch (error) {

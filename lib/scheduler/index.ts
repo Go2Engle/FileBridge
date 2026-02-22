@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { runJob } from "@/lib/transfer/engine";
+import { logAudit } from "@/lib/audit";
 
 const scheduledTasks = new Map<number, cron.ScheduledTask>();
 
@@ -45,6 +46,14 @@ export function scheduleJob(jobId: number, cronExpression: string): void {
       return;
     }
     console.log(`[Scheduler] Triggering job ${jobId}`);
+    logAudit({
+      userId: "scheduler",
+      action: "execute",
+      resource: "job",
+      resourceId: jobId,
+      resourceName: job.name,
+      details: { trigger: "scheduled", schedule: job.schedule },
+    });
     try {
       await runJob(jobId);
     } catch (error) {

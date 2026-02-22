@@ -102,6 +102,24 @@ export const settings = sqliteTable("settings", {
   value: text("value", { mode: "json" }),
 });
 
+export const auditLogs = sqliteTable("audit_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
+  action: text("action", {
+    enum: ["create", "update", "delete", "execute", "login", "settings_change"],
+  }).notNull(),
+  resource: text("resource", {
+    enum: ["connection", "job", "settings", "job_run", "auth"],
+  }).notNull(),
+  resourceId: integer("resource_id"),
+  resourceName: text("resource_name"),
+  ipAddress: text("ip_address"),
+  details: text("details", { mode: "json" }).$type<Record<string, unknown>>(),
+  timestamp: text("timestamp")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+});
+
 export type Connection = typeof connections.$inferSelect;
 export type NewConnection = typeof connections.$inferInsert;
 export type Job = typeof jobs.$inferSelect;
@@ -110,3 +128,5 @@ export type JobRun = typeof jobRuns.$inferSelect;
 export type NewJobRun = typeof jobRuns.$inferInsert;
 export type TransferLog = typeof transferLogs.$inferSelect;
 export type NewTransferLog = typeof transferLogs.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;

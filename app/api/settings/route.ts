@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 const SETTINGS_KEY = "notifications";
 
@@ -51,6 +52,14 @@ export async function POST(req: NextRequest) {
         target: settings.key,
         set: { value: body },
       });
+
+    logAudit({
+      userId: getUserId(session),
+      action: "settings_change",
+      resource: "settings",
+      resourceName: "notifications",
+      ipAddress: getIpFromRequest(req),
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

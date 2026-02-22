@@ -8,6 +8,7 @@ import {
   Network,
   Calendar,
   FileText,
+  ShieldCheck,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/connections", label: "Connections", icon: Network },
   { href: "/jobs", label: "Jobs", icon: Calendar },
   { href: "/logs", label: "Logs", icon: FileText },
+  { href: "/audit-logs", label: "Audit Log", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -82,6 +82,18 @@ sqlite.exec(`
     value TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'settings_change')),
+    resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth')),
+    resource_id INTEGER,
+    resource_name TEXT,
+    ip_address TEXT,
+    details TEXT,
+    timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+
   -- Performance indexes
   CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
   CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id);
@@ -89,6 +101,9 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_status ON transfer_logs(status);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_transferred_at ON transfer_logs(transferred_at);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_job_run_id_status ON transfer_logs(job_run_id, status);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource);
 `);
 
 // Lightweight migrations for columns added after initial release.

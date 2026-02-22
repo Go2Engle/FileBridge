@@ -8,6 +8,7 @@ import {
   BackupConfig,
 } from "@/lib/backup";
 import cron from "node-cron";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 export async function GET() {
   const session = await getSession();
@@ -54,6 +55,15 @@ export async function POST(req: NextRequest) {
 
     // Re-initialize the scheduler with the new config
     await initializeBackupScheduler();
+
+    logAudit({
+      userId: getUserId(session),
+      action: "settings_change",
+      resource: "settings",
+      resourceName: "backup",
+      ipAddress: getIpFromRequest(req),
+      details: { enabled: config.enabled, schedule: config.schedule, retentionCount: config.retentionCount },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 export async function GET() {
   const session = await getSession();
@@ -29,6 +30,16 @@ export async function POST(req: NextRequest) {
       .insert(connections)
       .values({ name, protocol, host, port, credentials })
       .returning();
+
+    logAudit({
+      userId: getUserId(session),
+      action: "create",
+      resource: "connection",
+      resourceId: row.id,
+      resourceName: row.name,
+      ipAddress: getIpFromRequest(req),
+      details: { protocol: row.protocol, host: row.host },
+    });
 
     // Strip credentials from the response
     const { credentials: _creds, ...safeRow } = row;

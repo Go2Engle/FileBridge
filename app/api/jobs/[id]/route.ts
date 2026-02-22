@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { scheduleJob, unscheduleJob } from "@/lib/scheduler";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -76,6 +77,16 @@ export async function PUT(
       unscheduleJob(row.id);
     }
 
+    logAudit({
+      userId: getUserId(session),
+      action: "update",
+      resource: "job",
+      resourceId: row.id,
+      resourceName: row.name,
+      ipAddress: getIpFromRequest(req),
+      details: { schedule: row.schedule, status: row.status },
+    });
+
     return NextResponse.json(row);
   } catch (error) {
     console.error("[API] PUT /jobs/[id]:", error);
@@ -109,6 +120,16 @@ export async function PATCH(
       unscheduleJob(row.id);
     }
 
+    logAudit({
+      userId: getUserId(session),
+      action: "update",
+      resource: "job",
+      resourceId: row.id,
+      resourceName: row.name,
+      ipAddress: getIpFromRequest(req),
+      details: { statusChange: status },
+    });
+
     return NextResponse.json(row);
   } catch (error) {
     console.error("[API] PATCH /jobs/[id]:", error);
@@ -117,7 +138,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -126,11 +147,24 @@ export async function DELETE(
   const { id } = await params;
   const jobId = Number(id);
   try {
+    // Fetch name before deletion for audit record
+    const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+
     unscheduleJob(jobId);
     // Delete children before the parent to satisfy FK constraints
     await db.delete(transferLogs).where(eq(transferLogs.jobId, jobId));
     await db.delete(jobRuns).where(eq(jobRuns.jobId, jobId));
     await db.delete(jobs).where(eq(jobs.id, jobId));
+
+    logAudit({
+      userId: getUserId(session),
+      action: "delete",
+      resource: "job",
+      resourceId: jobId,
+      resourceName: job?.name ?? null,
+      ipAddress: getIpFromRequest(req),
+    });
+
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("[API] DELETE /jobs/[id]:", error);

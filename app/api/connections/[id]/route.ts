@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { connections, jobs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
+import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -47,6 +48,17 @@ export async function PUT(
       .returning();
 
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    logAudit({
+      userId: getUserId(session),
+      action: "update",
+      resource: "connection",
+      resourceId: row.id,
+      resourceName: row.name,
+      ipAddress: getIpFromRequest(req),
+      details: { protocol: row.protocol, host: row.host },
+    });
+
     const { credentials: _creds, ...safeRow } = row;
     return NextResponse.json(safeRow);
   } catch (error) {
@@ -56,7 +68,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -84,7 +96,20 @@ export async function DELETE(
       );
     }
 
+    // Fetch name before deletion for audit record
+    const [conn] = await db.select({ name: connections.name }).from(connections).where(eq(connections.id, connId));
+
     await db.delete(connections).where(eq(connections.id, connId));
+
+    logAudit({
+      userId: getUserId(session),
+      action: "delete",
+      resource: "connection",
+      resourceId: connId,
+      resourceName: conn?.name ?? null,
+      ipAddress: getIpFromRequest(req),
+    });
+
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("[API] DELETE /connections/[id]:", error);

@@ -1,8 +1,22 @@
 import NextAuth from "next-auth";
 import type { Session } from "next-auth";
 import { authConfig } from "./config";
+import { logAudit } from "@/lib/audit";
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  events: {
+    async signIn({ user }) {
+      // events.signIn only fires after successful authentication
+      logAudit({
+        userId: user.email ?? user.name ?? "unknown",
+        action: "login",
+        resource: "auth",
+        details: { outcome: "success" },
+      });
+    },
+  },
+});
 
 const isDevBypass =
   process.env.NODE_ENV === "development" &&
