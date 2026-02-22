@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -8,7 +8,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Edit2, FolderSearch, Loader2, Plus, PlugZap, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Edit2, FolderSearch, Loader2, Plus, PlugZap, Search, Trash2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -19,6 +23,9 @@ type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
 import { parseDBDate } from "@/lib/utils";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 
+type ProtocolFilter = "all" | "sftp" | "smb";
+type SortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc";
+
 interface ConnectionListProps {
   onEdit: (connection: ConnectionSummary) => void;
   onNew: () => void;
@@ -28,6 +35,9 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   const queryClient = useQueryClient();
   const [browser, setBrowser] = useState<{ conn: ConnectionSummary } | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [protocolFilter, setProtocolFilter] = useState<ProtocolFilter>("all");
+  const [sort, setSort] = useState<SortOption>("created-desc");
 
   async function testConnection(conn: ConnectionSummary) {
     setTestingId(conn.id);
@@ -64,14 +74,111 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
     },
   });
 
+  const protocolCounts = useMemo(() => {
+    if (!data) return { all: 0, sftp: 0, smb: 0 };
+    return {
+      all: data.length,
+      sftp: data.filter((c) => c.protocol === "sftp").length,
+      smb: data.filter((c) => c.protocol === "smb").length,
+    };
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    let list = data;
+
+    // Protocol filter
+    if (protocolFilter !== "all") {
+      list = list.filter((c) => c.protocol === protocolFilter);
+    }
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.host.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    const sorted = [...list];
+    switch (sort) {
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "created-asc":
+        sorted.sort(
+          (a, b) =>
+            parseDBDate(a.createdAt).getTime() - parseDBDate(b.createdAt).getTime()
+        );
+        break;
+      case "created-desc":
+      default:
+        sorted.sort(
+          (a, b) =>
+            parseDBDate(b.createdAt).getTime() - parseDBDate(a.createdAt).getTime()
+        );
+        break;
+    }
+    return sorted;
+  }, [data, protocolFilter, search, sort]);
+
   return (
     <>
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={onNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Connection
-        </Button>
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search connections..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 w-[220px]"
+            />
+          </div>
+          <div className="flex items-center rounded-md border bg-muted/40 p-0.5">
+            {(["all", "sftp", "smb"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setProtocolFilter(p)}
+                className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
+                  protocolFilter === p
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p === "all" ? "All" : p.toUpperCase()}
+                <span className="ml-1 text-muted-foreground">
+                  {protocolCounts[p]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
+            <SelectTrigger className="w-[160px] h-9 text-xs">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name-asc">Name (A–Z)</SelectItem>
+              <SelectItem value="name-desc">Name (Z–A)</SelectItem>
+              <SelectItem value="created-desc">Newest first</SelectItem>
+              <SelectItem value="created-asc">Oldest first</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={onNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Connection
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -84,6 +191,11 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">No connections yet.</p>
           <p className="text-xs mt-1">Add a connection to get started.</p>
+        </div>
+      ) : !filtered.length ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-sm">No connections match your filters.</p>
+          <p className="text-xs mt-1">Try adjusting your search or filter.</p>
         </div>
       ) : (
         <Table>
@@ -98,7 +210,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((conn) => (
+            {filtered.map((conn) => (
               <TableRow key={conn.id}>
                 <TableCell className="font-medium">{conn.name}</TableCell>
                 <TableCell>

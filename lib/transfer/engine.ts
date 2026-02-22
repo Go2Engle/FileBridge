@@ -85,6 +85,103 @@ function extractTar(content: Buffer): Promise<ExtractedFile[]> {
   });
 }
 
+export interface DryRunFile {
+  name: string;
+  size: number;
+  wouldSkip: boolean;
+}
+
+export interface DryRunResult {
+  jobId: number;
+  jobName: string;
+  sourcePath: string;
+  destinationPath: string;
+  fileFilter: string;
+  files: DryRunFile[];
+  totalMatched: number;
+  wouldTransfer: number;
+  wouldSkip: number;
+  totalBytes: number;
+}
+
+export async function dryRunJob(jobId: number): Promise<DryRunResult> {
+  const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
+  if (!job) throw new Error(`Job ${jobId} not found`);
+
+  const srcConn = await db.query.connections.findFirst({
+    where: eq(connections.id, job.sourceConnectionId),
+  });
+  const dstConn = await db.query.connections.findFirst({
+    where: eq(connections.id, job.destinationConnectionId),
+  });
+  if (!srcConn) throw new Error(`Source connection ${job.sourceConnectionId} not found`);
+  if (!dstConn) throw new Error(`Destination connection ${job.destinationConnectionId} not found`);
+
+  const source = createStorageProvider(srcConn as Parameters<typeof createStorageProvider>[0]);
+  await source.connect();
+
+  try {
+    let files = await source.listFiles(job.sourcePath, job.fileFilter);
+
+    // Apply same filters as runJob
+    if (job.skipHiddenFiles) {
+      files = files.filter((f) => !f.name.startsWith("."));
+    }
+
+    if (job.postTransferAction === "move" && job.movePath) {
+      const srcNorm = job.sourcePath.replace(/\/+$/, "") + "/";
+      const moveNorm = job.movePath.replace(/\/+$/, "");
+      if (moveNorm.startsWith(srcNorm)) {
+        const relSegment = moveNorm.slice(srcNorm.length).split("/")[0];
+        if (relSegment) {
+          files = files.filter((f) => f.name !== relSegment);
+        }
+      }
+    }
+
+    // Check destination for existing files when overwrite is disabled
+    let existingDestFiles: Set<string> = new Set();
+    if (!job.overwriteExisting) {
+      const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
+      try {
+        await dest.connect();
+        const destListing = await dest.listFiles(job.destinationPath);
+        existingDestFiles = new Set(destListing.map((f) => f.name));
+        await dest.disconnect();
+      } catch {
+        // Destination dir may not exist yet — nothing to skip
+      }
+    }
+
+    const dryRunFiles: DryRunFile[] = files.map((f) => ({
+      name: f.name,
+      size: f.size,
+      wouldSkip: existingDestFiles.has(f.name),
+    }));
+
+    const wouldSkip = dryRunFiles.filter((f) => f.wouldSkip).length;
+    const wouldTransfer = dryRunFiles.length - wouldSkip;
+    const totalBytes = dryRunFiles
+      .filter((f) => !f.wouldSkip)
+      .reduce((sum, f) => sum + f.size, 0);
+
+    return {
+      jobId: job.id,
+      jobName: job.name,
+      sourcePath: job.sourcePath,
+      destinationPath: job.destinationPath,
+      fileFilter: job.fileFilter,
+      files: dryRunFiles,
+      totalMatched: dryRunFiles.length,
+      wouldTransfer,
+      wouldSkip,
+      totalBytes,
+    };
+  } finally {
+    await source.disconnect();
+  }
+}
+
 export async function runJob(jobId: number): Promise<void> {
   console.log(`[Engine] ▶ Starting job ${jobId}`);
 
