@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileBridge — Automated File Transfer Scheduling</title>
-  <meta name="description" content="Self-hosted automated file transfers over SFTP and SMB/CIFS with cron scheduling, glob filtering, archive extraction, and a modern dashboard. Docker-ready and open source." />
+  <meta name="description" content="Self-hosted automated file transfers over SFTP, SMB/CIFS, and Azure Blob Storage with cron scheduling, glob filtering, archive extraction, and a modern dashboard. Docker-ready and open source." />
   <link rel="icon" href="../images/FileBridgeLogo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -540,9 +540,9 @@
 
     .protocol-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 24px;
-      max-width: 900px;
+      max-width: 1100px;
       margin: 0 auto;
     }
 
@@ -1069,6 +1069,7 @@
 
       .protocol-grid {
         grid-template-columns: 1fr;
+        max-width: 100%;
       }
 
       .steps {
@@ -1171,8 +1172,8 @@
         <span class="grad">scheduled and monitored</span>
       </h1>
       <p>
-        FileBridge automates your SFTP and SMB/CIFS transfers with cron scheduling,
-        glob filtering, archive extraction, and a modern audit dashboard.
+        FileBridge automates your SFTP, SMB/CIFS, and Azure Blob Storage transfers with
+        cron scheduling, glob filtering, archive extraction, and a modern audit dashboard.
         No cloud vendor lock-in. Runs anywhere.
       </p>
       <div class="hero-ctas">
@@ -1187,8 +1188,8 @@
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
-          <div class="hero-stat-value">SFTP + SMB</div>
-          <div class="hero-stat-label">Protocol support</div>
+          <div class="hero-stat-value">3 Protocols</div>
+          <div class="hero-stat-label">SFTP · SMB · Azure Blob</div>
         </div>
         <div class="hero-stat">
           <div class="hero-stat-value">ZIP/TAR/TGZ</div>
@@ -1210,8 +1211,8 @@
   <div class="strip">
     <div class="strip-inner container">
       <div class="strip-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        NTLMv2 Authentication
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Azure Blob Storage
       </div>
       <div class="strip-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
@@ -1307,7 +1308,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
           <h3>Built-in File Browser</h3>
-          <p>Browse remote SFTP and SMB file systems directly in the UI when configuring jobs — no guessing at paths. Navigating nested directories is fully supported.</p>
+          <p>Browse remote SFTP, SMB, and Azure Blob Storage directly in the UI when configuring jobs — no guessing at paths. Navigating nested directories and virtual prefixes is fully supported.</p>
         </div>
 
         <div class="feature-card fade-up fade-up-delay-2">
@@ -1327,8 +1328,8 @@
     <div class="container">
       <div class="section-header">
         <span class="section-tag">Protocols</span>
-        <h2>Two protocols, one interface</h2>
-        <p class="lead">Connect to any SFTP server or Windows/NAS SMB share. More protocols are on the roadmap.</p>
+        <h2>Three protocols, one interface</h2>
+        <p class="lead">Connect to SFTP servers, Windows/NAS SMB shares, or Azure Blob Storage — all through the same job configuration and transfer pipeline.</p>
       </div>
       <div class="protocol-grid">
         <div class="protocol-card fade-up">
@@ -1351,6 +1352,17 @@
             <span class="protocol-tag">Domain Auth</span>
             <span class="protocol-tag">Auto-Retry</span>
             <span class="protocol-tag">v9u-smb2</span>
+          </div>
+        </div>
+        <div class="protocol-card fade-up fade-up-delay-2">
+          <div class="protocol-logo">☁️</div>
+          <h3>Azure Blob Storage</h3>
+          <p>Microsoft Azure object storage. Authenticate with an Account Key or Connection String. Container-scoped access, server-side move operations, and virtual directory browsing built in.</p>
+          <div class="protocol-tags">
+            <span class="protocol-tag">Account Key</span>
+            <span class="protocol-tag">Connection String</span>
+            <span class="protocol-tag">Server-Side Copy</span>
+            <span class="protocol-tag">@azure/storage-blob</span>
           </div>
         </div>
       </div>
@@ -1474,7 +1486,7 @@
         <div class="step fade-up">
           <div class="step-num">1</div>
           <h3>Add your connections</h3>
-          <p>Register your SFTP servers or SMB shares in the connection manager. Test the connection directly from the UI before saving.</p>
+          <p>Register your SFTP servers, SMB shares, or Azure Blob Storage accounts in the connection manager. Test the connection directly from the UI before saving.</p>
         </div>
         <div class="step fade-up fade-up-delay-1">
           <div class="step-num">2</div>
@@ -1584,8 +1596,8 @@
         <div class="roadmap-item fade-up">
           <div class="roadmap-icon" style="background:color-mix(in srgb,#f59e0b 15%,transparent)">☁️</div>
           <div>
-            <p>Cloud Storage Providers</p>
-            <span>AWS S3 · Azure Blob · Google Cloud</span>
+            <p>More Cloud Providers</p>
+            <span>AWS S3 · Google Cloud Storage</span>
           </div>
         </div>
         <div class="roadmap-item fade-up fade-up-delay-1">

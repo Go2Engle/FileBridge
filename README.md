@@ -5,14 +5,14 @@
 
 # FileBridge
 
-A self-hosted web application for automated file transfer scheduling and monitoring. FileBridge connects your SFTP and SMB/CIFS storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging — all packaged as a single lightweight container.
+A self-hosted web application for automated file transfer scheduling and monitoring. FileBridge connects your SFTP, SMB/CIFS, and Azure Blob Storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging — all packaged as a single lightweight container.
 
 ---
 
 ## Features
 
 ### Transfer Engine
-- **Multi-protocol support** — SFTP and SMB/CIFS with a pluggable provider interface for future expansion (S3, Azure Blob, etc.)
+- **Multi-protocol support** — SFTP, SMB/CIFS, and Azure Blob Storage with a pluggable provider interface for future expansion (S3, GCS, etc.)
 - **Cron-based scheduling** — Full cron expression support with preset shortcuts (every N minutes, daily, weekdays)
 - **Manual execution** — Trigger any job on-demand with Run Now
 - **Glob file filtering** — Transfer only the files you need (e.g. `*.csv`, `report_*.xlsx`)
@@ -32,6 +32,7 @@ A self-hosted web application for automated file transfer scheduling and monitor
 ### Connection Management
 - **SFTP connections** — Username/password or SSH private key authentication
 - **SMB/CIFS connections** — NTLMv2 authentication with optional domain, works with NAS devices and Windows shares
+- **Azure Blob Storage connections** — Account Key or Connection String authentication; container-scoped access
 - **Built-in file browser** — Browse remote file systems directly from the UI when configuring jobs
 - **Referential integrity** — Connections in use by jobs cannot be deleted
 
@@ -81,6 +82,7 @@ A self-hosted web application for automated file transfer scheduling and monitor
 | Charts | Recharts |
 | SFTP | ssh2-sftp-client |
 | SMB/CIFS | v9u-smb2 (NTLMv2-capable) |
+| Azure Blob Storage | @azure/storage-blob |
 | Scheduler | node-cron |
 | Icons | Lucide React |
 | Notifications | Sonner (toasts) |
@@ -181,7 +183,7 @@ npm run db:studio
                            │               │
               ┌────────────▼───┐   ┌───────▼────────────┐
               │  SQLite (Drizzle) │   │  Storage Providers │
-              │  jobs, runs, logs │   │  SFTP │ SMB │ … │
+              │  jobs, runs, logs │   │  SFTP │ SMB │ Azure │
               └────────────────┘   └────────────────────┘
                            │
               ┌────────────▼───────────────┐
@@ -230,6 +232,7 @@ lib/
     interface.ts                    # StorageProvider interface + FileInfo type
     sftp.ts                         # SFTP implementation
     smb.ts                          # SMB/CIFS implementation
+    azure-blob.ts                   # Azure Blob Storage implementation
     registry.ts                     # Provider factory
   transfer/engine.ts                # Core transfer orchestration
   scheduler/index.ts                # Cron scheduling manager
@@ -242,7 +245,7 @@ instrumentation.ts                  # Scheduler init on server startup
 
 | Table | Purpose |
 |---|---|
-| `connections` | Storage connection profiles (SFTP/SMB credentials as JSON) |
+| `connections` | Storage connection profiles (SFTP/SMB/Azure Blob credentials as JSON) |
 | `jobs` | Transfer job definitions (schedule, paths, filters, options) |
 | `job_runs` | Per-execution records (status, file/byte counts, timing) |
 | `transfer_logs` | Per-file audit trail (source, dest, size, status, errors) |
@@ -287,7 +290,7 @@ interface StorageProvider {
 
 ### Adding a New Storage Provider
 
-FileBridge is designed for easy protocol expansion. To add a new backend (e.g. AWS S3, Azure Blob, FTP):
+FileBridge is designed for easy protocol expansion. To add a new backend (e.g. AWS S3, Google Cloud Storage, FTP):
 
 1. **Create the provider** — Add a new file in `lib/storage/` (e.g. `s3.ts`) that implements the `StorageProvider` interface
 2. **Define credentials** — Create a typed credentials interface for the protocol's auth requirements
@@ -355,7 +358,8 @@ The SQLite database persists in the `/app/data` volume mount.
 
 ## Roadmap
 
-- [ ] Cloud storage providers (AWS S3, Azure Blob Storage, Google Cloud Storage)
+- [x] Azure Blob Storage provider
+- [ ] Cloud storage providers (AWS S3, Google Cloud Storage)
 - [ ] File content transformation pipeline (encryption, compression, encoding)
 - [ ] Notification dispatch engine (email + Teams webhook delivery)
 - [ ] Multi-user role-based access control (admin / operator / viewer)
