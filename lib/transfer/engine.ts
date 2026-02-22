@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs, connections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createStorageProvider } from "@/lib/storage/registry";
+import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
 import { gunzipSync } from "zlib";
 import AdmZip from "adm-zip";
@@ -89,6 +90,16 @@ export interface DryRunFile {
   name: string;
   size: number;
   wouldSkip: boolean;
+  /** Why the file is skipped, or null if it will be transferred. */
+  skipReason: "filter" | "exists" | null;
+  /** What happens to the source file after a successful transfer. */
+  postAction: "retain" | "delete" | "move";
+  /** Full destination path when postAction is "move". */
+  moveDest: string | null;
+  /** True if the file is a recognized archive type. */
+  isArchive: boolean;
+  /** True when extractArchives is enabled and isArchive is true — contents will be extracted rather than the archive transferred as-is. */
+  wouldExtract: boolean;
 }
 
 export interface DryRunResult {
@@ -98,9 +109,16 @@ export interface DryRunResult {
   destinationPath: string;
   fileFilter: string;
   files: DryRunFile[];
+  /** All files visible in the source directory (after hidden/move-folder exclusions). */
+  totalInSource: number;
+  /** Files that match the job's file filter. */
   totalMatched: number;
   wouldTransfer: number;
   wouldSkip: number;
+  /** Files excluded because they don't match the file filter. */
+  skippedByFilter: number;
+  /** Files excluded because they already exist at the destination. */
+  skippedByExists: number;
   totalBytes: number;
 }
 
@@ -121,11 +139,12 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
   await source.connect();
 
   try {
-    let files = await source.listFiles(job.sourcePath, job.fileFilter);
+    // List ALL files (no filter) so non-matching files appear as "filtered" in the preview.
+    let allFiles = await source.listFiles(job.sourcePath);
 
-    // Apply same filters as runJob
+    // Apply the same pre-filter exclusions as runJob (hidden files, move subfolder).
     if (job.skipHiddenFiles) {
-      files = files.filter((f) => !f.name.startsWith("."));
+      allFiles = allFiles.filter((f) => !f.name.startsWith("."));
     }
 
     if (job.postTransferAction === "move" && job.movePath) {
@@ -134,12 +153,18 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       if (moveNorm.startsWith(srcNorm)) {
         const relSegment = moveNorm.slice(srcNorm.length).split("/")[0];
         if (relSegment) {
-          files = files.filter((f) => f.name !== relSegment);
+          allFiles = allFiles.filter((f) => f.name !== relSegment);
         }
       }
     }
 
-    // Check destination for existing files when overwrite is disabled
+    // Apply the job's file filter manually so we can mark non-matching files as "filtered".
+    const filterRegex = globToRegex(job.fileFilter);
+    const matchingNames = new Set(
+      allFiles.filter((f) => filterRegex.test(f.name)).map((f) => f.name)
+    );
+
+    // Check destination for existing files when overwrite is disabled.
     let existingDestFiles: Set<string> = new Set();
     if (!job.overwriteExisting) {
       const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
@@ -153,14 +178,39 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       }
     }
 
-    const dryRunFiles: DryRunFile[] = files.map((f) => ({
-      name: f.name,
-      size: f.size,
-      wouldSkip: existingDestFiles.has(f.name),
-    }));
+    const dryRunFiles: DryRunFile[] = allFiles.map((f) => {
+      const matchesFilter = matchingNames.has(f.name);
+      const fileIsArchive = isArchive(f.name);
 
-    const wouldSkip = dryRunFiles.filter((f) => f.wouldSkip).length;
-    const wouldTransfer = dryRunFiles.length - wouldSkip;
+      let skipReason: DryRunFile["skipReason"] = null;
+      if (!matchesFilter) {
+        skipReason = "filter";
+      } else if (existingDestFiles.has(f.name)) {
+        skipReason = "exists";
+      }
+
+      const wouldSkip = skipReason !== null;
+      const moveDest =
+        !wouldSkip && job.postTransferAction === "move" && job.movePath
+          ? path.posix.join(job.movePath, f.name)
+          : null;
+
+      return {
+        name: f.name,
+        size: f.size,
+        wouldSkip,
+        skipReason,
+        postAction: job.postTransferAction,
+        moveDest,
+        isArchive: fileIsArchive,
+        wouldExtract: !wouldSkip && job.extractArchives && fileIsArchive,
+      };
+    });
+
+    const skippedByFilter = dryRunFiles.filter((f) => f.skipReason === "filter").length;
+    const skippedByExists = dryRunFiles.filter((f) => f.skipReason === "exists").length;
+    const wouldSkipCount = skippedByFilter + skippedByExists;
+    const wouldTransfer = dryRunFiles.length - wouldSkipCount;
     const totalBytes = dryRunFiles
       .filter((f) => !f.wouldSkip)
       .reduce((sum, f) => sum + f.size, 0);
@@ -172,9 +222,12 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       destinationPath: job.destinationPath,
       fileFilter: job.fileFilter,
       files: dryRunFiles,
-      totalMatched: dryRunFiles.length,
+      totalInSource: allFiles.length,
+      totalMatched: matchingNames.size,
       wouldTransfer,
-      wouldSkip,
+      wouldSkip: wouldSkipCount,
+      skippedByFilter,
+      skippedByExists,
       totalBytes,
     };
   } finally {
