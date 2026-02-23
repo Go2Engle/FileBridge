@@ -5,7 +5,7 @@ import { useSession, signIn, signOut } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ArrowLeftRight, Lock, LogIn, LogOut } from "lucide-react";
+import { AlertCircle, ArrowLeftRight, Github, Lock, LogIn, LogOut } from "lucide-react";
 
 // Isolated so useSearchParams lives inside its own Suspense boundary
 function AuthErrorReader({ onError }: { onError: (err: string | null) => void }) {
@@ -21,6 +21,8 @@ function AuthErrorReader({ onError }: { onError: (err: string | null) => void })
 const DEV_BYPASS =
   process.env.NEXT_PUBLIC_AUTH_BYPASS_DEV === "true" &&
   process.env.NODE_ENV === "development";
+
+const GITHUB_ENABLED = process.env.NEXT_PUBLIC_GITHUB_AUTH_ENABLED === "true";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -64,7 +66,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Your Azure account was authenticated, but you don&apos;t have
+              Your account was authenticated, but you don&apos;t have
               permission to access this portal.
             </p>
             <div className="bg-muted p-4 rounded-lg">
@@ -112,7 +114,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
                     </div>
                     <p className="text-muted-foreground">
                       Automated file transfer scheduling and monitoring. Sign in
-                      with your Azure AD account to continue.
+                      to continue.
                     </p>
                   </div>
                 </div>
@@ -121,6 +123,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
                     <LogIn className="mr-2 h-4 w-4" />
                     Sign in with Microsoft
                   </Button>
+                  {GITHUB_ENABLED && (
+                    <Button onClick={() => signIn("github")} size="lg" variant="outline" className="w-full">
+                      <Github className="mr-2 h-4 w-4" />
+                      Sign in with GitHub
+                    </Button>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Need access? Contact your administrator.
                   </p>

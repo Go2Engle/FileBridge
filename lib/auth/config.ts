@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import GitHub from "next-auth/providers/github";
 
 function isUserAuthorized(email?: string | null, groups?: string[]): boolean {
   const allowedEmails = process.env.ALLOWED_EMAILS;
@@ -35,6 +36,14 @@ export const authConfig = {
         },
       },
     }),
+    ...(process.env.GITHUB_CLIENT_ID
+      ? [
+          GitHub({
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+          }),
+        ]
+      : []),
   ],
   pages: {
     signIn: "/",
@@ -44,20 +53,22 @@ export const authConfig = {
     async signIn({ user, account, profile }) {
       let groups: string[] = [];
 
-      if ((profile as Record<string, unknown>)?.groups) {
-        groups = (profile as Record<string, unknown>).groups as string[];
-      } else if (account?.access_token) {
-        try {
-          const response = await fetch(
-            "https://graph.microsoft.com/v1.0/me/memberOf/microsoft.graph.group?$select=id",
-            { headers: { Authorization: `Bearer ${account.access_token}` } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            groups = data.value?.map((g: { id: string }) => g.id) || [];
+      if (account?.provider === "azure-ad") {
+        if ((profile as Record<string, unknown>)?.groups) {
+          groups = (profile as Record<string, unknown>).groups as string[];
+        } else if (account?.access_token) {
+          try {
+            const response = await fetch(
+              "https://graph.microsoft.com/v1.0/me/memberOf/microsoft.graph.group?$select=id",
+              { headers: { Authorization: `Bearer ${account.access_token}` } }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              groups = data.value?.map((g: { id: string }) => g.id) || [];
+            }
+          } catch (error) {
+            console.error("[Auth] Error fetching groups:", error);
           }
-        } catch (error) {
-          console.error("[Auth] Error fetching groups:", error);
         }
       }
 
