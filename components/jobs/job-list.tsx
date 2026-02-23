@@ -22,6 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { Job, JobRun } from "@/lib/db/schema";
 import { parseDBDate } from "@/lib/utils";
 import { DryRunDialog } from "@/components/jobs/dry-run-dialog";
+import { useRole } from "@/hooks/use-role";
 
 type StatusFilter = "all" | "active" | "inactive" | "error";
 type JobSortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc" | "last-run";
@@ -65,6 +66,7 @@ interface JobListProps {
 
 export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<JobSortOption>("created-desc");
@@ -213,10 +215,12 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
               <SelectItem value="last-run">Last run</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={onNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Job
-          </Button>
+          {isAdmin && (
+            <Button onClick={onNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Job
+            </Button>
+          )}
         </div>
       </div>
 
@@ -245,7 +249,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
               <TableHead>Filter</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last Run</TableHead>
-              <TableHead className="w-32" />
+              {isAdmin && <TableHead className="w-32" />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -271,72 +275,74 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                     ? formatDistanceToNow(parseDBDate(job.lastRunAt), { addSuffix: true })
                     : "Never"}
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            toggleMutation.mutate({ id: job.id, status: job.status })
+                {isAdmin && (
+                  <TableCell>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              toggleMutation.mutate({ id: job.id, status: job.status })
+                            }
+                            disabled={job.status === "running"}
+                          >
+                            {job.status === "active" ? (
+                              <ToggleRight className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <ToggleLeft className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {job.status === "active" ? "Disable" : "Enable"}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => runMutation.mutate(job.id)}
+                            disabled={job.status === "running"}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Run now</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDryRunJob(job)}
+                            disabled={job.status === "running"}
+                          >
+                            <FlaskConical className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Dry run</TooltipContent>
+                      </Tooltip>
+                      <Button variant="ghost" size="icon" onClick={() => onEdit(job)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => {
+                          if (confirm(`Delete job "${job.name}"?`)) {
+                            deleteMutation.mutate(job.id);
                           }
-                          disabled={job.status === "running"}
-                        >
-                          {job.status === "active" ? (
-                            <ToggleRight className="h-4 w-4 text-emerald-500" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {job.status === "active" ? "Disable" : "Enable"}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => runMutation.mutate(job.id)}
-                          disabled={job.status === "running"}
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Run now</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDryRunJob(job)}
-                          disabled={job.status === "running"}
-                        >
-                          <FlaskConical className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Dry run</TooltipContent>
-                    </Tooltip>
-                    <Button variant="ghost" size="icon" onClick={() => onEdit(job)}>
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm(`Delete job "${job.name}"?`)) {
-                          deleteMutation.mutate(job.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

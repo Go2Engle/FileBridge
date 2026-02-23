@@ -102,14 +102,34 @@ export const settings = sqliteTable("settings", {
   value: text("value", { mode: "json" }),
 });
 
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(),
+  email: text("email"),
+  passwordHash: text("password_hash"),
+  displayName: text("display_name").notNull(),
+  role: text("role", { enum: ["admin", "viewer"] }).notNull().default("viewer"),
+  isLocal: integer("is_local", { mode: "boolean" }).notNull().default(true),
+  ssoProvider: text("sso_provider"),
+  ssoId: text("sso_id"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  lastLoginAt: text("last_login_at"),
+});
+
 export const auditLogs = sqliteTable("audit_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: text("user_id").notNull(),
   action: text("action", {
-    enum: ["create", "update", "delete", "execute", "login", "settings_change"],
+    enum: ["create", "update", "delete", "execute", "login", "logout", "settings_change"],
   }).notNull(),
   resource: text("resource", {
-    enum: ["connection", "job", "settings", "job_run", "auth"],
+    enum: ["connection", "job", "settings", "job_run", "auth", "user"],
   }).notNull(),
   resourceId: integer("resource_id"),
   resourceName: text("resource_name"),
@@ -128,5 +148,7 @@ export type JobRun = typeof jobRuns.$inferSelect;
 export type NewJobRun = typeof jobRuns.$inferInsert;
 export type TransferLog = typeof transferLogs.$inferSelect;
 export type NewTransferLog = typeof transferLogs.$inferInsert;
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;

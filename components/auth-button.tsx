@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +17,12 @@ const DEV_BYPASS =
   process.env.NEXT_PUBLIC_AUTH_BYPASS_DEV === "true" &&
   process.env.NODE_ENV === "development";
 
-const DEV_USER = { name: "Dev User", email: "dev@localhost", image: null };
+const DEV_USER = {
+  name: "Dev User",
+  email: "dev@localhost",
+  image: null,
+  role: "admin" as const,
+};
 
 export function AuthButton() {
   const { data: session } = useSession();
@@ -34,6 +40,8 @@ export function AuthButton() {
         .toUpperCase()
     : user.email?.[0].toUpperCase() ?? "U";
 
+  const role = "role" in user ? user.role : undefined;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -47,7 +55,17 @@ export function AuthButton() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium">{user.name}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{user.name}</span>
+              {role && (
+                <Badge
+                  variant={role === "admin" ? "default" : "secondary"}
+                  className="text-[10px] px-1.5 py-0"
+                >
+                  {role}
+                </Badge>
+              )}
+            </div>
             <span className="text-xs text-muted-foreground truncate">
               {user.email}
             </span>
@@ -61,7 +79,7 @@ export function AuthButton() {
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => signOut({ callbackUrl: "/login" })}
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="h-4 w-4" />

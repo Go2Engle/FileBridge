@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth, requireRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { transferLogs, jobRuns } from "@/lib/db/schema";
 import { lt, sql, and, ne } from "drizzle-orm";
@@ -9,9 +9,8 @@ const log = createLogger("api");
 
 /** GET /api/logs/purge?cutoffDate=<ISO> — preview counts */
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
 
   const cutoffDate = new URL(req.url).searchParams.get("cutoffDate");
   if (!cutoffDate || isNaN(Date.parse(cutoffDate)))
@@ -49,9 +48,8 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/logs/purge { cutoffDate } — execute purge */
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
 
   try {
     const { cutoffDate } = await req.json();

@@ -51,6 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useRole } from "@/hooks/use-role";
 
 const PRESET_SCHEDULES = [
   { label: "Daily at 2 AM", value: "0 2 * * *" },
@@ -99,6 +100,7 @@ function scheduleToPreset(schedule: string): string {
 
 export function BackupSettings() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [showCustom, setShowCustom] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<BackupEntry | null>(null);
 
@@ -354,13 +356,13 @@ export function BackupSettings() {
               )}
 
               <div className="flex items-center gap-3 pt-2">
-                <Button type="submit" disabled={saveMutation.isPending}>
+                <Button type="submit" disabled={saveMutation.isPending || !isAdmin}>
                   {saveMutation.isPending ? "Saving..." : "Save Settings"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={runMutation.isPending}
+                  disabled={runMutation.isPending || !isAdmin}
                   onClick={() => runMutation.mutate()}
                 >
                   <Play className="mr-2 h-4 w-4" />
@@ -402,15 +404,17 @@ export function BackupSettings() {
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(b.createdAt), "MMM d, yyyy HH:mm")}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => setRestoreTarget(b)}
-                      >
-                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                        Restore
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setRestoreTarget(b)}
+                        >
+                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                          Restore
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

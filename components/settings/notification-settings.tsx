@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useRole } from "@/hooks/use-role";
 
 const settingsSchema = z.object({
   emailEnabled: z.boolean().default(false),
@@ -46,6 +47,7 @@ interface SettingsData {
 
 export function NotificationSettings() {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
 
   const { data } = useQuery<SettingsData>({
     queryKey: ["settings"],
@@ -277,7 +279,7 @@ export function NotificationSettings() {
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" disabled={mutation.isPending || !isAdmin}>
             {mutation.isPending ? "Saving..." : "Save Settings"}
           </Button>
         </div>

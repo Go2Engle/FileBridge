@@ -34,6 +34,7 @@ const ACTION_COLORS: Record<AuditLog["action"], string> = {
   delete: "bg-red-500/15 text-red-700 dark:text-red-400",
   execute: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
   login: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+  logout: "bg-gray-500/15 text-gray-700 dark:text-gray-400",
   settings_change: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
 };
 
@@ -43,6 +44,7 @@ const ACTION_LABELS: Record<AuditLog["action"], string> = {
   delete: "Delete",
   execute: "Execute",
   login: "Login",
+  logout: "Logout",
   settings_change: "Settings",
 };
 
@@ -52,6 +54,7 @@ const RESOURCE_LABELS: Record<AuditLog["resource"], string> = {
   settings: "Settings",
   job_run: "Job Run",
   auth: "Auth",
+  user: "User",
 };
 
 export function AuditLogTable() {

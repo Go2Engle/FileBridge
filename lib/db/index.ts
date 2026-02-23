@@ -82,11 +82,27 @@ sqlite.exec(`
     value TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    password_hash TEXT,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer' CHECK(role IN ('admin', 'viewer')),
+    is_local INTEGER NOT NULL DEFAULT 1,
+    sso_provider TEXT,
+    sso_id TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    last_login_at TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'settings_change')),
-    resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth')),
+    action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'logout', 'settings_change')),
+    resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user')),
     resource_id INTEGER,
     resource_name TEXT,
     ip_address TEXT,
@@ -101,6 +117,9 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_status ON transfer_logs(status);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_transferred_at ON transfer_logs(transferred_at);
   CREATE INDEX IF NOT EXISTS idx_transfer_logs_job_run_id_status ON transfer_logs(job_run_id, status);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
+  CREATE INDEX IF NOT EXISTS idx_users_sso ON users(sso_provider, sso_id);
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource);
@@ -124,6 +143,34 @@ for (const sql of migrations) {
   } catch {
     // Column already exists — safe to ignore
   }
+}
+
+// Migrate: update audit_logs CHECK constraints for new action/resource values.
+const auditDef = sqlite
+  .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='audit_logs'")
+  .get() as { sql: string } | undefined;
+if (auditDef && !auditDef.sql.includes("'user'")) {
+  sqlite.pragma("foreign_keys = OFF");
+  sqlite.exec(`
+    CREATE TABLE audit_logs_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'logout', 'settings_change')),
+      resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user')),
+      resource_id INTEGER,
+      resource_name TEXT,
+      ip_address TEXT,
+      details TEXT,
+      timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO audit_logs_new SELECT * FROM audit_logs;
+    DROP TABLE audit_logs;
+    ALTER TABLE audit_logs_new RENAME TO audit_logs;
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource);
+  `);
+  sqlite.pragma("foreign_keys = ON");
 }
 
 // Migrate: update protocol CHECK constraint to include 'azure-blob'.

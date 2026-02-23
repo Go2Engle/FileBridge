@@ -17,6 +17,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import type { Connection } from "@/lib/db/schema";
+import { useRole } from "@/hooks/use-role";
 
 // The list endpoint strips credentials and adds a top-level username for display
 type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
@@ -33,6 +34,7 @@ interface ConnectionListProps {
 
 export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
   const [browser, setBrowser] = useState<{ conn: ConnectionSummary } | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -175,10 +177,12 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
               <SelectItem value="created-asc">Oldest first</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={onNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Connection
-          </Button>
+          {isAdmin && (
+            <Button onClick={onNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Connection
+            </Button>
+          )}
         </div>
       </div>
 
@@ -245,25 +249,29 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                     >
                       <FolderSearch className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(conn)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm("Delete this connection?")) {
-                          deleteMutation.mutate(conn.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEdit(conn)}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => {
+                            if (confirm("Delete this connection?")) {
+                              deleteMutation.mutate(conn.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

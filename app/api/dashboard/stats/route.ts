@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { jobRuns, transferLogs, jobs } from "@/lib/db/schema";
 import { eq, gte, sql, and } from "drizzle-orm";
@@ -9,8 +9,8 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("api");
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireAuth();
+  if ("error" in result) return result.error;
 
   const { searchParams } = new URL(req.url);
   const isChart = searchParams.get("chart") === "true";

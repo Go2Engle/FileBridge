@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -9,8 +9,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
 
   const { id } = await params;
   const [conn] = await db

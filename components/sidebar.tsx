@@ -10,11 +10,14 @@ import {
   FileText,
   ShieldCheck,
   Settings,
+  Users,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
+import { useRole } from "@/hooks/use-role";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,8 +28,14 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const adminNavItems = [
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/authentication", label: "Authentication", icon: KeyRound },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { isAdmin } = useRole();
 
   return (
     <aside className="flex w-60 flex-col border-r bg-sidebar">
@@ -56,6 +65,35 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {isAdmin && (
+          <>
+            <div className="pt-4 pb-1 px-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                Admin
+              </span>
+            </div>
+            {adminNavItems.map(({ href, label, icon: Icon }) => {
+              const active =
+                pathname === href || pathname.startsWith(href + "/");
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {label}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       <Separator className="bg-sidebar-border" />

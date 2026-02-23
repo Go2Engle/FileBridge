@@ -36,7 +36,7 @@ A self-hosted web application for automated file transfer scheduling and monitor
 - **Structured logging** — pino JSON output to stdout; natively ingestable by Datadog, Grafana Loki, CloudWatch, Azure Monitor
 - **Automated backups** — Scheduled SQLite snapshots with integrity verification and in-app restore
 - **Health check endpoint** — `GET /api/health` for Kubernetes liveness/readiness probes
-- **Azure AD SSO** — Enterprise single sign-on with email and group-based access control
+- **Local & SSO authentication** — Built-in username/password auth with optional Azure AD and GitHub SSO, configurable via admin UI
 - **Dashboard** — KPI cards, 7-day transfer chart, job status list, activity feed
 
 ---
@@ -47,7 +47,7 @@ A self-hosted web application for automated file transfer scheduling and monitor
 |---|---|
 | Framework | Next.js 15 (App Router) |
 | Language | TypeScript |
-| Authentication | NextAuth v5 (Auth.js) + Azure AD |
+| Authentication | NextAuth v5 (Auth.js) — local credentials + SSO (Azure AD, GitHub) |
 | Database | SQLite via better-sqlite3 + Drizzle ORM |
 | UI Components | shadcn/ui (new-york style) |
 | Styling | Tailwind CSS v4 |
@@ -88,12 +88,9 @@ NEXTAUTH_URL=http://localhost:3000
 ```env
 AUTH_SECRET=<openssl rand -base64 32>
 NEXTAUTH_URL=https://your-domain.com
-AZURE_AD_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AZURE_AD_CLIENT_SECRET=your-client-secret
-AZURE_AD_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
-The SQLite database is created automatically at `data/filebridge.db` on first startup. No migration step required.
+The SQLite database is created automatically at `data/filebridge.db` on first startup. No migration step required. On first launch, a setup wizard guides you through creating the initial administrator account. SSO providers (Azure AD, GitHub) can be configured via the admin UI after setup.
 
 ---
 
@@ -120,7 +117,7 @@ Full documentation is available in the [project wiki](../../wiki):
 |---|---|
 | [Getting Started](../../wiki/Getting-Started) | Installation, prerequisites, first run |
 | [Configuration](../../wiki/Configuration) | All environment variables and app settings |
-| [Authentication](../../wiki/Authentication) | Azure AD setup, access control, dev bypass |
+| [Authentication](../../wiki/Authentication) | Local auth, SSO setup, user management, RBAC |
 | [Connections](../../wiki/Connections) | SFTP, SMB/CIFS, and Azure Blob Storage |
 | [Jobs](../../wiki/Jobs) | Scheduling, filtering, delta sync, dry run |
 | [Transfer Engine](../../wiki/Transfer-Engine) | How transfers work under the hood |

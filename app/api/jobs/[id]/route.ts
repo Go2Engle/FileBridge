@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth, requireRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -13,8 +13,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
 
   const { id } = await params;
   const row = await db.query.jobs.findFirst({ where: eq(jobs.id, Number(id)) });
@@ -26,8 +26,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
+  const { session } = result;
 
   const { id } = await params;
   try {
@@ -112,8 +113,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
+  const { session } = result;
 
   const { id } = await params;
   try {
@@ -157,8 +159,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
+  const { session } = result;
 
   const { id } = await params;
   const jobId = Number(id);

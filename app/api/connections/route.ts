@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth, requireRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
@@ -9,8 +9,8 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("api");
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth();
+  if ("error" in auth) return auth.error;
 
   const rows = await db.select().from(connections).orderBy(desc(connections.createdAt));
   // Strip credentials — return only safe display fields
@@ -22,8 +22,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
+  const { session } = result;
 
   try {
     const body = await req.json();

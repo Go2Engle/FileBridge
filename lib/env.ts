@@ -8,25 +8,12 @@ const log = createLogger("env");
  * Call validateEnv() at startup to fail fast with clear error messages
  * instead of mysterious runtime failures deep in the request cycle.
  *
- * Azure AD vars are skipped when AUTH_BYPASS_DEV=true (local dev only).
+ * Only AUTH_SECRET is required. SSO providers are configured via the admin UI.
  */
-
-const devBypass = process.env.AUTH_BYPASS_DEV === "true";
 
 const envSchema = z.object({
   // NextAuth — always required
   AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required (generate with: openssl rand -base64 32)"),
-
-  // Azure AD — required in production, optional when dev bypass is active
-  AZURE_AD_CLIENT_ID: devBypass
-    ? z.string().optional()
-    : z.string().min(1, "AZURE_AD_CLIENT_ID is required"),
-  AZURE_AD_CLIENT_SECRET: devBypass
-    ? z.string().optional()
-    : z.string().min(1, "AZURE_AD_CLIENT_SECRET is required"),
-  AZURE_AD_TENANT_ID: devBypass
-    ? z.string().optional()
-    : z.string().min(1, "AZURE_AD_TENANT_ID is required"),
 
   // Optional with sensible defaults
   DATABASE_PATH: z.string().optional(),
@@ -46,5 +33,6 @@ export function validateEnv(): void {
     process.exit(1);
   }
 
+  const devBypass = process.env.AUTH_BYPASS_DEV === "true";
   log.info("Environment validated", { authBypass: devBypass });
 }

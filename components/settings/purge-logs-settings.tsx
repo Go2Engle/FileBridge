@@ -44,6 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useRole } from "@/hooks/use-role";
 
 const purgeSchema = z.object({
   retentionValue: z.coerce.number().min(1, "Must be at least 1"),
@@ -53,6 +54,7 @@ const purgeSchema = z.object({
 type PurgeFormValues = z.infer<typeof purgeSchema>;
 
 export function PurgeLogsSettings() {
+  const { isAdmin } = useRole();
   const [showConfirm, setShowConfirm] = useState(false);
   const [cutoffDate, setCutoffDate] = useState("");
   const queryClient = useQueryClient();
@@ -157,7 +159,7 @@ export function PurgeLogsSettings() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" variant="destructive">
+                <Button type="submit" variant="destructive" disabled={!isAdmin}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Purge Now
                 </Button>

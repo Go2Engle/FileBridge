@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/auth/rbac";
 import { runJob } from "@/lib/transfer/engine";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { db } from "@/lib/db";
@@ -13,8 +13,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
+  const { session } = result;
 
   const { id } = await params;
   const jobId = Number(id);

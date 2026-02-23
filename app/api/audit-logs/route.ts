@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { auditLogs } from "@/lib/db/schema";
 import { desc, like, eq, and, sql } from "drizzle-orm";
@@ -11,8 +11,8 @@ const log = createLogger("api");
 const PAGE_SIZE = 50;
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireAuth();
+  if ("error" in result) return result.error;
 
   const { searchParams } = new URL(req.url);
   const offset = Number(searchParams.get("offset") ?? "0");

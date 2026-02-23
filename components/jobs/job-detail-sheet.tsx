@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 import type { Job, JobRun, TransferLog, Connection } from "@/lib/db/schema";
 import { formatBytes, formatDuration, parseDBDate } from "@/lib/utils";
+import { useRole } from "@/hooks/use-role";
 
 const statusVariant: Record<
   Job["status"],
@@ -56,6 +57,7 @@ interface JobDetailSheetProps {
 
 export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetProps) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useRole();
 
   // Fetch fresh job data to keep status current
   const { data: freshJob } = useQuery<Job>({
@@ -125,7 +127,7 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
               </>
             )}
           </SheetDescription>
-          {currentJob && (
+          {currentJob && isAdmin && (
             <div className="flex gap-2 pt-1">
               <Button
                 size="sm"

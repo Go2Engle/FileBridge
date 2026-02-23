@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { transferLogs } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
@@ -8,8 +8,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; runId: string }> }
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireAuth();
+  if ("error" in result) return result.error;
 
   const { id, runId } = await params;
 

@@ -1,105 +1,52 @@
 import type { NextAuthConfig } from "next-auth";
-import AzureADProvider from "next-auth/providers/azure-ad";
-import GitHub from "next-auth/providers/github";
 
-function isUserAuthorized(email?: string | null, groups?: string[]): boolean {
-  const allowedEmails = process.env.ALLOWED_EMAILS;
-  const allowedGroupIds = process.env.ALLOWED_GROUP_IDS;
-
-  // No restrictions — allow all authenticated users
-  if (!allowedEmails && !allowedGroupIds) {
-    return true;
-  }
-
-  if (allowedEmails && email) {
-    const emailList = allowedEmails.split(",").map((e) => e.trim().toLowerCase());
-    if (emailList.includes(email.toLowerCase())) return true;
-  }
-
-  if (allowedGroupIds && groups && groups.length > 0) {
-    const groupList = allowedGroupIds.split(",").map((g) => g.trim());
-    if (groups.some((group) => groupList.includes(group))) return true;
-  }
-
-  return false;
-}
-
+/**
+ * Edge-safe auth config — used by middleware (edge runtime).
+ * Must NOT import anything that requires Node.js (fs, crypto, better-sqlite3, etc.).
+ * Providers are NOT defined here — they're only needed for sign-in, not JWT validation.
+ */
 export const authConfig = {
-  providers: [
-    AzureADProvider({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
-      authorization: {
-        params: {
-          scope: "openid profile email User.Read GroupMember.Read.All",
-        },
-      },
-    }),
-    ...(process.env.GITHUB_CLIENT_ID
-      ? [
-          GitHub({
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-          }),
-        ]
-      : []),
-  ],
+  providers: [], // Populated in lib/auth/index.ts (Node runtime only)
   pages: {
-    signIn: "/",
-    error: "/",
+    signIn: "/login",
+    error: "/login",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      let groups: string[] = [];
-
-      if (account?.provider === "azure-ad") {
-        if ((profile as Record<string, unknown>)?.groups) {
-          groups = (profile as Record<string, unknown>).groups as string[];
-        } else if (account?.access_token) {
-          try {
-            const response = await fetch(
-              "https://graph.microsoft.com/v1.0/me/memberOf/microsoft.graph.group?$select=id",
-              { headers: { Authorization: `Bearer ${account.access_token}` } }
-            );
-            if (response.ok) {
-              const data = await response.json();
-              groups = data.value?.map((g: { id: string }) => g.id) || [];
-            }
-          } catch (error) {
-            console.error("[Auth] Error fetching groups:", error);
-          }
-        }
-      }
-
-      const authorized = isUserAuthorized(user.email, groups);
-      if (!authorized) {
-        console.log(`[Auth] Access denied for: ${user.email}`);
-        return false;
-      }
-      console.log(`[Auth] Access granted for: ${user.email}`);
-      return true;
-    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      const { pathname } = nextUrl;
+
+      // Public paths that don't require auth
       const isPublicPath =
-        nextUrl.pathname === "/" ||
-        nextUrl.pathname.startsWith("/api/auth");
+        pathname === "/" ||
+        pathname === "/login" ||
+        pathname === "/setup" ||
+        pathname.startsWith("/api/auth") ||
+        pathname.startsWith("/api/setup") ||
+        pathname === "/api/health";
+
       if (isPublicPath) return true;
       if (!isLoggedIn) return false;
       return true;
     },
-    async jwt({ token, account, user }) {
-      if (account && user) {
-        return { ...token };
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role ?? "viewer";
+        token.isLocal = user.isLocal ?? false;
       }
       return token;
     },
-    async session({ session }) {
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.id as string;
+        session.user.role = (token.role as "admin" | "viewer") ?? "viewer";
+        session.user.isLocal = (token.isLocal as boolean) ?? false;
+      }
       return session;
     },
   },
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 3600 },
   trustHost: true,
   cookies: {
     sessionToken: {

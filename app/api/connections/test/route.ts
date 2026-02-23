@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireRole } from "@/lib/auth/rbac";
 import { createStorageProvider } from "@/lib/storage/registry";
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireRole("admin");
+  if ("error" in result) return result.error;
 
   const body = await req.json();
   const { protocol, host, port, credentials } = body;
