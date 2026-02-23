@@ -8,10 +8,18 @@ const DB_PATH =
   process.env.DATABASE_PATH ||
   path.join(process.cwd(), "data", "filebridge.db");
 
-// Ensure data directory exists
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+// During `next build`, Next.js statically analyses every API route by
+// importing its module in parallel worker processes. Each worker would open
+// the same SQLite file concurrently, causing SQLITE_BUSY errors. Use an
+// in-memory database as a harmless stand-in — it is never actually queried
+// during the build phase itself.
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
-const sqlite = new Database(DB_PATH);
+if (!isBuildPhase) {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+}
+
+const sqlite = new Database(isBuildPhase ? ":memory:" : DB_PATH);
 
 // Performance and reliability pragmas
 sqlite.pragma("journal_mode = WAL");
