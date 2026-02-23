@@ -111,7 +111,7 @@ export function UserFormDialog({ open, onClose, editUser }: UserFormDialogProps)
       const method = isEdit ? "PUT" : "POST";
 
       const body: Record<string, unknown> = { ...values };
-      if (isEdit && !values.password) {
+      if (!values.isLocal || (isEdit && !values.password)) {
         delete body.password;
       }
 

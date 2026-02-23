@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/rbac";
-import { getAllUsers, createUser, hashPassword } from "@/lib/db/users";
+import { getAllUsers, createUser } from "@/lib/db/users";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { z } from "zod";
 
@@ -14,7 +14,7 @@ const createUserSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   role: z.enum(["admin", "viewer"]),
   isLocal: z.boolean(),
-  password: z.string().min(8).max(128).optional(),
+  password: z.string().min(8).max(128).optional().or(z.literal("")),
   ssoProvider: z.string().optional(),
 });
 
