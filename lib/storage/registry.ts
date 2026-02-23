@@ -2,6 +2,7 @@ import type { StorageProvider } from "./interface";
 import { SftpProvider } from "./sftp";
 import { SmbProvider } from "./smb";
 import { AzureBlobProvider } from "./azure-blob";
+import { LocalProvider } from "./local";
 
 interface ConnectionRecord {
   protocol: string;
@@ -35,6 +36,8 @@ export function createStorageProvider(
         connectionString: connection.credentials.connectionString,
         container: connection.credentials.container,
       });
+    case "local":
+      return new LocalProvider(connection.host);
     default:
       throw new Error(`Unsupported protocol: ${connection.protocol}`);
   }

@@ -10,20 +10,16 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ChevronRight, Folder, FolderOpen, File, Home, AlertCircle, ArrowLeft,
+  ChevronRight, Folder, FolderOpen, File, Home, AlertCircle, ArrowLeft, HardDrive,
 } from "lucide-react";
 import type { FileInfo } from "@/lib/storage/interface";
 
-interface FolderBrowserProps {
+interface LocalFolderPickerProps {
   open: boolean;
   onClose: () => void;
-  /** ID of the connection to browse */
-  connectionId: number;
-  /** Display name shown in the dialog title */
-  connectionName: string;
-  /** Starting path when the dialog opens */
+  /** Starting path when the dialog opens — defaults to "/" */
   initialPath?: string;
-  /** Called with the chosen path when the user clicks "Select" */
+  /** Called with the chosen absolute path when the user clicks "Select" */
   onSelect: (path: string) => void;
 }
 
@@ -41,7 +37,7 @@ function Breadcrumb({
   const startIndex = truncated ? parts.length - MAX_VISIBLE : 0;
 
   return (
-    <div className="flex items-center gap-1 text-sm min-h-[24px]">
+    <div className="flex items-center gap-1 text-sm min-h-[24px] overflow-hidden">
       <button
         onClick={() => onNavigate("/")}
         className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -77,35 +73,31 @@ function Breadcrumb({
   );
 }
 
-export function FolderBrowser({
+export function LocalFolderPicker({
   open,
   onClose,
-  connectionId,
-  connectionName,
   initialPath = "/",
   onSelect,
-}: FolderBrowserProps) {
+}: LocalFolderPickerProps) {
   const [currentPath, setCurrentPath] = useState(initialPath);
 
   // Reset path when dialog opens
   useEffect(() => {
-    if (open) setCurrentPath(initialPath);
+    if (open) setCurrentPath(initialPath || "/");
   }, [open, initialPath]);
 
   const { data, isLoading, error } = useQuery<{
     path: string;
     entries: FileInfo[];
   }>({
-    queryKey: ["browse", connectionId, currentPath],
+    queryKey: ["filesystem-browse", currentPath],
     queryFn: () =>
       axios
-        .get(
-          `/api/connections/${connectionId}/browse?path=${encodeURIComponent(currentPath)}`
-        )
+        .get(`/api/filesystem/browse?path=${encodeURIComponent(currentPath)}`)
         .then((r) => r.data),
-    enabled: open && !!connectionId,
+    enabled: open,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 10_000,
   });
 
   const navigate = (entry: FileInfo) => {
@@ -128,8 +120,8 @@ export function FolderBrowser({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FolderOpen className="h-4 w-4" />
-            Browse — {connectionName}
+            <HardDrive className="h-4 w-4" />
+            Select Base Path
           </DialogTitle>
         </DialogHeader>
 
@@ -158,10 +150,10 @@ export function FolderBrowser({
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive p-6 text-center">
               <AlertCircle className="h-6 w-6" />
-              <p className="text-sm font-medium">Failed to load directory</p>
+              <p className="text-sm font-medium">Failed to read directory</p>
               <p className="text-xs text-muted-foreground">
                 {(error as { response?: { data?: { error?: string } } }).response?.data?.error ??
-                  "Check your connection credentials and that the path exists"}
+                  "Check that the path exists and the server has permission to read it"}
               </p>
             </div>
           ) : !data?.entries?.length ? (
@@ -184,7 +176,7 @@ export function FolderBrowser({
                   ].join(" ")}
                 >
                   {entry.isDirectory ? (
-                    <Folder className="h-4 w-4 shrink-0 text-primary/70" />
+                    <FolderOpen className="h-4 w-4 shrink-0 text-primary/70" />
                   ) : (
                     <File className="h-4 w-4 shrink-0" />
                   )}

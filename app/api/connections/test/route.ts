@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { protocol, host, port, credentials } = body;
 
-  if (!protocol || !host || !port || !credentials) {
+  if (!protocol || !host || port == null || !credentials) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
