@@ -7,7 +7,6 @@ name: Release
 #   create-release  ──┬──► docker         (builds + pushes multi-arch image to GHCR)
 #                     ├──► tarball (linux/amd64)
 #                     ├──► tarball (linux/arm64)
-#                     ├──► tarball (darwin/amd64)
 #                     └──► tarball (darwin/arm64)
 #
 # All build jobs fan out in parallel once the release exists.
@@ -160,9 +159,6 @@ jobs:
           - runner: ubuntu-24.04-arm
             os-label: linux
             arch: arm64
-          - runner: macos-13
-            os-label: darwin
-            arch: amd64
           - runner: macos-latest
             os-label: darwin
             arch: arm64
@@ -201,7 +197,7 @@ jobs:
 
           # Copy static assets and public dir into the standalone output
           cp -r .next/static  .next/standalone/.next/static
-          cp -r public        .next/standalone/public
+          [ -d public ] && cp -r public .next/standalone/public || true
 
           # Write version marker so install.sh can detect the installed version
           echo "$TAG" > .next/standalone/FILEBRIDGE_VERSION
