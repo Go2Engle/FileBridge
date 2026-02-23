@@ -670,8 +670,8 @@
     }
 
     .mock-titlebar {
-      background: var(--bg-3);
-      border-bottom: 1px solid var(--border);
+      background: oklch(0.205 0 0);
+      border-bottom: 1px solid oklch(1 0 0 / 10%);
       padding: 12px 16px;
       display: flex;
       align-items: center;
@@ -695,18 +695,18 @@
 
     .mock-url {
       flex: 1;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: oklch(0.269 0 0);
+      border: 1px solid oklch(1 0 0 / 10%);
       border-radius: 6px;
       padding: 4px 12px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.75rem;
-      color: var(--text-muted);
+      color: oklch(0.708 0 0);
       max-width: 300px;
     }
 
     .mock-body {
-      background: var(--bg-2);
+      background: oklch(0.145 0 0);
       padding: 24px;
       display: flex;
       gap: 20px;
@@ -717,7 +717,10 @@
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      background: oklch(0.205 0 0);
+      border-right: 1px solid oklch(1 0 0 / 10%);
+      margin: -24px 0 -24px -24px;
+      padding: 0 8px 8px;
     }
 
     .mock-nav-item {
@@ -725,21 +728,41 @@
       align-items: center;
       gap: 8px;
       padding: 8px 10px;
-      border-radius: 8px;
+      border-radius: 6px;
       font-size: 0.78rem;
       font-weight: 500;
-      color: var(--text-muted);
+      color: oklch(0.708 0 0);
     }
 
     .mock-nav-item.active {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
+      background: oklch(0.488 0.243 264.376);
+      color: oklch(0.985 0 0);
     }
 
-    .mock-nav-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
+    .mock-nav-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      opacity: 0.65;
+    }
+
+    .mock-nav-item.active .mock-nav-icon { opacity: 1; }
+
+    .mock-sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 10px;
+      border-bottom: 1px solid oklch(1 0 0 / 10%);
+      margin-bottom: 4px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: oklch(0.985 0 0);
+    }
+
+    .mock-sidebar-logo svg {
+      width: 14px;
+      height: 14px;
       flex-shrink: 0;
     }
 
@@ -758,30 +781,42 @@
     }
 
     .mock-kpi {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      background: oklch(0.205 0 0);
+      border: 1px solid oklch(1 0 0 / 10%);
+      border-radius: 0.625rem;
       padding: 14px;
+    }
+
+    .mock-kpi-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .mock-kpi-icon {
+      width: 14px;
+      height: 14px;
+      color: oklch(0.708 0 0);
+      flex-shrink: 0;
     }
 
     .mock-kpi-label {
       font-size: 0.68rem;
-      color: var(--text-dim);
+      color: oklch(0.708 0 0);
       font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 4px;
     }
 
     .mock-kpi-value {
       font-size: 1.3rem;
       font-weight: 800;
       letter-spacing: -0.03em;
+      color: oklch(0.985 0 0);
     }
 
     .mock-kpi-sub {
       font-size: 0.65rem;
-      color: var(--text-dim);
+      color: oklch(0.708 0 0);
       margin-top: 2px;
     }
 
@@ -792,43 +827,28 @@
     }
 
     .mock-chart, .mock-activity {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      background: oklch(0.205 0 0);
+      border: 1px solid oklch(1 0 0 / 10%);
+      border-radius: 0.625rem;
       padding: 16px;
     }
 
     .mock-chart-title, .mock-activity-title {
-      font-size: 0.75rem;
+      font-size: 0.82rem;
       font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      color: oklch(0.985 0 0);
+      margin-bottom: 2px;
     }
 
     .mock-chart-sub {
-      font-size: 0.61rem;
-      color: var(--text-dim);
-      margin-top: -8px;
+      font-size: 0.65rem;
+      color: oklch(0.708 0 0);
       margin-bottom: 10px;
     }
 
-    .mock-line-chart {
+    .mock-area-chart {
       width: 100%;
-      height: 64px;
       display: block;
-    }
-
-    .mock-chart-dates {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 4px;
-    }
-
-    .mock-chart-date {
-      font-size: 0.58rem;
-      color: var(--text-dim);
     }
 
     .mock-job-items { display: flex; flex-direction: column; gap: 10px; }
@@ -850,7 +870,7 @@
     .mock-job-name {
       font-size: 0.72rem;
       font-weight: 600;
-      color: var(--text);
+      color: oklch(0.985 0 0);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -858,7 +878,7 @@
 
     .mock-job-time {
       font-size: 0.61rem;
-      color: var(--text-dim);
+      color: oklch(0.708 0 0);
     }
 
     .mock-job-badge {
@@ -871,9 +891,9 @@
     }
 
     .mock-badge-inactive {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
+      background: oklch(0.269 0 0);
+      border: 1px solid oklch(1 0 0 / 10%);
+      color: oklch(0.708 0 0);
     }
 
     .mock-badge-active {
@@ -895,8 +915,8 @@
     }
 
     .mock-activity-full {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: oklch(0.205 0 0);
+      border: 1px solid oklch(1 0 0 / 10%);
       border-radius: var(--radius);
       overflow: hidden;
     }
@@ -908,7 +928,7 @@
       align-items: center;
       gap: 8px;
       padding: 7px 12px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid oklch(1 0 0 / 10%);
     }
 
     .mock-activity-row:last-child { border-bottom: none; }
@@ -924,7 +944,7 @@
     .mock-activity-filename {
       font-size: 0.72rem;
       font-weight: 600;
-      color: var(--text);
+      color: oklch(0.985 0 0);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -932,7 +952,7 @@
 
     .mock-activity-path {
       font-size: 0.6rem;
-      color: var(--text-dim);
+      color: oklch(0.708 0 0);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -948,7 +968,7 @@
 
     .mock-activity-meta {
       font-size: 0.6rem;
-      color: var(--text-dim);
+      color: oklch(0.708 0 0);
     }
 
     .mock-status-dot {
@@ -1502,46 +1522,66 @@
         </div>
         <div class="mock-body">
           <div class="mock-sidebar">
+            <div class="mock-sidebar-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 3-4 4 4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+              FileBridge
+            </div>
             <div class="mock-nav-item active">
-              <div class="mock-nav-dot" style="background:var(--accent-1)"></div>
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="11" rx="1"/><rect width="7" height="5" x="3" y="15" rx="1"/></svg>
               Dashboard
             </div>
             <div class="mock-nav-item">
-              <div class="mock-nav-dot" style="background:var(--text-dim)"></div>
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
               Connections
             </div>
             <div class="mock-nav-item">
-              <div class="mock-nav-dot" style="background:var(--text-dim)"></div>
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Jobs
             </div>
             <div class="mock-nav-item">
-              <div class="mock-nav-dot" style="background:var(--text-dim)"></div>
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Logs
             </div>
             <div class="mock-nav-item">
-              <div class="mock-nav-dot" style="background:var(--text-dim)"></div>
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              Audit Log
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
               Settings
             </div>
           </div>
           <div class="mock-content">
             <div class="mock-kpis">
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Files Transferred</div>
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Files Transferred</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.5 2H8.6c-.4 0-.8.2-1.1.5-.3.3-.5.7-.5 1.1v12.8c0 .4.2.8.5 1.1.3.3.7.5 1.1.5h9.8c.4 0 .8-.2 1.1-.5.3-.3.5-.7.5-1.1V6.5L15.5 2z"/><path d="M3 7.6v12.8c0 .4.2.8.5 1.1.3.3.7.5 1.1.5H13"/><path d="M15 2v5h5"/></svg>
+                </div>
                 <div class="mock-kpi-value">1,284</div>
                 <div class="mock-kpi-sub">2,200 this week</div>
               </div>
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Data Volume (7d)</div>
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Data Volume (7d)</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>
+                </div>
                 <div class="mock-kpi-value">4.7 GB</div>
                 <div class="mock-kpi-sub">2,200 files all-time</div>
               </div>
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Success Rate</div>
-                <div class="mock-kpi-value" style="color:#22c55e">99.8%</div>
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Success Rate</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+                </div>
+                <div class="mock-kpi-value">99.8%</div>
                 <div class="mock-kpi-sub">Last 7 days</div>
               </div>
               <div class="mock-kpi">
-                <div class="mock-kpi-label">Active Jobs</div>
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Active Jobs</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                </div>
                 <div class="mock-kpi-value">7</div>
                 <div class="mock-kpi-sub">Scheduled transfers</div>
               </div>
@@ -1550,25 +1590,38 @@
               <div class="mock-chart">
                 <div class="mock-chart-title">Transfer Volume</div>
                 <div class="mock-chart-sub">Files and data transferred over the last 7 days</div>
-                <svg class="mock-line-chart" viewBox="0 0 220 64" preserveAspectRatio="none">
+                <svg class="mock-area-chart" viewBox="0 0 340 155" xmlns="http://www.w3.org/2000/svg">
                   <defs>
-                    <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>
-                      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.02"/>
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="oklch(0.488 0.243 264.376)" stop-opacity="0.3"/>
+                      <stop offset="100%" stop-color="oklch(0.488 0.243 264.376)" stop-opacity="0.02"/>
                     </linearGradient>
                   </defs>
-                  <path d="M 0,62 C 30,61 55,58 80,46 C 95,38 105,14 115,4 C 125,14 140,52 165,59 C 185,63 205,62 220,62 L 220,64 L 0,64 Z" fill="url(#lineGrad)"/>
-                  <path d="M 0,62 C 30,61 55,58 80,46 C 95,38 105,14 115,4 C 125,14 140,52 165,59 C 185,63 205,62 220,62" fill="none" stroke="#6366f1" stroke-width="1.5"/>
+                  <!-- Dashed grid lines -->
+                  <line x1="44" y1="10" x2="334" y2="10" stroke="oklch(1 0 0 / 10%)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="40" x2="334" y2="40" stroke="oklch(1 0 0 / 10%)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="70" x2="334" y2="70" stroke="oklch(1 0 0 / 10%)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="100" x2="334" y2="100" stroke="oklch(1 0 0 / 10%)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="130" x2="334" y2="130" stroke="oklch(1 0 0 / 10%)" stroke-width="1"/>
+                  <!-- Y-axis labels -->
+                  <text x="38" y="133" text-anchor="end" font-size="7.5" fill="oklch(0.708 0 0)">0</text>
+                  <text x="38" y="103" text-anchor="end" font-size="7.5" fill="oklch(0.708 0 0)">500</text>
+                  <text x="38" y="73" text-anchor="end" font-size="7.5" fill="oklch(0.708 0 0)">1000</text>
+                  <text x="38" y="43" text-anchor="end" font-size="7.5" fill="oklch(0.708 0 0)">1500</text>
+                  <text x="38" y="13" text-anchor="end" font-size="7.5" fill="oklch(0.708 0 0)">2000</text>
+                  <!-- Area fill -->
+                  <path d="M 44,128 C 65,127 80,126 90,126 C 108,125 120,124 140,123 C 158,122 172,114 188,105 C 200,98 218,46 236,14 C 253,28 268,105 285,112 C 300,117 316,121 334,124 L 334,130 L 44,130 Z" fill="url(#chartGrad)"/>
+                  <!-- Line -->
+                  <path d="M 44,128 C 65,127 80,126 90,126 C 108,125 120,124 140,123 C 158,122 172,114 188,105 C 200,98 218,46 236,14 C 253,28 268,105 285,112 C 300,117 316,121 334,124" fill="none" stroke="oklch(0.488 0.243 264.376)" stroke-width="1.5"/>
+                  <!-- X-axis labels -->
+                  <text x="44" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 16</text>
+                  <text x="90" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 17</text>
+                  <text x="138" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 18</text>
+                  <text x="187" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 19</text>
+                  <text x="236" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 20</text>
+                  <text x="285" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 21</text>
+                  <text x="334" y="148" text-anchor="middle" font-size="7" fill="oklch(0.708 0 0)">Feb 22</text>
                 </svg>
-                <div class="mock-chart-dates">
-                  <span class="mock-chart-date">Feb 16</span>
-                  <span class="mock-chart-date">Feb 17</span>
-                  <span class="mock-chart-date">Feb 18</span>
-                  <span class="mock-chart-date">Feb 19</span>
-                  <span class="mock-chart-date">Feb 20</span>
-                  <span class="mock-chart-date">Feb 21</span>
-                  <span class="mock-chart-date">Feb 22</span>
-                </div>
               </div>
               <div class="mock-activity">
                 <div class="mock-activity-title">Job Status</div>
@@ -1615,7 +1668,8 @@
                   </div>
                   <div class="mock-activity-end">
                     <div class="mock-job-badge mock-badge-active">success</div>
-                    <div class="mock-activity-meta">2.3 MB · 2 min ago</div>
+                    <div class="mock-activity-meta">2.3 MB</div>
+                    <div class="mock-activity-meta">2 min ago</div>
                   </div>
                 </div>
                 <div class="mock-activity-row">
@@ -1626,7 +1680,8 @@
                   </div>
                   <div class="mock-activity-end">
                     <div class="mock-job-badge mock-badge-active">success</div>
-                    <div class="mock-activity-meta">1.1 MB · 14 min ago</div>
+                    <div class="mock-activity-meta">1.1 MB</div>
+                    <div class="mock-activity-meta">14 min ago</div>
                   </div>
                 </div>
                 <div class="mock-activity-row">
@@ -1637,7 +1692,8 @@
                   </div>
                   <div class="mock-activity-end">
                     <div class="mock-job-badge mock-badge-error">failure</div>
-                    <div class="mock-activity-meta">45.2 MB · 1 hr ago</div>
+                    <div class="mock-activity-meta">45.2 MB</div>
+                    <div class="mock-activity-meta">1 hr ago</div>
                   </div>
                 </div>
                 <div class="mock-activity-row">
@@ -1648,7 +1704,8 @@
                   </div>
                   <div class="mock-activity-end">
                     <div class="mock-job-badge mock-badge-active">success</div>
-                    <div class="mock-activity-meta">234 KB · 2 hr ago</div>
+                    <div class="mock-activity-meta">234 KB</div>
+                    <div class="mock-activity-meta">2 hr ago</div>
                   </div>
                 </div>
               </div>
