@@ -1,0 +1,57 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (reinstalled inside Docker)
+node_modules
+
+# Next.js build output (rebuilt inside Docker)
+.next
+out
+build
+
+# Local env files — inject secrets at runtime via Docker env vars or secrets
+.env
+.env.local
+.env.*.local
+
+# SQLite database files — mount /app/data as a volume at runtime
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db-journal
+data/backups
+
+# Drizzle migrations (applied separately or on startup)
+drizzle/
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Certificates
+*.pem
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+
+# Local-only reference code
+samplecode/
+
+# Documentation
+README.md
+prd.md
+ENTERPRISE_ROADMAP.md
+
+# CI / GitHub config (not needed in the image)
+.github
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+next-env.d.ts
