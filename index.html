@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileBridge — Automated File Transfer Scheduling</title>
+  <meta name="description" content="Self-hosted automated file transfers over SFTP, SMB/CIFS, and Azure Blob Storage with cron scheduling, glob filtering, archive extraction, and a modern dashboard. Docker-ready and open source." />
+  <link rel="icon" href="images/FileBridgeLogo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    img { max-width: 100%; display: block; }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; border: none; background: none; font: inherit; }
+
+    /* ─── Theme Tokens ─────────────────────────────────────────────────── */
+    :root {
+      --accent-1: #6366f1;
+      --accent-2: #8b5cf6;
+      --accent-3: #06b6d4;
+      --accent-grad: linear-gradient(135deg, #6366f1, #8b5cf6 50%, #06b6d4);
+      --radius: 12px;
+      --radius-lg: 20px;
+      --transition: 0.2s ease;
+    }
+
+    [data-theme="dark"] {
+      --bg: #07070f;
+      --bg-2: #0e0e1c;
+      --bg-3: #13132a;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.14);
+      --text: #f1f1f5;
+      --text-muted: #8b8ba8;
+      --text-dim: #4a4a6a;
+      --glow: rgba(99,102,241,0.25);
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.3);
+      --hero-glow: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.3) 0%, transparent 70%);
+      /* Real app dark tokens */
+      --mock-bg: oklch(0.145 0 0);
+      --mock-surface: oklch(0.205 0 0);
+      --mock-sidebar-bg: oklch(0.205 0 0);
+      --mock-muted: oklch(0.269 0 0);
+      --mock-text: oklch(0.985 0 0);
+      --mock-text-muted: oklch(0.708 0 0);
+      --mock-border: oklch(1 0 0 / 10%);
+      --mock-sidebar-primary: oklch(0.488 0.243 264.376);
+      --mock-sidebar-primary-fg: oklch(0.985 0 0);
+      --mock-chart-1: oklch(0.488 0.243 264.376);
+      /* Badge variants - dark (matches Tailwind dark: classes) */
+      --mock-badge-success-bg: rgba(6,78,59,0.3);
+      --mock-badge-success-text: #34d399;
+      --mock-badge-warning-bg: rgba(120,53,15,0.3);
+      --mock-badge-warning-text: #fbbf24;
+      --mock-badge-destructive-bg: oklch(0.704 0.191 22.216);
+      --mock-badge-destructive-text: #fff;
+      --mock-badge-secondary-bg: oklch(0.269 0 0);
+      --mock-badge-secondary-text: oklch(0.985 0 0);
+    }
+
+    [data-theme="light"] {
+      --bg: #f8f8ff;
+      --bg-2: #f0f0fa;
+      --bg-3: #e8e8f5;
+      --surface: rgba(255,255,255,0.9);
+      --surface-hover: rgba(255,255,255,1);
+      --border: rgba(0,0,0,0.08);
+      --border-strong: rgba(0,0,0,0.14);
+      --text: #0f0f23;
+      --text-muted: #6666a0;
+      --text-dim: #aaaacc;
+      --glow: rgba(99,102,241,0.12);
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.08);
+      --hero-glow: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.15) 0%, transparent 70%);
+      /* Real app light tokens */
+      --mock-bg: oklch(1 0 0);
+      --mock-surface: oklch(1 0 0);
+      --mock-sidebar-bg: oklch(0.985 0 0);
+      --mock-muted: oklch(0.97 0 0);
+      --mock-text: oklch(0.145 0 0);
+      --mock-text-muted: oklch(0.556 0 0);
+      --mock-border: oklch(0.922 0 0);
+      --mock-sidebar-primary: oklch(0.205 0 0);
+      /* Badge variants - light (matches Tailwind classes) */
+      --mock-badge-success-bg: #d1fae5;
+      --mock-badge-success-text: #065f46;
+      --mock-badge-warning-bg: #fef3c7;
+      --mock-badge-warning-text: #92400e;
+      --mock-badge-destructive-bg: oklch(0.577 0.245 27.325);
+      --mock-badge-destructive-text: #fff;
+      --mock-badge-secondary-bg: oklch(0.97 0 0);
+      --mock-badge-secondary-text: oklch(0.205 0 0);
+      --mock-sidebar-primary-fg: oklch(0.985 0 0);
+      --mock-chart-1: oklch(0.646 0.222 41.116);
+    }
+
+    /* ─── Global Styles ────────────────────────────────────────────────── */
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ─── Navbar ───────────────────────────────────────────────────────── */
+    .navbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid transparent;
+      transition: background var(--transition), border-color var(--transition), backdrop-filter var(--transition);
+    }
+
+    .navbar.scrolled {
+      background: var(--bg);
+      border-color: var(--border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
+    }
+
+    .nav-inner {
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+
+    .nav-logo img { width: 28px; height: 28px; border-radius: 6px; }
+
+    .nav-logo-text {
+      background: var(--accent-grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .nav-links a {
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: color var(--transition), background var(--transition);
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+
+    .btn-ghost {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all var(--transition);
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+      background: var(--surface);
+    }
+
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      background: var(--accent-grad);
+      color: #fff;
+      transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+      box-shadow: 0 2px 12px var(--glow);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--glow);
+    }
+
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all var(--transition);
+    }
+
+    .theme-toggle:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+      background: var(--surface);
+    }
+
+    .theme-toggle svg { width: 16px; height: 16px; }
+    .icon-moon { display: block; }
+    .icon-sun  { display: none; }
+    [data-theme="light"] .icon-moon { display: none; }
+    [data-theme="light"] .icon-sun  { display: block; }
+
+    /* ─── Hero ─────────────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: var(--hero-glow);
+      pointer-events: none;
+    }
+
+    .hero-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 20%, transparent 80%);
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .hero-content {
+      position: relative;
+      max-width: 800px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.85); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .grad {
+      background: var(--accent-grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    .btn-hero-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      background: var(--accent-grad);
+      color: #fff;
+      box-shadow: 0 4px 24px var(--glow);
+      transition: all 0.25s ease;
+    }
+
+    .btn-hero-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px var(--glow);
+      opacity: 0.95;
+    }
+
+    .btn-hero-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      backdrop-filter: blur(8px);
+      transition: all 0.25s ease;
+    }
+
+    .btn-hero-secondary:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-1);
+      background: var(--surface-hover);
+    }
+
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+
+    .hero-stat {
+      text-align: center;
+    }
+
+    .hero-stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: var(--accent-grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    /* ─── Strip ────────────────────────────────────────────────────────── */
+    .strip {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-2);
+      padding: 18px 0;
+      overflow: hidden;
+    }
+
+    .strip-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .strip-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .strip-item svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent-1);
+      flex-shrink: 0;
+    }
+
+    /* ─── Section Layout ───────────────────────────────────────────────── */
+    .section {
+      padding: 100px 24px;
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 64px;
+    }
+
+    .section-tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: color-mix(in srgb, var(--accent-1) 15%, transparent);
+      color: var(--accent-1);
+      border: 1px solid color-mix(in srgb, var(--accent-1) 30%, transparent);
+      margin-bottom: 16px;
+    }
+
+    .section h2 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .section p.lead {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ─── Feature Cards ────────────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-lg);
+      background: var(--accent-grad);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .feature-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-3px);
+      box-shadow: var(--card-shadow);
+    }
+
+    .feature-card:hover::before {
+      opacity: 0.04;
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      background: color-mix(in srgb, var(--accent-1) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent-1) 25%, transparent);
+      position: relative;
+    }
+
+    .feature-icon svg {
+      width: 22px;
+      height: 22px;
+      color: var(--accent-1);
+    }
+
+    .feature-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+      position: relative;
+    }
+
+    .feature-card p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+      position: relative;
+    }
+
+    /* ─── Protocol Section ─────────────────────────────────────────────── */
+    .protocol-section {
+      background: var(--bg-2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .protocol-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .protocol-card {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      text-align: center;
+      transition: all 0.25s ease;
+    }
+
+    .protocol-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+      box-shadow: var(--card-shadow);
+    }
+
+    .protocol-logo {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+    }
+
+    .protocol-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .protocol-card p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.65;
+    }
+
+    .protocol-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .protocol-tag {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
+    }
+
+    /* ─── How It Works ─────────────────────────────────────────────────── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      max-width: 1000px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: calc(16.67% + 20px);
+      right: calc(16.67% + 20px);
+      height: 1px;
+      background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--accent-3));
+      opacity: 0.4;
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-num {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--accent-grad);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 auto 20px;
+      box-shadow: 0 4px 20px var(--glow);
+      position: relative;
+      z-index: 1;
+    }
+
+    .step h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .step p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ─── Dashboard Mock ───────────────────────────────────────────────── */
+    .dashboard-section {
+      background: var(--bg-2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dashboard-mock {
+      max-width: 960px;
+      margin: 0 auto;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.4);
+    }
+
+    .mock-titlebar {
+      background: var(--mock-surface);
+      border-bottom: 1px solid var(--mock-border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mock-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mock-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .mock-dot-red    { background: #ff5f57; }
+    .mock-dot-yellow { background: #febc2e; }
+    .mock-dot-green  { background: #28c840; }
+
+    .mock-url {
+      flex: 1;
+      background: var(--mock-muted);
+      border: 1px solid var(--mock-border);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--mock-text-muted);
+      max-width: 300px;
+    }
+
+    .mock-body {
+      background: var(--mock-bg);
+      padding: 24px;
+      display: flex;
+      gap: 20px;
+    }
+
+    .mock-sidebar {
+      width: 180px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--mock-sidebar-bg);
+      border-right: 1px solid var(--mock-border);
+      margin: -24px 0 -24px -24px;
+      padding: 0 8px 8px;
+    }
+
+    .mock-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--mock-text-muted);
+    }
+
+    .mock-nav-item.active {
+      background: var(--mock-sidebar-primary);
+      color: var(--mock-sidebar-primary-fg);
+    }
+
+    .mock-nav-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      opacity: 0.65;
+    }
+
+    .mock-nav-item.active .mock-nav-icon { opacity: 1; }
+
+    .mock-sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 10px;
+      border-bottom: 1px solid var(--mock-border);
+      margin-bottom: 4px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--mock-text);
+    }
+
+    .mock-sidebar-logo svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .mock-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .mock-kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .mock-kpi {
+      background: var(--mock-surface);
+      border: 1px solid var(--mock-border);
+      border-radius: 0.625rem;
+      padding: 14px;
+    }
+
+    .mock-kpi-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .mock-kpi-icon {
+      width: 14px;
+      height: 14px;
+      color: var(--mock-text-muted);
+      flex-shrink: 0;
+    }
+
+    .mock-kpi-label {
+      font-size: 0.68rem;
+      color: var(--mock-text-muted);
+      font-weight: 500;
+    }
+
+    .mock-kpi-value {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--mock-text);
+    }
+
+    .mock-kpi-sub {
+      font-size: 0.65rem;
+      color: var(--mock-text-muted);
+      margin-top: 2px;
+    }
+
+    .mock-chart-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+
+    .mock-chart, .mock-activity {
+      background: var(--mock-surface);
+      border: 1px solid var(--mock-border);
+      border-radius: 0.625rem;
+      padding: 16px;
+    }
+
+    .mock-chart-title, .mock-activity-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--mock-text);
+      margin-bottom: 2px;
+    }
+
+    .mock-chart-sub {
+      font-size: 0.65rem;
+      color: var(--mock-text-muted);
+      margin-bottom: 10px;
+    }
+
+    .mock-area-chart {
+      width: 100%;
+      display: block;
+    }
+
+    .mock-job-items { display: flex; flex-direction: column; gap: 10px; }
+
+    .mock-job-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mock-job-info {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .mock-job-name {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--mock-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-job-time {
+      font-size: 0.61rem;
+      color: var(--mock-text-muted);
+    }
+
+    .mock-job-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 1px 8px;
+      border-radius: 0.375rem;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .mock-badge-inactive {
+      background: var(--mock-badge-secondary-bg);
+      color: var(--mock-badge-secondary-text);
+    }
+
+    .mock-badge-active {
+      background: var(--mock-badge-success-bg);
+      color: var(--mock-badge-success-text);
+    }
+
+    .mock-badge-running {
+      background: var(--mock-badge-warning-bg);
+      color: var(--mock-badge-warning-text);
+    }
+
+    .mock-badge-error {
+      background: var(--mock-badge-destructive-bg);
+      color: var(--mock-badge-destructive-text);
+    }
+
+    .mock-activity-full {
+      background: var(--mock-surface);
+      border: 1px solid var(--mock-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .mock-activity-rows { display: flex; flex-direction: column; }
+
+    .mock-activity-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--mock-border);
+    }
+
+    .mock-activity-row:last-child { border-bottom: none; }
+
+    .mock-activity-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .mock-activity-filename {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--mock-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-activity-path {
+      font-size: 0.6rem;
+      color: var(--mock-text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mock-activity-end {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .mock-activity-meta {
+      font-size: 0.6rem;
+      color: var(--mock-text-muted);
+    }
+
+    .mock-status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ─── Quick Start ──────────────────────────────────────────────────── */
+    .quickstart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      max-width: 1000px;
+      margin: 0 auto;
+      align-items: center;
+    }
+
+    .code-block {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-header-dots { display: flex; gap: 5px; }
+    .code-header-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-header-dot-r { background: #ff5f57; }
+    .code-header-dot-y { background: #febc2e; }
+    .code-header-dot-g { background: #28c840; }
+
+    .code-header-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .code-body {
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.9;
+      overflow-x: auto;
+    }
+
+    .code-line { display: block; white-space: nowrap; }
+    .code-comment { color: var(--text-dim); }
+    .code-prompt { color: var(--accent-3); user-select: none; }
+    .code-cmd { color: var(--text); }
+    .code-string { color: #a3e635; }
+    .code-flag { color: var(--accent-2); }
+
+    .quickstart-info h3 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+
+    .quickstart-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .qs-step {
+      display: flex;
+      gap: 14px;
+    }
+
+    .qs-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--accent-1) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent-1) 40%, transparent);
+      color: var(--accent-1);
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .qs-text strong {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .qs-text span {
+      font-size: 0.825rem;
+      color: var(--text-muted);
+    }
+
+    /* ─── CTA Section ──────────────────────────────────────────────────── */
+    .cta-section {
+      padding: 120px 24px;
+      text-align: center;
+    }
+
+    .cta-inner {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .cta-section h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+
+    .cta-section p {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+      line-height: 1.7;
+    }
+
+    .cta-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* ─── Footer ───────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 24px;
+      background: var(--bg-2);
+    }
+
+    .footer-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .footer-brand img { width: 24px; height: 24px; border-radius: 5px; }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: color var(--transition);
+    }
+
+    .footer-links a:hover { color: var(--text); }
+
+    .footer-copy {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    /* ─── Responsive ───────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .btn-ghost { display: none; }
+
+      .protocol-grid {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .steps::before { display: none; }
+
+      .quickstart-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mock-body {
+        flex-direction: column;
+      }
+
+      .mock-sidebar { display: none; }
+
+      .mock-kpis {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .mock-chart-row {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats { gap: 24px; }
+
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+
+    @media (max-width: 480px) {
+      .section { padding: 72px 20px; }
+      .mock-kpis { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ─── Scroll Animations ────────────────────────────────────────────── */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .fade-up-delay-1 { transition-delay: 0.1s; }
+    .fade-up-delay-2 { transition-delay: 0.2s; }
+    .fade-up-delay-3 { transition-delay: 0.3s; }
+    .fade-up-delay-4 { transition-delay: 0.4s; }
+    .fade-up-delay-5 { transition-delay: 0.5s; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <img src="images/FileBridgeLogo.png" alt="FileBridge" />
+        <span class="nav-logo-text">FileBridge</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#quickstart">Quick start</a>
+      </div>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+          <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <a href="https://github.com/go2engle/filebridge" class="btn-ghost" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.77.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.8c1.02 0 2.04.14 3.0.4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.69.83.57C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+        <a href="#quickstart" class="btn-primary">
+          Get Started
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ───────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-grid"></div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        Open Source · Self-Hosted · Docker Ready
+      </div>
+      <h1>
+        File transfers,<br />
+        <span class="grad">scheduled and monitored</span>
+      </h1>
+      <p>
+        FileBridge automates your SFTP, SMB/CIFS, and Azure Blob Storage transfers with
+        cron scheduling, glob filtering, archive extraction, and a modern audit dashboard.
+        No cloud vendor lock-in. Runs anywhere.
+      </p>
+      <div class="hero-ctas">
+        <a href="#quickstart" class="btn-hero-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Deploy in minutes
+        </a>
+        <a href="https://github.com/go2engle/filebridge" class="btn-hero-secondary" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.77.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.8c1.02 0 2.04.14 3.0.4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.69.83.57C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-value">3 Protocols</div>
+          <div class="hero-stat-label">SFTP · SMB · Azure Blob</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-value">ZIP/TAR/TGZ</div>
+          <div class="hero-stat-label">Archive extraction</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-value">Azure AD</div>
+          <div class="hero-stat-label">Enterprise SSO</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Strip ──────────────────────────────────────────────────────────── -->
+  <div class="strip">
+    <div class="strip-inner container">
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Azure Blob Storage
+      </div>
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Modern Dashboard UI
+      </div>
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Cron Scheduling
+      </div>
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Docker Ready
+      </div>
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Full Audit Log
+      </div>
+      <div class="strip-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Live KPI Dashboard
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Features ───────────────────────────────────────────────────────── -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Features</span>
+        <h2>Everything you need to move files reliably</h2>
+        <p class="lead">Built for ops teams that need reliable, auditable file movement between internal systems — without writing a single line of script.</p>
+      </div>
+      <div class="features-grid">
+
+        <div class="feature-card fade-up">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3>Cron Scheduling</h3>
+          <p>Full cron expression support with human-readable previews. Use presets like "every 15 minutes" or write custom expressions. Every job runs with concurrent-run protection so it never overlaps itself.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-1">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <h3>Glob File Filtering</h3>
+          <p>Transfer only the files you need. Use patterns like <code style="font-family:monospace;font-size:0.82em;background:var(--bg-3);padding:2px 5px;border-radius:4px">*.csv</code> or <code style="font-family:monospace;font-size:0.82em;background:var(--bg-3);padding:2px 5px;border-radius:4px">report_*.xlsx</code> to precisely target source files. Hidden file filtering is also built in.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-2">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <h3>Archive Extraction</h3>
+          <p>Automatically extract ZIP, TAR, TAR.GZ, and TGZ archives inline at the destination. No manual unpacking — FileBridge handles it as part of the transfer pipeline.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-3">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <h3>Live Dashboard & Analytics</h3>
+          <p>KPI cards for 24h, 7d, and all-time stats. A 7-day rolling chart shows transfer volume trends. Auto-refreshing job status, activity feed, and job run history are all included.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-4">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Enterprise SSO</h3>
+          <p>Azure Active Directory single sign-on via NextAuth v5. Lock access to specific email addresses or Azure AD group IDs. Full dev bypass mode for local development.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-5">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <h3>Full Audit Logging</h3>
+          <p>Every transferred file is recorded with source path, destination, size, timestamp, and status. Per-execution run records summarize file counts, byte totals, and duration. Searchable, paginated log viewer included.</p>
+        </div>
+
+        <div class="feature-card fade-up">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <h3>Post-Transfer Actions</h3>
+          <p>After a successful transfer, retain the source file, delete it, or move it to an archive path. Configurable per job — perfect for ETL pipelines that need clean-up guarantees.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-1">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <h3>Built-in File Browser</h3>
+          <p>Browse remote SFTP, SMB, and Azure Blob Storage directly in the UI when configuring jobs — no guessing at paths. Navigating nested directories and virtual prefixes is fully supported.</p>
+        </div>
+
+        <div class="feature-card fade-up fade-up-delay-2">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <h3>Notifications</h3>
+          <p>SMTP email and Microsoft Teams webhook alerts are config-ready. Set rules to notify on failure or after N consecutive errors. Notification history tracked in the audit log.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Protocol Support ────────────────────────────────────────────────── -->
+  <section class="section protocol-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Protocols</span>
+        <h2>Three protocols, one interface</h2>
+        <p class="lead">Connect to SFTP servers, Windows/NAS SMB shares, or Azure Blob Storage — all through the same job configuration and transfer pipeline.</p>
+      </div>
+      <div class="protocol-grid">
+        <div class="protocol-card fade-up">
+          <div class="protocol-logo">🔐</div>
+          <h3>SFTP</h3>
+          <p>Secure FTP over SSH. Supports both username/password and SSH private key authentication for maximum compatibility with Linux servers and network appliances.</p>
+          <div class="protocol-tags">
+            <span class="protocol-tag">SSH2</span>
+            <span class="protocol-tag">Password Auth</span>
+            <span class="protocol-tag">Private Key Auth</span>
+            <span class="protocol-tag">ssh2-sftp-client</span>
+          </div>
+        </div>
+        <div class="protocol-card fade-up fade-up-delay-1">
+          <div class="protocol-logo">🖥</div>
+          <h3>SMB / CIFS</h3>
+          <p>Windows file sharing and NAS devices. Full NTLMv2 authentication with optional domain support, automatic retry on stale sessions, and sharing violation handling.</p>
+          <div class="protocol-tags">
+            <span class="protocol-tag">NTLMv2</span>
+            <span class="protocol-tag">Domain Auth</span>
+            <span class="protocol-tag">Auto-Retry</span>
+            <span class="protocol-tag">v9u-smb2</span>
+          </div>
+        </div>
+        <div class="protocol-card fade-up fade-up-delay-2">
+          <div class="protocol-logo">☁️</div>
+          <h3>Azure Blob Storage</h3>
+          <p>Microsoft Azure object storage. Authenticate with an Account Key or Connection String. Container-scoped access, server-side move operations, and virtual directory browsing built in.</p>
+          <div class="protocol-tags">
+            <span class="protocol-tag">Account Key</span>
+            <span class="protocol-tag">Connection String</span>
+            <span class="protocol-tag">Server-Side Copy</span>
+            <span class="protocol-tag">@azure/storage-blob</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Dashboard Preview ───────────────────────────────────────────────── -->
+  <section class="section dashboard-section" id="dashboard">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Dashboard</span>
+        <h2>Full visibility into every transfer</h2>
+        <p class="lead">A clean, responsive dashboard gives you real-time insight into job health, transfer volume, and file-level activity.</p>
+      </div>
+
+      <div class="dashboard-mock fade-up">
+        <div class="mock-titlebar">
+          <div class="mock-dots">
+            <div class="mock-dot mock-dot-red"></div>
+            <div class="mock-dot mock-dot-yellow"></div>
+            <div class="mock-dot mock-dot-green"></div>
+          </div>
+          <div class="mock-url">localhost:3000/dashboard</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-sidebar">
+            <div class="mock-sidebar-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 3-4 4 4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+              FileBridge
+            </div>
+            <div class="mock-nav-item active">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="11" rx="1"/><rect width="7" height="5" x="3" y="15" rx="1"/></svg>
+              Dashboard
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
+              Connections
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Jobs
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Logs
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              Audit Log
+            </div>
+            <div class="mock-nav-item">
+              <svg class="mock-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="mock-content">
+            <div class="mock-kpis">
+              <div class="mock-kpi">
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Files Transferred</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.5 2H8.6c-.4 0-.8.2-1.1.5-.3.3-.5.7-.5 1.1v12.8c0 .4.2.8.5 1.1.3.3.7.5 1.1.5h9.8c.4 0 .8-.2 1.1-.5.3-.3.5-.7.5-1.1V6.5L15.5 2z"/><path d="M3 7.6v12.8c0 .4.2.8.5 1.1.3.3.7.5 1.1.5H13"/><path d="M15 2v5h5"/></svg>
+                </div>
+                <div class="mock-kpi-value">1,284</div>
+                <div class="mock-kpi-sub">2,200 this week</div>
+              </div>
+              <div class="mock-kpi">
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Data Volume (7d)</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>
+                </div>
+                <div class="mock-kpi-value">4.7 GB</div>
+                <div class="mock-kpi-sub">2,200 files all-time</div>
+              </div>
+              <div class="mock-kpi">
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Success Rate</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+                </div>
+                <div class="mock-kpi-value">99.8%</div>
+                <div class="mock-kpi-sub">Last 7 days</div>
+              </div>
+              <div class="mock-kpi">
+                <div class="mock-kpi-header">
+                  <div class="mock-kpi-label">Active Jobs</div>
+                  <svg class="mock-kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                </div>
+                <div class="mock-kpi-value">7</div>
+                <div class="mock-kpi-sub">Scheduled transfers</div>
+              </div>
+            </div>
+            <div class="mock-chart-row">
+              <div class="mock-chart">
+                <div class="mock-chart-title">Transfer Volume</div>
+                <div class="mock-chart-sub">Files and data transferred over the last 7 days</div>
+                <svg class="mock-area-chart" viewBox="0 0 340 155" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" style="stop-color:var(--mock-chart-1)" stop-opacity="0.3"/>
+                      <stop offset="100%" style="stop-color:var(--mock-chart-1)" stop-opacity="0.02"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- Dashed grid lines -->
+                  <line x1="44" y1="10" x2="334" y2="10" style="stroke:var(--mock-border)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="40" x2="334" y2="40" style="stroke:var(--mock-border)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="70" x2="334" y2="70" style="stroke:var(--mock-border)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="100" x2="334" y2="100" style="stroke:var(--mock-border)" stroke-width="1" stroke-dasharray="3,3"/>
+                  <line x1="44" y1="130" x2="334" y2="130" style="stroke:var(--mock-border)" stroke-width="1"/>
+                  <!-- Y-axis labels -->
+                  <text x="38" y="133" text-anchor="end" font-size="7.5" style="fill:var(--mock-text-muted)">0</text>
+                  <text x="38" y="103" text-anchor="end" font-size="7.5" style="fill:var(--mock-text-muted)">500</text>
+                  <text x="38" y="73" text-anchor="end" font-size="7.5" style="fill:var(--mock-text-muted)">1000</text>
+                  <text x="38" y="43" text-anchor="end" font-size="7.5" style="fill:var(--mock-text-muted)">1500</text>
+                  <text x="38" y="13" text-anchor="end" font-size="7.5" style="fill:var(--mock-text-muted)">2000</text>
+                  <!-- Area fill -->
+                  <path d="M 44,128 C 65,127 80,126 90,126 C 108,125 120,124 140,123 C 158,122 172,114 188,105 C 200,98 218,46 236,14 C 253,28 268,105 285,112 C 300,117 316,121 334,124 L 334,130 L 44,130 Z" fill="url(#chartGrad)"/>
+                  <!-- Line -->
+                  <path d="M 44,128 C 65,127 80,126 90,126 C 108,125 120,124 140,123 C 158,122 172,114 188,105 C 200,98 218,46 236,14 C 253,28 268,105 285,112 C 300,117 316,121 334,124" fill="none" style="stroke:var(--mock-chart-1)" stroke-width="1.5"/>
+                  <!-- X-axis labels -->
+                  <text x="44" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 16</text>
+                  <text x="90" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 17</text>
+                  <text x="138" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 18</text>
+                  <text x="187" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 19</text>
+                  <text x="236" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 20</text>
+                  <text x="285" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 21</text>
+                  <text x="334" y="148" text-anchor="middle" font-size="7" style="fill:var(--mock-text-muted)">Feb 22</text>
+                </svg>
+              </div>
+              <div class="mock-activity">
+                <div class="mock-activity-title">Job Status</div>
+                <div class="mock-job-items">
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">reports-sftp</div>
+                      <div class="mock-job-time">Last run 2 min ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-active">Active</div>
+                  </div>
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">archive-backup</div>
+                      <div class="mock-job-time">Last run 14 min ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-inactive">Inactive</div>
+                  </div>
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">user-export</div>
+                      <div class="mock-job-time">Last run 1 hour ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-inactive">Inactive</div>
+                  </div>
+                  <div class="mock-job-item">
+                    <div class="mock-job-info">
+                      <div class="mock-job-name">daily-sync</div>
+                      <div class="mock-job-time">Last run 3 hours ago</div>
+                    </div>
+                    <div class="mock-job-badge mock-badge-running">Running</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mock-activity-full">
+              <div class="mock-activity-title" style="padding:12px 12px 6px;margin-bottom:0">Recent Activity</div>
+              <div class="mock-activity-rows">
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">report_2026_02.csv</div>
+                    <div class="mock-activity-path">/reports/report.csv → /archive/report.csv</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">2.3 MB</div>
+                    <div class="mock-activity-meta">2 min ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">export_users.xlsx</div>
+                    <div class="mock-activity-path">/exports/users.xlsx → /smb/users.xlsx</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">1.1 MB</div>
+                    <div class="mock-activity-meta">14 min ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#ef4444"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">archive_feb.zip</div>
+                    <div class="mock-activity-path">/source/archive.zip → /backup/archive.zip</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-error">failure</div>
+                    <div class="mock-activity-meta">45.2 MB</div>
+                    <div class="mock-activity-meta">1 hr ago</div>
+                  </div>
+                </div>
+                <div class="mock-activity-row">
+                  <div class="mock-status-dot" style="background:#22c55e"></div>
+                  <div class="mock-activity-main">
+                    <div class="mock-activity-filename">invoice_0291.pdf</div>
+                    <div class="mock-activity-path">/invoices/inv.pdf → /sftp/inv.pdf</div>
+                  </div>
+                  <div class="mock-activity-end">
+                    <div class="mock-job-badge mock-badge-active">success</div>
+                    <div class="mock-activity-meta">234 KB</div>
+                    <div class="mock-activity-meta">2 hr ago</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ────────────────────────────────────────────────────── -->
+  <section class="section" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">How it works</span>
+        <h2>Up and running in three steps</h2>
+        <p class="lead">No agents, no cloud accounts, no complex config. Just Docker and your environment variables.</p>
+      </div>
+      <div class="steps">
+        <div class="step fade-up">
+          <div class="step-num">1</div>
+          <h3>Add your connections</h3>
+          <p>Register your SFTP servers, SMB shares, or Azure Blob Storage accounts in the connection manager. Test the connection directly from the UI before saving.</p>
+        </div>
+        <div class="step fade-up fade-up-delay-1">
+          <div class="step-num">2</div>
+          <h3>Create a transfer job</h3>
+          <p>Pick source and destination connections, set a cron schedule, configure glob filters, and choose a post-transfer action. Preview matched files with dry-run mode before committing.</p>
+        </div>
+        <div class="step fade-up fade-up-delay-2">
+          <div class="step-num">3</div>
+          <h3>Monitor & alert</h3>
+          <p>Watch transfers happen in real time on the dashboard. Get notified via email or Teams on failures. Every file touched is logged with full path, size, and timestamp.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Quick Start ─────────────────────────────────────────────────────── -->
+  <section class="section" id="quickstart" style="background:var(--bg-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Quick Start</span>
+        <h2>From zero to running in under 5 minutes</h2>
+        <p class="lead">Clone, configure, and go. Runs with Node.js 18+ or Docker.</p>
+      </div>
+      <div class="quickstart-grid">
+        <div class="code-block fade-up">
+          <div class="code-header">
+            <div class="code-header-dots">
+              <div class="code-header-dot code-header-dot-r"></div>
+              <div class="code-header-dot code-header-dot-y"></div>
+              <div class="code-header-dot code-header-dot-g"></div>
+            </div>
+            <span class="code-header-title">terminal</span>
+          </div>
+          <div class="code-body">
+            <span class="code-line"><span class="code-comment"># Clone the repository</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">git clone https://github.com/go2engle/filebridge</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">cd filebridge</span></span>
+            <span class="code-line">&nbsp;</span>
+            <span class="code-line"><span class="code-comment"># Install dependencies</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">npm install</span></span>
+            <span class="code-line">&nbsp;</span>
+            <span class="code-line"><span class="code-comment"># Configure environment</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">cp .env.example .env.local</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">echo <span class="code-string">"AUTH_BYPASS_DEV=true"</span> >> .env.local</span></span>
+            <span class="code-line">&nbsp;</span>
+            <span class="code-line"><span class="code-comment"># Start development server</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">npm run dev</span></span>
+            <span class="code-line">&nbsp;</span>
+            <span class="code-line"><span class="code-comment"># Or run with Docker</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker build <span class="code-flag">-t</span> filebridge .</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker run <span class="code-flag">-p</span> 3000:3000 <span class="code-flag">--env-file</span> .env filebridge</span></span>
+          </div>
+        </div>
+        <div class="quickstart-info fade-up fade-up-delay-2">
+          <h3>What you get out of the box</h3>
+          <div class="quickstart-steps">
+            <div class="qs-step">
+              <div class="qs-num">✓</div>
+              <div class="qs-text">
+                <strong>SQLite database</strong>
+                <span>Auto-created at <code style="font-family:monospace;font-size:0.8em">data/filebridge.db</code> on first start. No migration steps required.</span>
+              </div>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">✓</div>
+              <div class="qs-text">
+                <strong>Scheduler initialized</strong>
+                <span>node-cron starts automatically on server boot via <code style="font-family:monospace;font-size:0.8em">instrumentation.ts</code>.</span>
+              </div>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">✓</div>
+              <div class="qs-text">
+                <strong>Dev auth bypass</strong>
+                <span>Set <code style="font-family:monospace;font-size:0.8em">AUTH_BYPASS_DEV=true</code> to skip Azure AD during local development.</span>
+              </div>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">✓</div>
+              <div class="qs-text">
+                <strong>Health check endpoint</strong>
+                <span><code style="font-family:monospace;font-size:0.8em">GET /api/health</code> returns DB status, scheduler state, and uptime for container probes.</span>
+              </div>
+            </div>
+            <div class="qs-step">
+              <div class="qs-num">✓</div>
+              <div class="qs-text">
+                <strong>Security headers configured</strong>
+                <span>CSP, HSTS, X-Frame-Options, and more are applied by default in <code style="font-family:monospace;font-size:0.8em">next.config.ts</code>.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ────────────────────────────────────────────────────────────── -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-inner">
+        <h2>Ready to automate your file transfers?</h2>
+        <p>FileBridge is free, open source, and self-hosted. No SaaS subscription, no data leaving your network, no lock-in.</p>
+        <div class="cta-buttons">
+          <a href="https://github.com/go2engle/filebridge" class="btn-hero-primary" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.77.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.8c1.02 0 2.04.14 3.0.4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.69.83.57C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+            Star on GitHub
+          </a>
+          <a href="#quickstart" class="btn-hero-secondary">
+            View quick start
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="images/FileBridgeLogo.png" alt="FileBridge" />
+        FileBridge
+      </div>
+      <div class="footer-links">
+        <a href="#features">Features</a>
+        <a href="#quickstart">Quick Start</a>
+        <a href="https://github.com/go2engle/filebridge" target="_blank" rel="noopener">GitHub</a>
+      </div>
+      <span class="footer-copy">Built with Next.js · MIT License</span>
+    </div>
+  </footer>
+
+  <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+  <script>
+    // Theme toggle
+    const html = document.documentElement;
+    const toggleBtn = document.getElementById('themeToggle');
+    const saved = localStorage.getItem('fb-theme');
+    const preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    html.setAttribute('data-theme', saved || preferred);
+
+    toggleBtn.addEventListener('click', () => {
+      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('fb-theme', next);
+    });
+
+    // Navbar scroll effect
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 20);
+    }, { passive: true });
+
+    // Scroll animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
