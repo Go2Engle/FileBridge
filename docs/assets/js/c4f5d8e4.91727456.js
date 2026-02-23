@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfilebridge_docs=self.webpackChunkfilebridge_docs||[]).push([[634],{192(e,d,r){r.r(d),r.d(d,{default:()=>c});var s=r(6347),i=r(4848);function c(){return(0,i.jsx)(s.rd,{to:"/FileBridge/docs/Home"})}}}]);

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" dir="ltr" class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-Authentication" data-has-hydrated="false">
+<head>
+<meta charset="UTF-8">
+<meta name="generator" content="Docusaurus v3.9.2">
+<title data-rh="true">Authentication | FileBridge</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://go2engle.com/FileBridge/docs/Authentication"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Authentication | FileBridge"><meta data-rh="true" name="description" content="FileBridge uses NextAuth v5 (Auth.js) with support for local username/password authentication and optional external SSO providers (Azure AD, GitHub). Authentication protects every page and API route. A two-tier role system (Administrator and Viewer) controls what authenticated users can do."><meta data-rh="true" property="og:description" content="FileBridge uses NextAuth v5 (Auth.js) with support for local username/password authentication and optional external SSO providers (Azure AD, GitHub). Authentication protects every page and API route. A two-tier role system (Administrator and Viewer) controls what authenticated users can do."><link data-rh="true" rel="icon" href="/FileBridge/docs/img/logo.png"><link data-rh="true" rel="canonical" href="https://go2engle.com/FileBridge/docs/Authentication"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Authentication" hreflang="en"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Authentication" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Authentication","item":"https://go2engle.com/FileBridge/docs/Authentication"}]}</script><link rel="stylesheet" href="/FileBridge/docs/assets/css/styles.3e5f2db8.css">
+<script src="/FileBridge/docs/assets/js/runtime~main.b3f4af0a.js" defer="defer"></script>
+<script src="/FileBridge/docs/assets/js/main.18dcf3a0.js" defer="defer"></script>
+</head>
+<body class="navigation-with-keyboard">
+<svg style="display: none;"><defs>
+<symbol id="theme-svg-external-link" viewBox="0 0 24 24"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{const c=new URLSearchParams(window.location.search).entries();for(var[t,e]of c)if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id="__docusaurus"><div role="region" aria-label="Skip to main content"><a class="skipToContent_fXgn" href="#__docusaurus_skipToContent_fallback">Skip to main content</a></div><nav aria-label="Main" class="theme-layout-navbar navbar navbar--fixed-top"><div class="navbar__inner"><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded="false" class="navbar__toggle clean-btn" type="button"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a class="navbar__brand" href="/FileBridge/docs/"><div class="navbar__logo"><img src="/FileBridge/docs/img/logo.png" alt="FileBridge Logo" class="themedComponent_mlkZ themedComponent--light_NVdE"><img src="/FileBridge/docs/img/logo.png" alt="FileBridge Logo" class="themedComponent_mlkZ themedComponent--dark_xIcU"></div><b class="navbar__title text--truncate">FileBridge</b></a><a aria-current="page" class="navbar__item navbar__link navbar__link--active" href="/FileBridge/docs/Home">Documentation</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href="https://go2engle.com" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link">Home<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a><a href="https://github.com/cengle/FileBridge" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type="button" disabled="" title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill="currentColor" d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"></path></svg><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill="currentColor" d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"></path></svg><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill="currentColor" d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"></path></svg></button></div><div class="navbarSearchContainer_Bca1"></div></div></div><div role="presentation" class="navbar-sidebar__backdrop"></div></nav><div id="__docusaurus_skipToContent_fallback" class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class="docsWrapper_hBAB"><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type="button"></button><div class="docRoot_UBD9"><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class="sidebarViewport_aRkj"><div class="sidebar_njMd"><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/FileBridge/docs/Home"><span title="FileBridge Wiki" class="linkLabel_WmDU">FileBridge Wiki</span></a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role="button" aria-expanded="true" href="/FileBridge/docs/Getting-Started"><span title="Getting Started" class="categoryLinkLabel_W154">Getting Started</span></a></div><ul class="menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Getting-Started"><span title="Getting Started" class="linkLabel_WmDU">Getting Started</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Configuration"><span title="Configuration" class="linkLabel_WmDU">Configuration</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current="page" tabindex="0" href="/FileBridge/docs/Authentication"><span title="Authentication" class="linkLabel_WmDU">Authentication</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Docker-Deployment"><span title="Docker Deployment" class="linkLabel_WmDU">Docker Deployment</span></a></li></ul></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/Connections"><span title="Core Concepts" class="categoryLinkLabel_W154">Core Concepts</span></a></div></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/Database-Backups"><span title="Operations" class="categoryLinkLabel_W154">Operations</span></a></div></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/API-Reference"><span title="Reference" class="categoryLinkLabel_W154">Reference</span></a></div></li></ul></nav></div></div></aside><main class="docMainContainer_TBSr"><div class="container padding-top--md padding-bottom--lg"><div class="row"><div class="col docItemCol_VOVn"><div class="docItemContainer_Djhp"><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label="Breadcrumbs"><ul class="breadcrumbs"><li class="breadcrumbs__item"><a aria-label="Home page" class="breadcrumbs__link" href="/FileBridge/docs/"><svg viewBox="0 0 24 24" class="breadcrumbHomeIcon_YNFT"><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill="currentColor"></path></svg></a></li><li class="breadcrumbs__item"><span class="breadcrumbs__link">Getting Started</span></li><li class="breadcrumbs__item breadcrumbs__item--active"><span class="breadcrumbs__link">Authentication</span></li></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type="button" class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Authentication</h1></header>
+<p>FileBridge uses <strong>NextAuth v5</strong> (Auth.js) with support for <strong>local username/password authentication</strong> and optional <strong>external SSO providers</strong> (Azure AD, GitHub). Authentication protects every page and API route. A two-tier role system (Administrator and Viewer) controls what authenticated users can do.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="how-it-works">How It Works<a href="#how-it-works" class="hash-link" aria-label="Direct link to How It Works" title="Direct link to How It Works" translate="no">​</a></h2>
+<ol>
+<li class="">On first launch, FileBridge detects an empty user database and redirects to the <strong>Setup Wizard</strong></li>
+<li class="">The wizard creates the first local administrator account</li>
+<li class="">Subsequent users sign in via the <strong>Login</strong> page using their username and password</li>
+<li class="">If SSO providers are configured by an admin, SSO buttons appear on the login page</li>
+<li class="">Sessions are JWT-based and validated on every request via <code>middleware.ts</code></li>
+</ol>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="first-run-setup-wizard">First-Run Setup Wizard<a href="#first-run-setup-wizard" class="hash-link" aria-label="Direct link to First-Run Setup Wizard" title="Direct link to First-Run Setup Wizard" translate="no">​</a></h2>
+<p>When no users exist in the database, FileBridge automatically redirects to <code>/setup</code>. The wizard walks you through creating the initial administrator account:</p>
+<ol>
+<li class=""><strong>Welcome</strong> — overview of what the wizard configures</li>
+<li class=""><strong>Create Admin</strong> — set a username, display name, optional email, and password</li>
+<li class=""><strong>Complete</strong> — redirects to the login page</li>
+</ol>
+<blockquote>
+<p>The setup endpoint (<code>POST /api/setup</code>) is guarded by <code>isFirstRun()</code> — it returns 403 if any users already exist. There is no way to re-run the wizard after the first user is created.</p>
+</blockquote>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="local-authentication">Local Authentication<a href="#local-authentication" class="hash-link" aria-label="Direct link to Local Authentication" title="Direct link to Local Authentication" translate="no">​</a></h2>
+<p>FileBridge supports built-in username/password login:</p>
+<ul>
+<li class="">Passwords are hashed with <strong>bcrypt</strong> (12 salt rounds) before storage</li>
+<li class="">The Credentials provider in NextAuth validates login attempts against the <code>users</code> table</li>
+<li class="">Failed login attempts show a generic &quot;Invalid username or password&quot; message (no user enumeration)</li>
+</ul>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="sso-providers">SSO Providers<a href="#sso-providers" class="hash-link" aria-label="Direct link to SSO Providers" title="Direct link to SSO Providers" translate="no">​</a></h2>
+<p>External SSO providers (Azure AD, GitHub) are configured entirely through the <strong>Admin UI</strong> — no environment variables needed.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="configuring-sso">Configuring SSO<a href="#configuring-sso" class="hash-link" aria-label="Direct link to Configuring SSO" title="Direct link to Configuring SSO" translate="no">​</a></h3>
+<ol>
+<li class="">Sign in as an administrator</li>
+<li class="">Navigate to <strong>Admin → Authentication</strong></li>
+<li class="">Click <strong>Add Provider</strong></li>
+<li class="">Fill in the provider details (Client ID, Client Secret, Tenant ID for Azure AD)</li>
+<li class="">Save — the provider&#x27;s &quot;Sign in with...&quot; button immediately appears on the login page</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="azure-ad-setup">Azure AD Setup<a href="#azure-ad-setup" class="hash-link" aria-label="Direct link to Azure AD Setup" title="Direct link to Azure AD Setup" translate="no">​</a></h3>
+<p>To configure Azure AD as an SSO provider:</p>
+<ol>
+<li class="">Go to the <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer" class="">Azure portal</a> → <strong>Microsoft Entra ID</strong> → <strong>App registrations</strong></li>
+<li class="">Click <strong>New registration</strong></li>
+<li class="">Set the <strong>Name</strong> (e.g. &quot;FileBridge&quot;)</li>
+<li class="">Set <strong>Supported account types</strong> to &quot;Accounts in this organizational directory only&quot;</li>
+<li class="">Set the <strong>Redirect URI</strong>:<!-- -->
+<ul>
+<li class="">Type: <strong>Web</strong></li>
+<li class="">URI: <code>https://your-domain.com/api/auth/callback/azure-ad</code></li>
+<li class="">For local development: <code>http://localhost:3000/api/auth/callback/azure-ad</code></li>
+</ul>
+</li>
+<li class="">Click <strong>Register</strong></li>
+<li class="">Copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from the Overview page</li>
+<li class="">Create a <strong>Client secret</strong> under <strong>Certificates &amp; secrets</strong></li>
+<li class="">Enter these values in FileBridge&#x27;s <strong>Admin → Authentication → Add Provider</strong> form</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="github-setup">GitHub Setup<a href="#github-setup" class="hash-link" aria-label="Direct link to GitHub Setup" title="Direct link to GitHub Setup" translate="no">​</a></h3>
+<ol>
+<li class="">Go to <a href="https://github.com/settings/developers" target="_blank" rel="noopener noreferrer" class="">GitHub Developer Settings</a> → <strong>OAuth Apps</strong> → <strong>New OAuth App</strong></li>
+<li class="">Set the <strong>Authorization callback URL</strong> to <code>https://your-domain.com/api/auth/callback/github</code></li>
+<li class="">Copy the <strong>Client ID</strong> and generate a <strong>Client Secret</strong></li>
+<li class="">Enter these values in FileBridge&#x27;s <strong>Admin → Authentication → Add Provider</strong> form</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="sso-user-provisioning">SSO User Provisioning<a href="#sso-user-provisioning" class="hash-link" aria-label="Direct link to SSO User Provisioning" title="Direct link to SSO User Provisioning" translate="no">​</a></h3>
+<p>SSO follows a <strong>deny-by-default</strong> model. An administrator must pre-create a user account in <strong>Admin → Users</strong> before that person can sign in via SSO:</p>
+<ol>
+<li class="">Create the user with their email address and set <strong>Auth Type</strong> to SSO</li>
+<li class="">Select the appropriate SSO provider</li>
+<li class="">When the user signs in via SSO, FileBridge matches them by SSO identity or email</li>
+</ol>
+<p>Users who are not pre-created in FileBridge will be denied access even if they authenticate successfully with the SSO provider.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="roles--permissions-rbac">Roles &amp; Permissions (RBAC)<a href="#roles--permissions-rbac" class="hash-link" aria-label="Direct link to Roles &amp; Permissions (RBAC)" title="Direct link to Roles &amp; Permissions (RBAC)" translate="no">​</a></h2>
+<p>FileBridge has two roles:</p>
+<table><thead><tr><th>Role</th><th>Description</th></tr></thead><tbody><tr><td><strong>Administrator</strong></td><td>Full access — can create/edit/delete connections, jobs, users, and SSO settings</td></tr><tr><td><strong>Viewer</strong></td><td>Read-only access — can view connections, jobs, logs, and settings but cannot modify anything</td></tr></tbody></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="how-roles-work">How Roles Work<a href="#how-roles-work" class="hash-link" aria-label="Direct link to How Roles Work" title="Direct link to How Roles Work" translate="no">​</a></h3>
+<ul>
+<li class="">Roles are stored in the <code>users</code> table and stamped into the JWT token at login</li>
+<li class="">API routes enforce roles server-side: GET requests require any authenticated user, mutations require the <code>admin</code> role</li>
+<li class="">The UI hides mutation controls (create, edit, delete buttons) for viewers</li>
+<li class="">Role changes take effect on the user&#x27;s next login (JWT maxAge is 1 hour)</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="role-enforcement">Role Enforcement<a href="#role-enforcement" class="hash-link" aria-label="Direct link to Role Enforcement" title="Direct link to Role Enforcement" translate="no">​</a></h3>
+<table><thead><tr><th>Layer</th><th>Mechanism</th></tr></thead><tbody><tr><td>API routes</td><td><code>requireAuth()</code> for read operations, <code>requireRole(&quot;admin&quot;)</code> for mutations</td></tr><tr><td>Middleware</td><td>JWT validation (edge runtime — checks token existence, not role)</td></tr><tr><td>UI components</td><td><code>useRole()</code> hook conditionally renders admin-only controls</td></tr></tbody></table>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="user-management">User Management<a href="#user-management" class="hash-link" aria-label="Direct link to User Management" title="Direct link to User Management" translate="no">​</a></h2>
+<p>Administrators can manage users at <strong>Admin → Users</strong>:</p>
+<ul>
+<li class=""><strong>Create</strong> users — local (username/password) or SSO-linked</li>
+<li class=""><strong>Edit</strong> users — change display name, email, role, active status, or reset password</li>
+<li class=""><strong>Delete</strong> users — with safeguards (cannot delete yourself, cannot delete the last admin)</li>
+<li class=""><strong>Deactivate</strong> users — toggle the active flag to disable login without deleting the account</li>
+</ul>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="environment-variables">Environment Variables<a href="#environment-variables" class="hash-link" aria-label="Direct link to Environment Variables" title="Direct link to Environment Variables" translate="no">​</a></h2>
+<p>The only required environment variable for authentication is:</p>
+<div class="language-env codeBlockContainer_Ckt0 theme-code-block" style="--prism-background-color:hsl(220, 13%, 18%);--prism-color:hsl(220, 14%, 71%)"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-env codeBlock_bY9V thin-scrollbar" style="background-color:hsl(220, 13%, 18%);color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">AUTH_SECRET=&lt;openssl rand -base64 32&gt;</span><br></span></code></pre></div></div>
+<p>SSO provider credentials (Client ID, Client Secret, Tenant ID) are stored in the database and configured via the admin UI. They are <strong>encrypted at rest</strong> using AES-256-GCM with a key derived from <code>AUTH_SECRET</code>.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="login-audit-events">Login Audit Events<a href="#login-audit-events" class="hash-link" aria-label="Direct link to Login Audit Events" title="Direct link to Login Audit Events" translate="no">​</a></h2>
+<p>Every sign-in attempt is recorded in the audit log with:</p>
+<ul>
+<li class=""><strong>Action</strong>: <code>login</code></li>
+<li class=""><strong>Resource</strong>: <code>auth</code></li>
+<li class=""><strong>User ID</strong>: the authenticated username</li>
+<li class=""><strong>Details</strong>: <code>{ outcome: &quot;success&quot; | &quot;denied&quot; }</code></li>
+<li class=""><strong>IP address</strong>: extracted from request headers</li>
+</ul>
+<p>See <a class="" href="/FileBridge/docs/Audit-Logging">Audit Logging</a> for more.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="dev-bypass-mode">Dev Bypass Mode<a href="#dev-bypass-mode" class="hash-link" aria-label="Direct link to Dev Bypass Mode" title="Direct link to Dev Bypass Mode" translate="no">​</a></h2>
+<p>For local development without creating user accounts, set:</p>
+<div class="language-env codeBlockContainer_Ckt0 theme-code-block" style="--prism-background-color:hsl(220, 13%, 18%);--prism-color:hsl(220, 14%, 71%)"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-env codeBlock_bY9V thin-scrollbar" style="background-color:hsl(220, 13%, 18%);color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">AUTH_BYPASS_DEV=true</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">NEXT_PUBLIC_AUTH_BYPASS_DEV=true</span><br></span></code></pre></div></div>
+<p>In bypass mode:</p>
+<ul>
+<li class="">All authentication checks are skipped</li>
+<li class="">A mock session is injected with the user <code>dev@localhost</code> and the <code>admin</code> role</li>
+<li class="">The middleware passes all requests through without validation</li>
+<li class="">No user accounts or SSO configuration are needed</li>
+</ul>
+<blockquote>
+<p><strong>Warning</strong>: Dev bypass mode is only active when <code>NODE_ENV=development</code>. It cannot be enabled in production builds.</p>
+</blockquote>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="session-management">Session Management<a href="#session-management" class="hash-link" aria-label="Direct link to Session Management" title="Direct link to Session Management" translate="no">​</a></h2>
+<p>FileBridge uses JWT-based sessions with a 1-hour max age. Sessions are validated on every request via middleware. When a user&#x27;s role is changed by an admin, the change takes effect when the user next logs in (or when the current JWT expires).</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="middleware">Middleware<a href="#middleware" class="hash-link" aria-label="Direct link to Middleware" title="Direct link to Middleware" translate="no">​</a></h2>
+<p><code>middleware.ts</code> intercepts every request (except public paths) and:</p>
+<ol>
+<li class="">Generates or propagates a <code>X-Request-ID</code> correlation UUID for log tracing</li>
+<li class="">Checks for a valid NextAuth JWT session</li>
+<li class="">Redirects unauthenticated requests to <code>/login</code></li>
+</ol>
+<p>Public paths excluded from auth checks:</p>
+<ul>
+<li class=""><code>/</code> (root — handles first-run detection)</li>
+<li class=""><code>/login</code></li>
+<li class=""><code>/setup</code></li>
+<li class=""><code>/api/auth/*</code> (NextAuth endpoints)</li>
+<li class=""><code>/api/setup/*</code> (setup wizard API)</li>
+<li class=""><code>/api/health</code></li>
+</ul></div></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/FileBridge/docs/Configuration"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Configuration</div></a><a class="pagination-nav__link pagination-nav__link--next" href="/FileBridge/docs/Docker-Deployment"><div class="pagination-nav__sublabel">Next</div><div class="pagination-nav__label">Docker Deployment</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#how-it-works" class="table-of-contents__link toc-highlight">How It Works</a></li><li><a href="#first-run-setup-wizard" class="table-of-contents__link toc-highlight">First-Run Setup Wizard</a></li><li><a href="#local-authentication" class="table-of-contents__link toc-highlight">Local Authentication</a></li><li><a href="#sso-providers" class="table-of-contents__link toc-highlight">SSO Providers</a><ul><li><a href="#configuring-sso" class="table-of-contents__link toc-highlight">Configuring SSO</a></li><li><a href="#azure-ad-setup" class="table-of-contents__link toc-highlight">Azure AD Setup</a></li><li><a href="#github-setup" class="table-of-contents__link toc-highlight">GitHub Setup</a></li><li><a href="#sso-user-provisioning" class="table-of-contents__link toc-highlight">SSO User Provisioning</a></li></ul></li><li><a href="#roles--permissions-rbac" class="table-of-contents__link toc-highlight">Roles &amp; Permissions (RBAC)</a><ul><li><a href="#how-roles-work" class="table-of-contents__link toc-highlight">How Roles Work</a></li><li><a href="#role-enforcement" class="table-of-contents__link toc-highlight">Role Enforcement</a></li></ul></li><li><a href="#user-management" class="table-of-contents__link toc-highlight">User Management</a></li><li><a href="#environment-variables" class="table-of-contents__link toc-highlight">Environment Variables</a></li><li><a href="#login-audit-events" class="table-of-contents__link toc-highlight">Login Audit Events</a></li><li><a href="#dev-bypass-mode" class="table-of-contents__link toc-highlight">Dev Bypass Mode</a></li><li><a href="#session-management" class="table-of-contents__link toc-highlight">Session Management</a></li><li><a href="#middleware" class="table-of-contents__link toc-highlight">Middleware</a></li></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class="footer__title">Docs</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/Getting-Started">Getting Started</a></li><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/Configuration">Configuration</a></li><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/API-Reference">API Reference</a></li></ul></div><div class="theme-layout-footer-column col footer__col"><div class="footer__title">More</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://go2engle.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Home<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a></li><li class="footer__item"><a href="https://github.com/cengle/FileBridge" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2026 FileBridge. Built with Docusaurus.</div></div></div></footer></div>
+</body>
+</html>
