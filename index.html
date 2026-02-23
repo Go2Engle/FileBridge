@@ -1019,7 +1019,7 @@
       display: flex;
       flex-direction: column;
       gap: 40px;
-      max-width: 900px;
+      max-width: 980px;
       margin: 0 auto;
     }
 
@@ -1056,9 +1056,10 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.85rem;
       line-height: 2;
+      overflow-x: auto;
     }
 
-    .code-line { display: block; white-space: pre-wrap; word-break: break-word; }
+    .code-line { display: block; white-space: nowrap; }
     .code-indent { padding-left: 2.2em; }
     .code-comment { color: var(--text-dim); }
     .code-prompt { color: var(--accent-3); user-select: none; }
@@ -1778,8 +1779,7 @@
             <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">curl <span class="code-flag">-fsSL</span> https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash</span></span>
             <span class="code-line">&nbsp;</span>
             <span class="code-line"><span class="code-comment"># Upgrade an existing install to the latest release</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">curl <span class="code-flag">-fsSL</span> https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh <span class="code-cont">\</span></span></span>
-            <span class="code-line code-indent"><span class="code-cmd">| sudo bash <span class="code-flag">-s</span> -- <span class="code-flag">--upgrade</span></span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">curl <span class="code-flag">-fsSL</span> https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash <span class="code-flag">-s</span> -- <span class="code-flag">--upgrade</span></span></span>
             <span class="code-line">&nbsp;</span>
             <span class="code-line"><span class="code-comment"># Prefer Docker? Pull the pre-built image instead</span></span>
             <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker run <span class="code-flag">-d -p</span> 3000:3000 <span class="code-flag">--env-file</span> .env.production ghcr.io/go2engle/filebridge:latest</span></span>
