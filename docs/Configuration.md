@@ -1,6 +1,6 @@
 # Configuration
 
-FileBridge is configured entirely through environment variables. The application validates all required variables at startup and exits immediately with a clear error message if any are missing or invalid.
+FileBridge is configured through a small set of environment variables. SSO providers, users, and most application settings are managed through the admin UI rather than environment variables.
 
 ---
 
@@ -10,22 +10,12 @@ FileBridge is configured entirely through environment variables. The application
 
 | Variable | Required | Description |
 |---|---|---|
-| `AUTH_SECRET` | **Yes** | NextAuth secret key. Generate with `openssl rand -base64 32`. Must be at least 1 character. |
+| `AUTH_SECRET` | **Yes** | NextAuth secret key. Generate with `openssl rand -base64 32`. Also used to encrypt SSO client secrets at rest. |
 | `NEXTAUTH_URL` | Yes (prod) | Full URL where the app is hosted (e.g. `https://filebridge.example.com`). Required in production. |
-| `AZURE_AD_CLIENT_ID` | Yes* | Azure AD application (client) ID |
-| `AZURE_AD_CLIENT_SECRET` | Yes* | Azure AD client secret |
-| `AZURE_AD_TENANT_ID` | Yes* | Azure AD tenant (directory) ID |
-| `AUTH_BYPASS_DEV` | No | Set to `true` to skip Azure AD in local development. **Never use in production.** |
+| `AUTH_BYPASS_DEV` | No | Set to `true` to skip authentication in local development. **Never use in production.** |
 | `NEXT_PUBLIC_AUTH_BYPASS_DEV` | No | Client-side companion to `AUTH_BYPASS_DEV`. Must match. |
 
-*Not required when `AUTH_BYPASS_DEV=true`.
-
-### Access Control
-
-| Variable | Required | Description |
-|---|---|---|
-| `ALLOWED_EMAILS` | No | Comma-separated list of email addresses permitted to sign in. If unset, any authenticated Azure AD user is allowed. |
-| `ALLOWED_GROUP_IDS` | No | Comma-separated Azure AD group object IDs. Users must be a member of at least one group to access the app. |
+> **Note**: SSO provider credentials (Azure AD Client ID/Secret, GitHub Client ID/Secret) are configured via the **Admin → Authentication** UI and stored encrypted in the database. No SSO-related environment variables are needed.
 
 ### Database
 
@@ -50,15 +40,12 @@ FileBridge is configured entirely through environment variables. The application
 
 ## Startup Validation
 
-FileBridge uses a Zod schema (`lib/env.ts`) to validate environment variables at startup, before the scheduler or any other subsystem initializes. If validation fails, the process exits with a non-zero status and logs the specific missing or invalid variables:
+FileBridge uses a Zod schema (`lib/env.ts`) to validate environment variables at startup. The only mandatory variable is `AUTH_SECRET`. If validation fails, the process exits with a non-zero status and logs the specific missing or invalid variables:
 
 ```
 ERROR [env] Invalid environment configuration — server cannot start
-  - AZURE_AD_CLIENT_ID: AZURE_AD_CLIENT_ID is required
   - AUTH_SECRET: AUTH_SECRET is required
 ```
-
-This fail-fast approach prevents mysterious runtime failures deep in request handling.
 
 ---
 
@@ -74,18 +61,14 @@ NEXTAUTH_URL=http://localhost:3000
 LOG_LEVEL=debug
 ```
 
-### Local Development (With Azure AD)
+### Local Development (With Local Auth)
 
 ```env
 AUTH_SECRET=<openssl rand -base64 32>
 NEXTAUTH_URL=http://localhost:3000
-
-AZURE_AD_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AZURE_AD_CLIENT_SECRET=your-secret-value
-AZURE_AD_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-ALLOWED_EMAILS=alice@example.com,bob@example.com
 ```
+
+On first launch, the setup wizard will create your admin account. No additional configuration needed.
 
 ### Production
 
@@ -93,21 +76,36 @@ ALLOWED_EMAILS=alice@example.com,bob@example.com
 AUTH_SECRET=<openssl rand -base64 32>
 NEXTAUTH_URL=https://filebridge.example.com
 
-AZURE_AD_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AZURE_AD_CLIENT_SECRET=your-secret-value
-AZURE_AD_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-ALLOWED_GROUP_IDS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
 DATABASE_PATH=/app/data/filebridge.db
 LOG_LEVEL=info
 ```
+
+SSO providers are configured via the admin UI after setup. See [Authentication](Authentication) for details.
 
 ---
 
 ## Application Settings (In-App)
 
-Some settings are stored in the database and configured through the **Settings** page in the UI:
+Most settings are stored in the database and configured through the web UI:
+
+### User Management
+
+Configured at **Admin → Users**:
+
+| Setting | Description |
+|---|---|
+| User accounts | Create, edit, deactivate, and delete local and SSO user accounts |
+| Roles | Assign Administrator or Viewer roles |
+
+### SSO Configuration
+
+Configured at **Admin → Authentication**:
+
+| Setting | Description |
+|---|---|
+| Azure AD | Client ID, Client Secret, Tenant ID |
+| GitHub | Client ID, Client Secret |
+| Enable/Disable | Toggle individual providers on the login page |
 
 ### Notification Settings
 

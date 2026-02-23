@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through installing FileBridge, configuring it for first use, and running your first transfer job.
+This guide walks you through installing FileBridge, running the setup wizard, and creating your first transfer job.
 
 ---
 
@@ -8,7 +8,8 @@ This guide walks you through installing FileBridge, configuring it for first use
 
 - **Node.js 18+** (LTS recommended — v20 or v22)
 - **npm**, **yarn**, or **pnpm**
-- An **Azure AD / Microsoft Entra ID application** for authentication (or use [dev bypass mode](Authentication#dev-bypass-mode) for local development)
+
+No external authentication provider is required to get started. FileBridge includes built-in local authentication.
 
 ---
 
@@ -35,18 +36,15 @@ At minimum you need:
 ```env
 AUTH_SECRET=<generate with: openssl rand -base64 32>
 NEXTAUTH_URL=http://localhost:3000
-
-# Azure AD (skip if using dev bypass)
-AZURE_AD_CLIENT_ID=your-client-id
-AZURE_AD_CLIENT_SECRET=your-client-secret
-AZURE_AD_TENANT_ID=your-tenant-id
 ```
+
+That's it. No external provider credentials are needed — SSO providers can be configured later through the admin UI.
 
 See [Configuration](Configuration) for the full list of environment variables.
 
-### Development Without Azure AD
+### Development Without Login
 
-To run locally without Azure AD, use dev bypass mode:
+To run locally without creating a user account, use dev bypass mode:
 
 ```env
 AUTH_BYPASS_DEV=true
@@ -98,21 +96,45 @@ npm run db:studio
 
 ---
 
-## First Steps After Install
+## Setup Wizard
 
-1. **Sign in** — Use your Azure AD account (or the dev bypass)
+On first launch, FileBridge detects that no users exist and automatically redirects to the **Setup Wizard** at `/setup`:
+
+1. **Welcome** — overview of what the wizard will configure
+2. **Create Admin Account** — enter a username, display name, email (optional), and password
+3. **Complete** — redirects to the login page
+
+After completing the wizard, sign in with the credentials you just created.
+
+> The setup wizard is a one-time process. Once the first user is created, the `/setup` endpoint is permanently disabled.
+
+---
+
+## First Steps After Setup
+
+1. **Sign in** — Use the admin credentials you created during setup
 2. **Create a connection** — Go to **Connections** → **New Connection** and configure your source or destination (SFTP, SMB, or Azure Blob)
 3. **Test the connection** — Use the **Test Connection** button to verify credentials and reachability
 4. **Create a job** — Go to **Jobs** → **New Job**, pick source and destination connections, set a schedule and file filter
 5. **Run Now** — Trigger an immediate execution to verify everything works
 6. **Check logs** — Review per-file transfer results on the **Logs** page
 
+### Optional: Configure SSO
+
+To enable external sign-in (Azure AD, GitHub):
+
+1. Go to **Admin → Authentication** → **Add Provider**
+2. Enter your provider's Client ID, Client Secret, and Tenant ID (Azure AD) or just Client ID and Secret (GitHub)
+3. Pre-create SSO user accounts at **Admin → Users** with matching email addresses
+
+See [Authentication](Authentication) for detailed provider setup instructions.
+
 ---
 
 ## Next Steps
 
 - [Configuration](Configuration) — All environment variables
-- [Authentication](Authentication) — Azure AD setup and access control
+- [Authentication](Authentication) — Local auth, SSO setup, user management, RBAC
 - [Connections](Connections) — SFTP, SMB, and Azure Blob Storage setup
 - [Jobs](Jobs) — Scheduling, filtering, post-transfer actions
 - [Docker Deployment](Docker-Deployment) — Container-based deployment

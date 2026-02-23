@@ -79,9 +79,6 @@ services:
       NODE_ENV: "production"
       AUTH_SECRET: "${AUTH_SECRET}"
       NEXTAUTH_URL: "https://filebridge.example.com"
-      AZURE_AD_CLIENT_ID: "${AZURE_AD_CLIENT_ID}"
-      AZURE_AD_CLIENT_SECRET: "${AZURE_AD_CLIENT_SECRET}"
-      AZURE_AD_TENANT_ID: "${AZURE_AD_TENANT_ID}"
       DATABASE_PATH: "/app/data/filebridge.db"
       LOG_LEVEL: "info"
     healthcheck:
@@ -97,6 +94,8 @@ volumes:
     driver: local
 ```
 
+> **Note**: SSO providers (Azure AD, GitHub) are configured through the admin UI after first-run setup — no SSO-related environment variables are needed in the container.
+
 ---
 
 ## Environment File for Production
@@ -107,16 +106,22 @@ Create a `.env.production` file (never commit this to git):
 AUTH_SECRET=<openssl rand -base64 32>
 NEXTAUTH_URL=https://filebridge.example.com
 
-AZURE_AD_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AZURE_AD_CLIENT_SECRET=your-client-secret
-AZURE_AD_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# Optional access control
-ALLOWED_GROUP_IDS=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
 DATABASE_PATH=/app/data/filebridge.db
 LOG_LEVEL=info
 ```
+
+That's it. On first launch, the setup wizard will create your admin account. SSO providers can be configured later through the admin UI.
+
+---
+
+## First-Run Setup
+
+When the container starts for the first time:
+
+1. The SQLite database is automatically created at the `DATABASE_PATH` location
+2. FileBridge detects no users exist and redirects to the **Setup Wizard**
+3. Create your initial administrator account through the wizard
+4. Sign in and start configuring connections, jobs, and (optionally) SSO providers
 
 ---
 
@@ -150,7 +155,7 @@ curl http://localhost:3000/api/health
 |---|---|
 | `/app/data` | SQLite database (`filebridge.db`) and backup files |
 
-Mount this volume to a persistent storage location. If the volume is lost, all jobs, connections, settings, and logs are lost. Use the [backup system](Database-Backups) to protect against this.
+Mount this volume to a persistent storage location. If the volume is lost, all jobs, connections, users, settings, and logs are lost. Use the [backup system](Database-Backups) to protect against this.
 
 ### Separate Backup Volume (Recommended)
 
