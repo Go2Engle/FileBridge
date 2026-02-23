@@ -52,7 +52,7 @@ const config = {
         logo: {
           alt: 'FileBridge Logo',
           src: 'img/logo.png',
-          href: 'https://go2engle.com',
+          href: 'https://go2engle.com/FileBridge',
           target: '_self',
         },
         items: [
