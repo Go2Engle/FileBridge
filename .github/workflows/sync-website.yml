@@ -1,0 +1,45 @@
+name: Sync Website Branch
+
+# Triggers only when index.html at the repo root is modified on main.
+# Can also be triggered manually from the Actions tab.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - index.html
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync index.html and images to Website branch
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # push to Website branch
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can push to other branches
+
+      - name: Push files to Website branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Switch to the Website branch without touching the working tree
+          git checkout Website
+
+          # Bring in the updated index.html and images from main
+          git checkout main -- index.html images/
+
+          # If nothing changed, skip the commit
+          if git diff --cached --quiet; then
+            echo "No changes to sync."
+            exit 0
+          fi
+
+          git commit -m "chore: sync website files from main"
+          git push origin Website
