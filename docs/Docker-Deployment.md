@@ -2,6 +2,14 @@
 
 FileBridge is configured for Next.js **standalone output**, producing a self-contained build that includes only the files needed to run — no `node_modules` required at runtime.
 
+Pre-built images are published to the GitHub Container Registry on every release:
+
+```bash
+docker pull ghcr.io/go2engle/filebridge:latest
+```
+
+Available tags: `latest`, `1`, `1.x`, `1.x.y` (semantic versioning).
+
 ---
 
 ## Dockerfile
@@ -69,7 +77,7 @@ version: "3.8"
 
 services:
   filebridge:
-    image: your-registry/filebridge:latest
+    image: ghcr.io/go2engle/filebridge:latest
     ports:
       - "3000:3000"
     volumes:
@@ -127,6 +135,30 @@ When the container starts for the first time:
 
 ## Build and Run
 
+### Using the Pre-built Image (Recommended)
+
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/go2engle/filebridge:latest
+
+# Run with env file
+docker run -d \
+  --name filebridge \
+  -p 3000:3000 \
+  -v filebridge-data:/app/data \
+  --env-file .env.production \
+  --restart unless-stopped \
+  ghcr.io/go2engle/filebridge:latest
+
+# View logs
+docker logs -f filebridge
+
+# Health check
+curl http://localhost:3000/api/health
+```
+
+### Building Locally
+
 ```bash
 # Build the image
 docker build -t filebridge:latest .
@@ -139,12 +171,6 @@ docker run -d \
   --env-file .env.production \
   --restart unless-stopped \
   filebridge:latest
-
-# View logs
-docker logs -f filebridge
-
-# Health check
-curl http://localhost:3000/api/health
 ```
 
 ---
@@ -234,14 +260,31 @@ Memory usage spikes temporarily while files are in transit, as files are buffere
 
 ## Updating
 
-```bash
-# Pull latest code
-git pull
+### Using the Pre-built Image
 
-# Rebuild image
+```bash
+# Pull the latest release
+docker pull ghcr.io/go2engle/filebridge:latest
+
+# Recreate the container
+docker stop filebridge
+docker rm filebridge
+docker run -d \
+  --name filebridge \
+  -p 3000:3000 \
+  -v filebridge-data:/app/data \
+  --env-file .env.production \
+  --restart unless-stopped \
+  ghcr.io/go2engle/filebridge:latest
+```
+
+### Building Locally
+
+```bash
+# Pull latest code and rebuild
+git pull
 docker build -t filebridge:latest .
 
-# Recreate container (zero-downtime if behind a load balancer)
 docker stop filebridge
 docker rm filebridge
 docker run -d \
