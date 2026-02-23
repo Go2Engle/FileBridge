@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
+import { VersionBadge } from "@/components/version-badge";
 import { useRole } from "@/hooks/use-role";
 
 const navItems = [
@@ -95,6 +96,8 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      <VersionBadge />
 
       <Separator className="bg-sidebar-border" />
 
