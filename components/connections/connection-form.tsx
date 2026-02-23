@@ -110,6 +110,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   });
 
   useEffect(() => {
+    if (!open) return;
     if (editConnection && fullConnection) {
       const creds = fullConnection.credentials as Record<string, string>;
       form.reset({
@@ -144,7 +145,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         connectionString: "",
       });
     }
-  }, [editConnection, fullConnection, form]);
+  }, [open, editConnection, fullConnection, form]);
 
   // Auto-update default port when protocol changes
   useEffect(() => {

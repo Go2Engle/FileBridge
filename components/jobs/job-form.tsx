@@ -145,6 +145,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
   });
 
   useEffect(() => {
+    if (!open) return;
     if (editJob) {
       form.reset({
         name: editJob.name,
@@ -178,7 +179,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         deltaSync: false,
       });
     }
-  }, [editJob, form]);
+  }, [open, editJob, form]);
 
   const postAction = form.watch("postTransferAction");
   const sourceConnectionId = form.watch("sourceConnectionId");
