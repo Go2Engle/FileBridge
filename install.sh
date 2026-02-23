@@ -106,19 +106,12 @@ die() {
 # ── Banner ───────────────────────────────────────────────────
 print_banner() {
   printf "\n"
-  printf "  ${BCYAN}╔══════════════════════════════════════════════════════════╗${R}\n"
-  printf "  ${BCYAN}║${R}                                                          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}███████╗██╗██╗     ███████╗                          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}██╔════╝██║██║     ██╔════╝                          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}█████╗  ██║██║     █████╗  ${CYAN}██████╗ ██████╗ ██╗${R}      ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}██╔══╝  ██║██║     ██╔══╝  ${CYAN}██╔══██╗██╔══██╗╚═╝${R}      ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}██║     ██║███████╗███████╗${CYAN}██████╔╝██║  ██║██╗${R}      ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${BWHITE}╚═╝     ╚═╝╚══════╝╚══════╝${CYAN}╚═════╝ ╚═╝  ╚═╝╚═╝${R}      ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}                                                          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${DIM}Automated File Transfer Scheduler${R}                        ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}  ${DIM}https://github.com/${REPO}${R}          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}║${R}                                                          ${BCYAN}║${R}\n"
-  printf "  ${BCYAN}╚══════════════════════════════════════════════════════════╝${R}\n"
+  printf "  ${BCYAN}╔══════════════════════════════════════════╗${R}\n"
+  printf "  ${BCYAN}║${R}                                          ${BCYAN}║${R}\n"
+  printf "  ${BCYAN}║${R}  ${DIM}Automated File Transfer Scheduler${R}       ${BCYAN}║${R}\n"
+  printf "  ${BCYAN}║${R}  ${DIM}https://github.com/${REPO}${R}  ${BCYAN}║${R}\n"
+  printf "  ${BCYAN}║${R}                                          ${BCYAN}║${R}\n"
+  printf "  ${BCYAN}╚══════════════════════════════════════════╝${R}\n"
   printf "\n"
 }
 
