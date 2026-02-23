@@ -5,6 +5,20 @@
 
 # FileBridge
 
+<div align="center">
+
+[![Release & Publish](https://github.com/Go2Engle/FileBridge/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Go2Engle/FileBridge/actions/workflows/docker-publish.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Go2Engle/FileBridge?logo=github&logoColor=white&color=4c1)](https://github.com/Go2Engle/FileBridge/releases/latest)
+[![Docker](https://img.shields.io/badge/ghcr.io%2Fgo2engle%2Ffilebridge-2496ED?logo=docker&logoColor=white&label=docker)](https://github.com/Go2Engle/FileBridge/pkgs/container/filebridge)
+[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
+[![License](https://img.shields.io/badge/License-Private-critical)](LICENSE)
+
+</div>
+
 A self-hosted web application for automated file transfer scheduling and monitoring. FileBridge connects your SFTP, SMB/CIFS, and Azure Blob Storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging — all packaged as a single lightweight container.
 
 ---
