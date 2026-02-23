@@ -10,9 +10,10 @@ const sidebars = {
       collapsed: false,
       items: [
         'Getting-Started',
+        'Server-Install',
+        'Docker-Deployment',
         'Configuration',
         'Authentication',
-        'Docker-Deployment',
       ],
     },
     {

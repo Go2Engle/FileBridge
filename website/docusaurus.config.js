@@ -80,7 +80,8 @@ const config = {
           {
             title: 'Docs',
             items: [
-              { label: 'Getting Started', to: '/Getting-Started' },
+              { label: 'Server Install', to: '/Server-Install' },
+              { label: 'Docker Deployment', to: '/Docker-Deployment' },
               { label: 'Configuration', to: '/Configuration' },
               { label: 'API Reference', to: '/API-Reference' },
             ],

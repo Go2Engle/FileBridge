@@ -4,7 +4,19 @@ This guide walks you through installing FileBridge, running the setup wizard, an
 
 ---
 
-## Prerequisites
+## Deployment Options
+
+| Method | Best for |
+|---|---|
+| [**Server Install**](Server-Install) | Production servers — Linux or macOS. One-liner script, automatic updates, runs as a system service. |
+| [**Docker**](Docker-Deployment) | Container-based environments, Compose stacks, Kubernetes. |
+| **From source** *(this guide)* | Local development and contributions. |
+
+> For a production server, start with the [Server Install](Server-Install) guide — it handles everything in one command.
+
+---
+
+## Prerequisites (From Source)
 
 - **Node.js 18+** (LTS recommended — v20 or v22)
 - **npm**, **yarn**, or **pnpm**
@@ -16,7 +28,7 @@ No external authentication provider is required to get started. FileBridge inclu
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/filebridge.git
+git clone https://github.com/go2engle/filebridge.git
 cd filebridge
 npm install
 ```
@@ -137,4 +149,5 @@ See [Authentication](Authentication) for detailed provider setup instructions.
 - [Authentication](Authentication) — Local auth, SSO setup, user management, RBAC
 - [Connections](Connections) — SFTP, SMB, and Azure Blob Storage setup
 - [Jobs](Jobs) — Scheduling, filtering, post-transfer actions
+- [Server Install](Server-Install) — One-liner production install for Linux and macOS
 - [Docker Deployment](Docker-Deployment) — Container-based deployment

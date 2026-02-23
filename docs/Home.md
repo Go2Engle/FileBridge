@@ -4,11 +4,37 @@ Welcome to the FileBridge documentation. FileBridge is a self-hosted web applica
 
 ---
 
+## Quick Start
+
+Get FileBridge running on a Linux server or macOS machine in one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash
+```
+
+The script installs Node.js if needed, downloads the latest release, creates OS-standard directories, generates a secure `AUTH_SECRET`, and registers FileBridge as a system service that starts automatically on boot.
+
+:::tip Already using Docker?
+Pull the pre-built image instead: `docker pull ghcr.io/go2engle/filebridge:latest` — see the [Docker Deployment](Docker-Deployment) guide.
+:::
+
+**Upgrading an existing install:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash -s -- --upgrade
+```
+
+→ [Full Server Install guide](Server-Install) — options, directory layout, service management, non-interactive installs
+
+---
+
 ## Quick Navigation
 
 | Topic | Description |
 |---|---|
-| [Getting Started](Getting-Started) | Installation, prerequisites, and first run |
+| [Getting Started](Getting-Started) | Dev setup from source, first run, setup wizard |
+| [Server Install](Server-Install) | One-liner production install for Linux and macOS |
+| [Docker Deployment](Docker-Deployment) | Container deployment (Docker, Compose, Kubernetes) |
 | [Configuration](Configuration) | Environment variables and application settings |
 | [Authentication](Authentication) | Azure AD SSO setup, access control, dev bypass |
 | [Connections](Connections) | SFTP, SMB/CIFS, and Azure Blob Storage setup |
@@ -20,7 +46,6 @@ Welcome to the FileBridge documentation. FileBridge is a self-hosted web applica
 | [Database Backups](Database-Backups) | Automated SQLite backup and restore |
 | [Health Check](Health-Check) | Kubernetes liveness/readiness probes |
 | [Architecture](Architecture) | System design and component overview |
-| [Docker Deployment](Docker-Deployment) | Container deployment guide |
 | [Extending FileBridge](Extending-FileBridge) | Adding new storage providers and features |
 | [Security](Security) | Security model, headers, and best practices |
 | [Roadmap](Roadmap) | Planned features and known gaps |
@@ -46,5 +71,5 @@ FileBridge lets you define **transfer jobs** that move files between storage sys
 - **Runtime**: Node.js 18+, Next.js 15 App Router
 - **Database**: SQLite (auto-created, no migration step required)
 - **Auth**: Azure AD SSO (Microsoft Entra ID) via NextAuth v5
-- **Deployment**: Single process, Docker-ready (standalone output)
+- **Deployment**: Single process — native install (systemd/launchd) or Docker (standalone output)
 - **Logging**: Structured JSON (pino) to stdout — compatible with Datadog, Grafana Loki, CloudWatch, Azure Monitor

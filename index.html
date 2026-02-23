@@ -1015,13 +1015,12 @@
     }
 
     /* ─── Quick Start ──────────────────────────────────────────────────── */
-    .quickstart-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-      max-width: 1000px;
+    .quickstart-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      max-width: 900px;
       margin: 0 auto;
-      align-items: center;
     }
 
     .code-block {
@@ -1053,41 +1052,56 @@
     }
 
     .code-body {
-      padding: 20px;
+      padding: 24px 28px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      line-height: 1.9;
-      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 2;
     }
 
-    .code-line { display: block; white-space: nowrap; }
+    .code-line { display: block; white-space: pre-wrap; word-break: break-word; }
+    .code-indent { padding-left: 2.2em; }
     .code-comment { color: var(--text-dim); }
     .code-prompt { color: var(--accent-3); user-select: none; }
     .code-cmd { color: var(--text); }
     .code-string { color: #a3e635; }
     .code-flag { color: var(--accent-2); }
+    .code-cont { color: var(--text-muted); user-select: none; }
 
     .quickstart-info h3 {
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 20px;
     }
 
-    .quickstart-steps {
-      display: flex;
-      flex-direction: column;
+    .qs-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 16px;
     }
 
-    .qs-step {
+    .qs-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
       display: flex;
-      gap: 14px;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color var(--transition), background var(--transition);
+    }
+
+    .qs-card:hover {
+      border-color: color-mix(in srgb, var(--accent-1) 50%, transparent);
+      background: var(--surface-hover);
     }
 
     .qs-num {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       background: color-mix(in srgb, var(--accent-1) 20%, transparent);
       border: 1px solid color-mix(in srgb, var(--accent-1) 40%, transparent);
@@ -1098,19 +1112,18 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      margin-top: 1px;
     }
 
-    .qs-text strong {
+    .qs-card strong {
       display: block;
       font-size: 0.9rem;
       font-weight: 600;
-      margin-bottom: 2px;
     }
 
-    .qs-text span {
-      font-size: 0.825rem;
+    .qs-card span {
+      font-size: 0.82rem;
       color: var(--text-muted);
+      line-height: 1.5;
     }
 
     /* ─── CTA Section ──────────────────────────────────────────────────── */
@@ -1209,10 +1222,6 @@
 
       .steps::before { display: none; }
 
-      .quickstart-grid {
-        grid-template-columns: 1fr;
-      }
-
       .mock-body {
         flex-direction: column;
       }
@@ -1298,7 +1307,7 @@
     <div class="hero-content">
       <div class="hero-badge">
         <span class="hero-badge-dot"></span>
-        Open Source · Self-Hosted · Docker Ready
+        Open Source · Self-Hosted · Native Install · Docker Ready
       </div>
       <h1>
         File transfers,<br />
@@ -1749,10 +1758,12 @@
     <div class="container">
       <div class="section-header">
         <span class="section-tag">Quick Start</span>
-        <h2>From zero to running in under 5 minutes</h2>
-        <p class="lead">Clone, configure, and go. Runs with Node.js 18+ or Docker.</p>
+        <h2>From zero to running in one command</h2>
+        <p class="lead">One line installs FileBridge, sets up the service, and generates your secrets. No Docker required.</p>
       </div>
-      <div class="quickstart-grid">
+      <div class="quickstart-stack">
+
+        <!-- Terminal -->
         <div class="code-block fade-up">
           <div class="code-header">
             <div class="code-header-dots">
@@ -1763,65 +1774,50 @@
             <span class="code-header-title">terminal</span>
           </div>
           <div class="code-body">
-            <span class="code-line"><span class="code-comment"># Clone the repository</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">git clone https://github.com/go2engle/filebridge</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">cd filebridge</span></span>
+            <span class="code-line"><span class="code-comment"># Linux / macOS — installs, configures, and starts as a system service</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">curl <span class="code-flag">-fsSL</span> https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash</span></span>
             <span class="code-line">&nbsp;</span>
-            <span class="code-line"><span class="code-comment"># Install dependencies</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">npm install</span></span>
+            <span class="code-line"><span class="code-comment"># Upgrade an existing install to the latest release</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">curl <span class="code-flag">-fsSL</span> https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh <span class="code-cont">\</span></span></span>
+            <span class="code-line code-indent"><span class="code-cmd">| sudo bash <span class="code-flag">-s</span> -- <span class="code-flag">--upgrade</span></span></span>
             <span class="code-line">&nbsp;</span>
-            <span class="code-line"><span class="code-comment"># Configure environment</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">cp .env.example .env.local</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">echo <span class="code-string">"AUTH_BYPASS_DEV=true"</span> >> .env.local</span></span>
-            <span class="code-line">&nbsp;</span>
-            <span class="code-line"><span class="code-comment"># Start development server</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">npm run dev</span></span>
-            <span class="code-line">&nbsp;</span>
-            <span class="code-line"><span class="code-comment"># Or run with Docker</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker build <span class="code-flag">-t</span> filebridge .</span></span>
-            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker run <span class="code-flag">-p</span> 3000:3000 <span class="code-flag">--env-file</span> .env filebridge</span></span>
+            <span class="code-line"><span class="code-comment"># Prefer Docker? Pull the pre-built image instead</span></span>
+            <span class="code-line"><span class="code-prompt">$ </span><span class="code-cmd">docker run <span class="code-flag">-d -p</span> 3000:3000 <span class="code-flag">--env-file</span> .env.production ghcr.io/go2engle/filebridge:latest</span></span>
           </div>
         </div>
+
+        <!-- Feature cards -->
         <div class="quickstart-info fade-up fade-up-delay-2">
-          <h3>What you get out of the box</h3>
-          <div class="quickstart-steps">
-            <div class="qs-step">
+          <h3>What the installer handles for you</h3>
+          <div class="qs-cards">
+            <div class="qs-card">
               <div class="qs-num">✓</div>
-              <div class="qs-text">
-                <strong>SQLite database</strong>
-                <span>Auto-created at <code style="font-family:monospace;font-size:0.8em">data/filebridge.db</code> on first start. No migration steps required.</span>
-              </div>
+              <strong>Node.js auto-installed</strong>
+              <span>Detects if Node.js 20+ is missing and installs it via NodeSource (Linux) or Homebrew (macOS).</span>
             </div>
-            <div class="qs-step">
+            <div class="qs-card">
               <div class="qs-num">✓</div>
-              <div class="qs-text">
-                <strong>Scheduler initialized</strong>
-                <span>node-cron starts automatically on server boot via <code style="font-family:monospace;font-size:0.8em">instrumentation.ts</code>.</span>
-              </div>
+              <strong>Starts on boot</strong>
+              <span>Registers a <code style="font-family:monospace;font-size:0.8em">systemd</code> unit (Linux) or <code style="font-family:monospace;font-size:0.8em">launchd</code> plist (macOS) so the service auto-restarts.</span>
             </div>
-            <div class="qs-step">
+            <div class="qs-card">
               <div class="qs-num">✓</div>
-              <div class="qs-text">
-                <strong>Dev auth bypass</strong>
-                <span>Set <code style="font-family:monospace;font-size:0.8em">AUTH_BYPASS_DEV=true</code> to skip Azure AD during local development.</span>
-              </div>
+              <strong>Secrets generated</strong>
+              <span>A cryptographically secure <code style="font-family:monospace;font-size:0.8em">AUTH_SECRET</code> is created and saved — never lost across upgrades.</span>
             </div>
-            <div class="qs-step">
+            <div class="qs-card">
               <div class="qs-num">✓</div>
-              <div class="qs-text">
-                <strong>Health check endpoint</strong>
-                <span><code style="font-family:monospace;font-size:0.8em">GET /api/health</code> returns DB status, scheduler state, and uptime for container probes.</span>
-              </div>
+              <strong>Standard directories</strong>
+              <span>Config in <code style="font-family:monospace;font-size:0.8em">/etc/filebridge/</code>, data in <code style="font-family:monospace;font-size:0.8em">/var/lib/filebridge/</code> — right where server apps belong.</span>
             </div>
-            <div class="qs-step">
+            <div class="qs-card">
               <div class="qs-num">✓</div>
-              <div class="qs-text">
-                <strong>Security headers configured</strong>
-                <span>CSP, HSTS, X-Frame-Options, and more are applied by default in <code style="font-family:monospace;font-size:0.8em">next.config.ts</code>.</span>
-              </div>
+              <strong>Health-checked</strong>
+              <span>Script polls <code style="font-family:monospace;font-size:0.8em">/api/health</code> after startup and only exits once FileBridge is responding.</span>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   </section>
