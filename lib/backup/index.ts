@@ -26,7 +26,7 @@ export interface BackupConfig {
 export const DEFAULT_BACKUP_CONFIG: BackupConfig = {
   enabled: false,
   schedule: "0 2 * * *",
-  localPath: path.join(process.cwd(), "data", "backups"),
+  localPath: process.env.BACKUP_PATH ?? path.join(process.cwd(), "data", "backups"),
   retentionCount: 7,
 };
 
