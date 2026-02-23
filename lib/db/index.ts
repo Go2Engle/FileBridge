@@ -31,7 +31,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS connections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob')),
+    protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob', 'local')),
     host TEXT NOT NULL,
     port INTEGER NOT NULL,
     credentials TEXT NOT NULL,
@@ -193,7 +193,31 @@ if (connDef && !connDef.sql.includes("'azure-blob'")) {
     CREATE TABLE connections_new (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob')),
+      protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob', 'local')),
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      credentials TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO connections_new SELECT * FROM connections;
+    DROP TABLE connections;
+    ALTER TABLE connections_new RENAME TO connections;
+  `);
+  sqlite.pragma("foreign_keys = ON");
+}
+
+// Migrate: update protocol CHECK constraint to include 'local'.
+const connDef2 = sqlite
+  .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='connections'")
+  .get() as { sql: string } | undefined;
+if (connDef2 && !connDef2.sql.includes("'local'")) {
+  sqlite.pragma("foreign_keys = OFF");
+  sqlite.exec(`
+    CREATE TABLE connections_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      protocol TEXT NOT NULL CHECK(protocol IN ('sftp', 'smb', 'azure-blob', 'local')),
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       credentials TEXT NOT NULL,

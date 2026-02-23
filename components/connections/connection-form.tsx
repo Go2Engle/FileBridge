@@ -15,18 +15,19 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlugZap } from "lucide-react";
+import { FolderOpen, Loader2, PlugZap } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import type { Connection } from "@/lib/db/schema";
+import { LocalFolderPicker } from "@/components/ui/local-folder-picker";
 
 const baseSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  protocol: z.enum(["sftp", "smb", "azure-blob"]),
-  host: z.string().min(1, "Host is required"),
-  port: z.coerce.number().int().min(1).max(65535),
+  protocol: z.enum(["sftp", "smb", "azure-blob", "local"]),
+  host: z.string().min(1, "Required"),
+  port: z.coerce.number().int().min(0).max(65535),
   // SFTP / SMB fields
   username: z.string().optional(),
   password: z.string().optional(),
@@ -79,6 +80,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   const queryClient = useQueryClient();
   const isEditing = !!editConnection;
   const [isTesting, setIsTesting] = useState(false);
+  const [isBrowsing, setIsBrowsing] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema),
@@ -152,6 +154,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
     if (!isEditing) {
       if (protocol === "smb") form.setValue("port", 445);
       else if (protocol === "azure-blob") form.setValue("port", 443);
+      else if (protocol === "local") form.setValue("port", 0);
       else form.setValue("port", 22);
     }
   }, [protocol, isEditing, form]);
@@ -176,6 +179,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       if (accountKey) credentials.accountKey = accountKey;
       if (connectionString) credentials.connectionString = connectionString;
     }
+    // "local" needs no credentials — basePath is stored in host
 
     return credentials;
   }
@@ -221,6 +225,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -242,7 +247,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className={protocol === "local" ? "" : "grid grid-cols-2 gap-4"}>
               <FormField
                 control={form.control}
                 name="protocol"
@@ -259,25 +264,28 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                         <SelectItem value="sftp">SFTP</SelectItem>
                         <SelectItem value="smb">SMB</SelectItem>
                         <SelectItem value="azure-blob">Azure Blob</SelectItem>
+                        <SelectItem value="local">Local</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="port"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Port</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {protocol !== "local" && (
+                <FormField
+                  control={form.control}
+                  name="port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <FormField
@@ -286,27 +294,57 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    {protocol === "azure-blob" ? "Storage Account Name" : "Host"}
+                    {protocol === "local"
+                      ? "Base Path"
+                      : protocol === "azure-blob"
+                        ? "Storage Account Name"
+                        : "Host"}
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder={
-                        protocol === "azure-blob"
-                          ? "myaccount"
-                          : "192.168.1.100 or server.example.com"
-                      }
-                      {...field}
-                    />
+                    {protocol === "local" ? (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="/data/files"
+                          {...field}
+                          className="font-mono"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          title="Browse server filesystem"
+                          onClick={() => setIsBrowsing(true)}
+                        >
+                          <FolderOpen className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Input
+                        placeholder={
+                          protocol === "azure-blob"
+                            ? "myaccount"
+                            : "192.168.1.100 or server.example.com"
+                        }
+                        {...field}
+                      />
+                    )}
                   </FormControl>
+                  {protocol === "local" && (
+                    <FormDescription>
+                      Absolute path to the root directory on the server&apos;s filesystem. Job paths are resolved relative to this directory.
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Credentials
-            </p>
+            {protocol !== "local" && <Separator />}
+            {protocol !== "local" && (
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Credentials
+              </p>
+            )}
 
             {(protocol === "sftp" || protocol === "smb") && (
               <>
@@ -496,5 +534,15 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         </Form>
       </DialogContent>
     </Dialog>
+
+    {protocol === "local" && (
+      <LocalFolderPicker
+        open={isBrowsing}
+        initialPath={form.getValues("host") || "/"}
+        onClose={() => setIsBrowsing(false)}
+        onSelect={(path) => form.setValue("host", path, { shouldValidate: true })}
+      />
+    )}
+    </>
   );
 }
