@@ -25,10 +25,10 @@ export function StatsCards() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
+          <Card key={i} className="py-4 gap-2">
+            <CardHeader>
               <Skeleton className="h-4 w-28" />
             </CardHeader>
             <CardContent>
@@ -69,10 +69,10 @@ export function StatsCards() {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
       {cards.map(({ title, value, sub, icon: Icon }) => (
-        <Card key={title}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card key={title} className="py-4 gap-2">
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {title}
             </CardTitle>

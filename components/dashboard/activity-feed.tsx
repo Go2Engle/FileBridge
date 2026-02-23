@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import axios from "axios";
 import { formatBytes, parseDBDate } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -35,7 +34,7 @@ export function ActivityFeed() {
         <CardTitle>Recent Activity</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="h-80">
+        <div className="h-80 overflow-y-auto">
           {isLoading ? (
             <div className="space-y-3 p-4">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -58,17 +57,17 @@ export function ActivityFeed() {
               {data.map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
+                  className="flex items-center gap-3 px-4 py-4 hover:bg-muted/30 transition-colors"
                 >
                   <div
-                    className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${
+                    className={`h-2 w-2 rounded-full shrink-0 ${
                       log.status === "success"
                         ? "bg-emerald-500"
                         : "bg-destructive"
                     }`}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{log.fileName}</p>
+                    <p className="text-sm font-semibold truncate">{log.fileName}</p>
                     <p className="text-xs text-muted-foreground truncate">
                       {log.sourcePath} → {log.destinationPath}
                     </p>
@@ -81,14 +80,14 @@ export function ActivityFeed() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <Badge
                       variant={log.status === "success" ? "success" : "destructive"}
-                      className="text-[10px] py-0"
+                      className="text-xs"
                     >
                       {log.status}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatBytes(log.fileSize)}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(parseDBDate(log.transferredAt), {
                         addSuffix: true,
                       })}
@@ -98,7 +97,7 @@ export function ActivityFeed() {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
