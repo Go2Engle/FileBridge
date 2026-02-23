@@ -5,6 +5,14 @@ import type { NextAuthConfig } from "next-auth";
  * Must NOT import anything that requires Node.js (fs, crypto, better-sqlite3, etc.).
  * Providers are NOT defined here — they're only needed for sign-in, not JWT validation.
  */
+
+// Use secure cookies only when the configured URL is actually HTTPS.
+// NODE_ENV=production on a plain-HTTP install would otherwise set __Secure-/__Host-
+// prefixed cookies that browsers silently discard, causing MissingCSRF errors.
+const configuredUrl =
+  process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+const secureCookies = configuredUrl.startsWith("https://");
+
 export const authConfig = {
   providers: [], // Populated in lib/auth/index.ts (Node runtime only)
   pages: {
@@ -50,39 +58,36 @@ export const authConfig = {
   trustHost: true,
   cookies: {
     sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-authjs.session-token"
-          : "authjs.session-token",
+      name: secureCookies
+        ? "__Secure-authjs.session-token"
+        : "authjs.session-token",
       options: {
         httpOnly: true,
         sameSite: "lax" as const,
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: secureCookies,
       },
     },
     callbackUrl: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-authjs.callback-url"
-          : "authjs.callback-url",
+      name: secureCookies
+        ? "__Secure-authjs.callback-url"
+        : "authjs.callback-url",
       options: {
         httpOnly: true,
         sameSite: "lax" as const,
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: secureCookies,
       },
     },
     csrfToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Host-authjs.csrf-token"
-          : "authjs.csrf-token",
+      name: secureCookies
+        ? "__Host-authjs.csrf-token"
+        : "authjs.csrf-token",
       options: {
         httpOnly: true,
         sameSite: "lax" as const,
         path: "/",
-        secure: process.env.NODE_ENV === "production",
+        secure: secureCookies,
       },
     },
   },
