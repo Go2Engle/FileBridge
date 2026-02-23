@@ -1,0 +1,57 @@
+name: Wiki Sync
+
+on:
+  # docs/ → wiki: runs when markdown files in docs/ are pushed to main
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+
+  # wiki → docs/: runs when someone edits the wiki directly in GitHub
+  gollum:
+
+  workflow_dispatch:
+
+jobs:
+  # ── Push docs/ changes to the wiki ────────────────────────────────────────
+  docs-to-wiki:
+    name: Sync docs/ → Wiki
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync docs/ to wiki
+        uses: newrelic/wiki-sync-action@v1.0.1
+        with:
+          source: docs
+          destination: wiki
+          token: ${{ secrets.WIKI_SYNC_TOKEN }}
+          gitAuthorName: "github-actions[bot]"
+          gitAuthorEmail: "github-actions[bot]@users.noreply.github.com"
+          commitMessage: "chore(wiki): sync from docs/ [skip ci]"
+
+  # ── Pull wiki edits back into docs/ ───────────────────────────────────────
+  wiki-to-docs:
+    name: Sync Wiki → docs/
+    runs-on: ubuntu-latest
+    if: github.event_name == 'gollum'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WIKI_SYNC_TOKEN }}
+
+      - name: Sync wiki to docs/
+        uses: newrelic/wiki-sync-action@v1.0.1
+        with:
+          source: wiki
+          destination: docs
+          token: ${{ secrets.WIKI_SYNC_TOKEN }}
+          gitAuthorName: "github-actions[bot]"
+          gitAuthorEmail: "github-actions[bot]@users.noreply.github.com"
+          commitMessage: "chore(docs): sync from wiki [skip ci]"
