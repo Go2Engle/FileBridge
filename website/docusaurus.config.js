@@ -52,6 +52,8 @@ const config = {
         logo: {
           alt: 'FileBridge Logo',
           src: 'img/logo.png',
+          href: 'https://go2engle.com',
+          target: '_self',
         },
         items: [
           {
