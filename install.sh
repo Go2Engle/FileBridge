@@ -25,19 +25,19 @@ HEALTH_INTERVAL=2
 
 # ── Colors ───────────────────────────────────────────────────
 if [ -t 1 ] && [ "${NO_COLOR:-}" != "1" ]; then
-  R='\033[0m'          # reset
-  BOLD='\033[1m'
-  DIM='\033[2m'
-  RED='\033[0;31m'
-  GREEN='\033[0;32m'
-  YELLOW='\033[0;33m'
-  CYAN='\033[0;36m'
-  WHITE='\033[0;37m'
-  BGREEN='\033[1;32m'
-  BRED='\033[1;31m'
-  BYELLOW='\033[1;33m'
-  BCYAN='\033[1;36m'
-  BWHITE='\033[1;37m'
+  R=$'\033[0m'          # reset
+  BOLD=$'\033[1m'
+  DIM=$'\033[2m'
+  RED=$'\033[0;31m'
+  GREEN=$'\033[0;32m'
+  YELLOW=$'\033[0;33m'
+  CYAN=$'\033[0;36m'
+  WHITE=$'\033[0;37m'
+  BGREEN=$'\033[1;32m'
+  BRED=$'\033[1;31m'
+  BYELLOW=$'\033[1;33m'
+  BCYAN=$'\033[1;36m'
+  BWHITE=$'\033[1;37m'
 else
   R=''; BOLD=''; DIM=''; RED=''; GREEN=''; YELLOW=''
   CYAN=''; WHITE=''; BGREEN=''; BRED=''; BYELLOW=''; BCYAN=''; BWHITE=''
