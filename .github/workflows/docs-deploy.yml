@@ -1,0 +1,67 @@
+name: Deploy Docs
+
+# Rebuild and deploy the Docusaurus docs site whenever docs content or
+# the Docusaurus config itself changes on main.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'website/**'
+  workflow_dispatch:
+
+jobs:
+  deploy-docs:
+    name: Build Docusaurus and deploy to Website branch
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed so we can push to Website branch
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Copy logo into Docusaurus static assets
+        run: cp images/FileBridgeLogo.png website/static/img/logo.png
+
+      - name: Install Docusaurus dependencies
+        run: npm install
+        working-directory: website
+
+      - name: Build Docusaurus
+        run: npm run build
+        working-directory: website
+
+      - name: Deploy docs/ folder to Website branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stash the fresh build output before switching branches
+          cp -r website/build /tmp/docs-build
+
+          # Switch to the Website branch
+          git checkout Website
+
+          # Replace the docs sub-folder with the new build
+          rm -rf docs/
+          cp -r /tmp/docs-build docs/
+
+          git add docs/
+
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+            exit 0
+          fi
+
+          git commit -m "chore(docs): deploy Docusaurus build [skip ci]"
+          git push origin Website
