@@ -32,6 +32,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Ensure public/ exists — Next.js requires it and the runner COPYs from it.
+# The directory may be absent if the project has no static public assets yet.
+RUN mkdir -p /app/public
+
 # next.config.ts already sets output: "standalone", so the build produces a
 # self-contained .next/standalone directory with only required node_modules.
 RUN npm run build
