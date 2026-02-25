@@ -27,6 +27,8 @@ RUN --mount=type=cache,target=/root/.npm \
 # builder: compile the Next.js application
 # -----------------------------------------------------------------------------
 FROM base AS builder
+# TARGETARCH is injected by buildx when using --platform (e.g. linux/arm64)
+ARG TARGETARCH
 # Only libc6-compat needed — native modules are already compiled in deps
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --no-cache libc6-compat
@@ -35,6 +37,13 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# During cross-compilation, npm ci runs on the host (amd64) and installs
+# amd64 SWC binaries. The arm64/Alpine target needs the musl variant.
+# Without it Next.js falls back to WASM, which doesn't support Turbopack.
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+    npm install --no-save @next/swc-linux-arm64-musl; \
+fi
 
 # Ensure public/ exists — Next.js requires it and the runner COPYs from it.
 # The directory may be absent if the project has no static public assets yet.
