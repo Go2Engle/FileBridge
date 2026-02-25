@@ -118,6 +118,16 @@ Configured at **Settings → Notifications**:
 | Alert on failure | Trigger notification when a job fails |
 | Alert after N consecutive errors | Escalation threshold |
 
+### Timezone Settings
+
+Configured at **Settings → Timezone**:
+
+| Setting | Description |
+|---|---|
+| Timezone | IANA timezone identifier used for all cron job scheduling (e.g. `America/New_York`, `Europe/London`, `UTC`) |
+
+Defaults to `UTC` if not configured. Changing the timezone immediately reschedules all active jobs. Invalid IANA identifiers are rejected with a validation error.
+
 ### Backup Settings
 
 Configured at **Settings → Database Backups**:

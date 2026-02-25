@@ -27,11 +27,14 @@ A self-hosted web application for automated file transfer scheduling and monitor
 
 - **Multi-protocol transfers** — SFTP, SMB/CIFS (NTLMv2), and Azure Blob Storage, with a pluggable interface for future protocols
 - **Cron scheduling** — Full cron expression support with preset shortcuts; manual Run Now trigger
+- **Timezone-aware scheduling** — Configurable system timezone applied to all cron jobs; next run time displayed per job
+- **File browser** — Browse, create directories, rename, and delete files on any configured connection directly from the UI
 - **Glob file filtering** — `*.csv`, `report_*.xlsx`, comma-separated multi-pattern support
 - **Delta sync** — Skip files that are already up to date at the destination
 - **Archive extraction** — Auto-extract ZIP, TAR, TAR.GZ, and TGZ at the destination
 - **Post-transfer actions** — Retain, delete, or move source files after transfer
 - **Job dry run** — Preview exactly what a job would do before running it for real
+- **Job logs panel** — Per-job transfer log viewer with real-time search and status filtering, embedded in the job detail sheet
 - **Audit logging** — Complete security trail: who did what, when, from where, with field-level diffs
 - **Structured logging** — pino JSON output to stdout; natively ingestable by Datadog, Grafana Loki, CloudWatch, Azure Monitor
 - **Automated backups** — Scheduled SQLite snapshots with integrity verification and in-app restore

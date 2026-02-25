@@ -122,13 +122,34 @@ A detailed success or failure message is shown in the UI.
 
 ## Built-in File Browser
 
-When creating or editing a job, you can browse the remote filesystem directly from the UI without leaving FileBridge:
+FileBridge includes a full-featured file browser for interacting with any configured connection. Access it from the connections list or from the path fields in the job form.
 
-- Click the folder icon next to the **Source Path** or **Destination Path** field
-- Navigate directories using the point-and-click browser
-- Select a folder to populate the path field
+### Navigating
 
-The file browser uses `GET /api/connections/[id]/browse?path=/some/path` under the hood.
+- Click any directory to enter it; use the breadcrumb bar to navigate back up
+- Files and folders are listed with name, size, and last modified date
+- Click a folder in the job form's path picker to populate the path field
+
+### File Operations
+
+The file browser supports the following operations (admin role required):
+
+| Operation | How |
+|---|---|
+| **Create Directory** | Click **New Folder**, enter a name, confirm |
+| **Rename** | Click the `…` menu next to any entry → **Rename** |
+| **Delete** | Click the `…` menu next to any file → **Delete** |
+
+> **Note**: Directory deletion is not supported through the file browser — use your storage system's native tools for that operation.
+
+### API Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/connections/[id]/browse?path=` | List directory contents |
+| `POST /api/connections/[id]/mkdir` | Create a new directory |
+| `DELETE /api/connections/[id]/files?path=` | Delete a file |
+| `PATCH /api/connections/[id]/files` | Rename or move a file |
 
 ---
 

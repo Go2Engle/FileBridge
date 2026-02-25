@@ -104,11 +104,73 @@ Lists the contents of a remote directory for the file browser UI.
 
 ---
 
+### `POST /api/connections/[id]/mkdir`
+
+Creates a new directory on the remote storage. Requires `admin` role.
+
+**Request Body**
+```json
+{ "path": "/data/new-folder" }
+```
+
+**Response**
+```json
+{ "success": true }
+```
+
+---
+
+### `DELETE /api/connections/[id]/files?path=/some/file.csv`
+
+Deletes a file on the remote storage. Requires `admin` role.
+
+**Query Parameters**
+- `path` (string) — full path of the file to delete
+
+**Response**
+```json
+{ "success": true }
+```
+
+---
+
+### `PATCH /api/connections/[id]/files`
+
+Renames or moves a file or directory on the remote storage. Requires `admin` role.
+
+**Request Body**
+```json
+{ "from": "/data/old-name.csv", "to": "/data/new-name.csv" }
+```
+
+**Response**
+```json
+{ "success": true }
+```
+
+---
+
 ## Jobs
 
 ### `GET /api/jobs`
 
-Returns all jobs with their current status.
+Returns all jobs with their current status. Active and running jobs include a computed `nextRunAt` field (ISO 8601) showing the next scheduled execution time, calculated using the configured system timezone.
+
+**Response** (excerpt)
+```json
+[
+  {
+    "id": 7,
+    "name": "Daily Report Transfer",
+    "status": "active",
+    "schedule": "0 6 * * *",
+    "nextRunAt": "2026-02-25T11:00:00.000Z",
+    ...
+  }
+]
+```
+
+`nextRunAt` is `null` for inactive or error-state jobs.
 
 ---
 
@@ -263,6 +325,37 @@ Returns KPI data and chart data for the dashboard.
 ---
 
 ## Settings
+
+### `GET /api/settings/timezone`
+
+Returns the currently configured system timezone. Accessible to all authenticated users.
+
+**Response**
+```json
+{ "timezone": "America/New_York" }
+```
+
+Defaults to `"UTC"` if no timezone has been configured.
+
+---
+
+### `POST /api/settings/timezone`
+
+Sets the system timezone used for all cron job scheduling. Requires `admin` role. All active jobs are rescheduled immediately after the timezone is saved.
+
+**Request Body**
+```json
+{ "timezone": "America/Chicago" }
+```
+
+The `timezone` value must be a valid IANA timezone identifier (e.g. `America/New_York`, `Europe/London`, `Asia/Tokyo`). Invalid identifiers return a `400` error.
+
+**Response**
+```json
+{ "success": true }
+```
+
+---
 
 ### `GET /api/settings`
 

@@ -33,7 +33,7 @@ Jobs run on a **cron expression**. The UI provides preset shortcuts as well as a
 
 The UI shows a human-readable description of the cron expression (e.g. "Every day at 8:00 AM").
 
-> **Note**: Timezone support is planned but not yet implemented. Cron expressions run in the server's local timezone.
+Cron expressions run in the **configured system timezone** (set under **Settings → Timezone**). This defaults to `UTC` if not configured. Changing the timezone immediately reschedules all active jobs. See [Configuration](Configuration#application-settings-in-app) for details.
 
 ### File Filtering
 
@@ -164,6 +164,20 @@ Every job execution creates a **job run** record with:
 - Real-time `currentFile` field (updated as each file is processed)
 
 Click a job in the Jobs list to view its run history in a detail panel. The job detail also shows the last error message inline via a tooltip.
+
+## Job Logs Panel
+
+The job detail sheet includes an embedded transfer log viewer. For the selected job you can:
+- Search logs by file name (partial match)
+- Filter by status: All, Success, or Failed
+- See the full source and destination paths with file sizes and timestamps
+- Auto-refresh to monitor a job that is currently running
+
+The panel fetches from `GET /api/logs?jobId=<id>` and supports real-time filtering without a full page reload.
+
+## Next Run Time
+
+Active jobs display a **Next Run** timestamp in the jobs list, showing when the job will next fire based on its cron expression and the configured system timezone. This field is `null` for inactive or error-state jobs.
 
 ---
 

@@ -73,15 +73,16 @@ app/
 │   ├── jobs/page.tsx                 # Job management
 │   ├── logs/page.tsx                 # Transfer audit log
 │   ├── audit-logs/page.tsx           # Security audit log
-│   └── settings/page.tsx            # Notification + backup settings
+│   └── settings/page.tsx            # Notification + backup + timezone settings
 └── api/
     ├── auth/[...nextauth]/route.ts   # NextAuth handlers
-    ├── connections/                   # CRUD, test, browse
+    ├── connections/                   # CRUD, test, browse, mkdir, file ops
     ├── jobs/                         # CRUD, run, dry-run, run history
     ├── logs/route.ts                 # Paginated transfer logs
     ├── audit-logs/route.ts           # Paginated audit logs
     ├── dashboard/stats/route.ts      # KPI + chart data
     ├── settings/route.ts             # Notification config
+    ├── settings/timezone/route.ts    # Timezone config (GET + POST)
     ├── backup/                       # run, list, restore
     └── health/route.ts               # Liveness/readiness probe
 
@@ -90,12 +91,12 @@ components/
 ├── sidebar.tsx                       # Navigation sidebar
 ├── providers.tsx                     # TanStack Query + theme providers
 ├── connections/                      # ConnectionList, ConnectionForm
-├── jobs/                             # JobList, JobForm, JobDetailSheet
+├── jobs/                             # JobList, JobForm, JobDetailSheet (with logs panel)
 ├── logs/                             # LogTable
 ├── audit-logs/                       # AuditLogTable
 ├── dashboard/                        # StatsCards, TransferChart, ActivityFeed, JobStatusList
-├── settings/                         # NotificationSettings, BackupSettings
-└── ui/                               # shadcn/ui primitives + FolderBrowser
+├── settings/                         # NotificationSettings, BackupSettings, TimezoneSettings
+└── ui/                               # shadcn/ui primitives + FileBrowserDialog
 
 lib/
 ├── auth/                             # NextAuth config + session helpers
@@ -110,11 +111,12 @@ lib/
 │   ├── sftp.ts                       # SSH2 SFTP implementation
 │   ├── smb.ts                        # v9u-smb2 NTLMv2 implementation
 │   ├── azure-blob.ts                 # @azure/storage-blob implementation
+│   ├── local.ts                      # Local filesystem implementation
 │   └── registry.ts                   # Provider factory (protocol → class)
 ├── transfer/
 │   └── engine.ts                     # Core transfer orchestration + dry run
 ├── scheduler/
-│   └── index.ts                      # node-cron job scheduling
+│   └── index.ts                      # node-cron job scheduling (timezone-aware)
 ├── backup/
 │   └── index.ts                      # SQLite backup, restore, pruning
 ├── audit.ts                          # Audit log writer, diffChanges, IP extraction
@@ -252,6 +254,7 @@ interface StorageProvider {
   uploadFile(content: Buffer, remotePath: string): Promise<void>
   deleteFile(remotePath: string): Promise<void>
   moveFile(sourcePath: string, destinationPath: string): Promise<void>
+  createDirectory(path: string): Promise<void>
 }
 
 interface FileInfo {
@@ -264,6 +267,7 @@ interface FileInfo {
 
 - `listFiles` applies the glob filter and returns only files (no directories)
 - `listDirectory` returns everything (files + directories) for the UI file browser
+- `createDirectory` creates a new directory at the given path (used by the file browser and API)
 
 The provider factory in `lib/storage/registry.ts` maps protocol names to concrete classes.
 
@@ -273,9 +277,17 @@ The provider factory in `lib/storage/registry.ts` maps protocol names to concret
 
 The scheduler (`lib/scheduler/index.ts`) maintains an in-memory `Map<jobId, ScheduledTask>`. This map is initialized at startup by `instrumentation.ts` and mutated by API routes when jobs are created, updated, or deleted.
 
+**Timezone-aware scheduling**: All cron tasks run in the timezone stored in the `settings` table under the key `"timezone"` (defaults to `"UTC"`). The timezone is read at initialization and applied to every `node-cron` task. When the timezone is changed via the settings API, `rescheduleAllJobs()` is called to rebuild all active tasks with the new timezone.
+
 **Startup recovery**: On init, any jobs with `status = "running"` (left over from a crashed process) are reset to `"error"`.
 
 **Re-check on trigger**: When a cron task fires, it re-reads the job from the database before running. This guards against stale state in Next.js's module cache, where an API route might have updated the job status in a different module instance.
+
+**Exported helpers**:
+- `scheduleJob(jobId, cronExpression)` — schedule or reschedule a single job (reads timezone from DB)
+- `unscheduleJob(jobId)` — remove a job from the scheduler
+- `rescheduleAllJobs()` — rebuild all active job tasks (called after timezone change)
+- `getSchedulerTimezone()` — read the current timezone from the `settings` table
 
 ---
 

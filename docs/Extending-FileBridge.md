@@ -66,6 +66,11 @@ export class S3Provider implements StorageProvider {
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
     // CopyObjectCommand + DeleteObjectCommand (or server-side copy)
   }
+
+  async createDirectory(path: string): Promise<void> {
+    // S3 has no real directories — create a zero-byte object with a trailing slash
+    // e.g. PutObjectCommand({ Key: path.endsWith("/") ? path : path + "/", Body: "" })
+  }
 }
 ```
 
