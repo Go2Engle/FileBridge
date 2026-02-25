@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -8,10 +8,14 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -20,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Play, Edit2, AlertCircle, CheckCircle2, XCircle, Clock, FileText,
-  ArrowLeft, Loader2,
+  ArrowLeft, Loader2, Search,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -103,12 +107,44 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
   const latestRun = runs?.[0];
   const connMap = new Map(connections?.map((c) => [c.id, c.name]) ?? []);
 
+  const [width, setWidth] = useState(600);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: width };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      const next = Math.min(Math.max(dragRef.current.startWidth - delta, 420), 1100);
+      setWidth(next);
+    };
+
+    const onMouseUp = () => {
+      dragRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [width]);
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="right"
-        className="w-[600px] sm:max-w-[700px] flex flex-col p-0"
+        className="flex flex-col p-0"
+        style={{ width, maxWidth: "95vw" }}
       >
+        {/* Resize handle */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize group z-10"
+          onMouseDown={handleDragStart}
+        >
+          <div className="absolute inset-y-0 left-0 w-px bg-border group-hover:bg-primary/50 group-active:bg-primary transition-colors" />
+        </div>
         <SheetHeader className="px-6 pt-6 pb-2">
           <div className="flex items-center gap-3">
             <SheetTitle className="text-lg">{currentJob?.name}</SheetTitle>
@@ -162,6 +198,7 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
               {isRunning ? "Live Progress" : "Overview"}
             </TabsTrigger>
             <TabsTrigger value="history">Run History</TabsTrigger>
+            <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="progress" className="flex-1 min-h-0 px-6 pb-6">
@@ -191,6 +228,12 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
                   runs={runs ?? []}
                 />
               )}
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="logs" className="flex-1 min-h-0 px-6 pb-6">
+            <ScrollArea className="h-full">
+              {currentJob && <JobLogsPanel job={currentJob} />}
             </ScrollArea>
           </TabsContent>
         </Tabs>
@@ -475,6 +518,189 @@ function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
           })}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+// --- Job Logs Panel ---
+
+const JOB_LOG_PAGE_SIZE = 25;
+
+interface JobLogEntry {
+  id: number;
+  fileName: string;
+  sourcePath: string;
+  destinationPath: string;
+  fileSize: number;
+  transferredAt: string;
+  status: "success" | "failure";
+  errorMessage: string | null;
+}
+
+function JobLogsPanel({ job }: { job: Job }) {
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failure">("all");
+
+  const { data, isLoading } = useQuery<{ logs: JobLogEntry[]; total: number }>({
+    queryKey: ["job-logs", job.id, page, search, statusFilter],
+    queryFn: () =>
+      axios.get("/api/logs", {
+        params: {
+          jobId: job.id,
+          offset: page * JOB_LOG_PAGE_SIZE,
+          limit: JOB_LOG_PAGE_SIZE,
+          search: search || undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+        },
+      }).then((r) => r.data),
+    refetchInterval: 30_000,
+  });
+
+  const totalPages = Math.ceil((data?.total ?? 0) / JOB_LOG_PAGE_SIZE);
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8 h-8 text-sm"
+            placeholder="Search file name..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setPage(0); }}
+        >
+          <SelectTrigger className="w-36 h-8 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+            <SelectItem value="failure">Failure</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      ) : !data?.logs.length ? (
+        <div className="text-center py-12 text-sm text-muted-foreground">
+          No transfer logs found.
+        </div>
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>File</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Transferred</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="max-w-[140px]">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="truncate block text-sm cursor-default">{log.fileName}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs break-all">
+                        <p className="text-xs">{log.fileName}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs max-w-[100px]">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="truncate block cursor-default text-muted-foreground">{log.sourcePath}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs break-all">
+                        <p className="text-xs font-mono">{log.sourcePath}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs max-w-[100px]">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="truncate block cursor-default text-muted-foreground">{log.destinationPath}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs break-all">
+                        <p className="text-xs font-mono">{log.destinationPath}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">
+                    {formatBytes(log.fileSize)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Badge
+                        variant={log.status === "success" ? "success" : "destructive"}
+                        className="capitalize text-xs"
+                      >
+                        {log.status}
+                      </Badge>
+                      {log.status === "failure" && log.errorMessage && (
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs">
+                            <p className="text-xs">{log.errorMessage}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {format(parseDBDate(log.transferredAt), "MMM d, HH:mm:ss")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground">
+              {data.total.toLocaleString()} total entries
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p - 1)}
+                disabled={page === 0}
+              >
+                Previous
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {page + 1} / {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= totalPages - 1}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
