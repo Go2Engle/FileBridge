@@ -132,6 +132,17 @@ export class LocalProvider implements StorageProvider {
     }
   }
 
+  async createDirectory(remotePath: string): Promise<void> {
+    const fullPath = this.resolvePath(remotePath);
+    log.info("Creating directory", { fullPath });
+    try {
+      await fs.mkdir(fullPath, { recursive: false });
+    } catch (err) {
+      log.error("createDirectory failed", { fullPath, error: err });
+      throw err;
+    }
+  }
+
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
     const src = this.resolvePath(sourcePath);
     const dst = this.resolvePath(destinationPath);

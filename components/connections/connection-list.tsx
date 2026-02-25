@@ -22,7 +22,7 @@ import { useRole } from "@/hooks/use-role";
 // The list endpoint strips credentials and adds a top-level username for display
 type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
 import { parseDBDate } from "@/lib/utils";
-import { FolderBrowser } from "@/components/ui/folder-browser";
+import { FileBrowserDialog } from "@/components/ui/file-browser-dialog";
 
 type ProtocolFilter = "all" | "sftp" | "smb" | "azure-blob" | "local";
 type SortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc";
@@ -283,12 +283,12 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
     </div>
 
     {browser && (
-      <FolderBrowser
+      <FileBrowserDialog
         open
         connectionId={browser.conn.id}
         connectionName={browser.conn.name}
+        isAdmin={isAdmin}
         onClose={() => setBrowser(null)}
-        onSelect={() => setBrowser(null)}
       />
     )}
     </>

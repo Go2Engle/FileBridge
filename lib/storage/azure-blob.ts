@@ -231,6 +231,20 @@ export class AzureBlobProvider implements StorageProvider {
     }
   }
 
+  async createDirectory(remotePath: string): Promise<void> {
+    // Azure Blob has no real directories; create a zero-byte sentinel blob to
+    // materialise the virtual folder so it appears in hierarchy listings.
+    const blobName = toBlobName(remotePath).replace(/\/$/, "") + "/.keep";
+    log.info("Creating virtual directory", { blobName });
+    try {
+      const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
+      await blockBlobClient.upload(Buffer.alloc(0), 0);
+    } catch (err) {
+      log.error("createDirectory failed", { blobName, error: err });
+      throw err;
+    }
+  }
+
   async moveFile(sourcePath: string, destinationPath: string): Promise<void> {
     const srcName = toBlobName(sourcePath);
     const dstName = toBlobName(destinationPath);

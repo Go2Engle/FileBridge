@@ -15,6 +15,8 @@ export interface StorageProvider {
   uploadFile(content: Buffer, remotePath: string): Promise<void>;
   deleteFile(remotePath: string): Promise<void>;
   moveFile(sourcePath: string, destinationPath: string): Promise<void>;
+  /** Create a new directory at the given path. */
+  createDirectory(path: string): Promise<void>;
 }
 
 /**

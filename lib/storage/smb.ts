@@ -118,6 +118,16 @@ export class SmbProvider implements StorageProvider {
     });
   }
 
+  private mkdirAsync(smbPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.client.mkdir(smbPath, (err: any) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   /**
@@ -321,6 +331,17 @@ export class SmbProvider implements StorageProvider {
         }
         throw err;
       }
+    }
+  }
+
+  async createDirectory(remotePath: string): Promise<void> {
+    const smbPath = this.toSmbPath(remotePath);
+    log.info("Creating directory", { smbPath });
+    try {
+      await this.mkdirAsync(smbPath);
+    } catch (err) {
+      log.error("createDirectory failed", { smbPath, error: err });
+      throw err;
     }
   }
 

@@ -129,4 +129,14 @@ export class SftpProvider implements StorageProvider {
     await this.client.mkdir(dir, true).catch(() => {});
     await this.client.rename(sourcePath, destinationPath);
   }
+
+  async createDirectory(remotePath: string): Promise<void> {
+    log.info("Creating directory", { remotePath });
+    try {
+      await this.client.mkdir(remotePath, true);
+    } catch (err) {
+      log.error("createDirectory failed", { remotePath, error: err });
+      throw err;
+    }
+  }
 }
