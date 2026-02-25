@@ -143,13 +143,40 @@ export function LogTable() {
                     {log.jobName ?? <span className="text-muted-foreground italic">deleted</span>}
                   </TableCell>
                   <TableCell className="font-medium max-w-48 truncate">
-                    {log.fileName}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="truncate block max-w-48 cursor-default">{log.fileName}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-sm break-all">
+                          <p className="text-xs">{log.fileName}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="font-mono text-xs max-w-40 truncate text-muted-foreground">
-                    {log.sourcePath}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="truncate block max-w-40 cursor-default">{log.sourcePath}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-sm break-all">
+                          <p className="text-xs font-mono">{log.sourcePath}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="font-mono text-xs max-w-40 truncate text-muted-foreground">
-                    {log.destinationPath}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="truncate block max-w-40 cursor-default">{log.destinationPath}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-sm break-all">
+                          <p className="text-xs font-mono">{log.destinationPath}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-sm">
                     {formatBytes(log.fileSize)}
