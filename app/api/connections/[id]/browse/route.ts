@@ -28,13 +28,15 @@ export async function GET(
     conn as Parameters<typeof createStorageProvider>[0]
   );
 
+  // Declared outside try so it's accessible in the catch log below.
+  let browsePath = requestedPath;
+
   try {
     await provider.connect();
 
     // "." means "auto-detect": ask the server for its working directory.
     // This mirrors how WinSCP finds the correct starting folder without
     // requiring the user to configure a remote root path manually.
-    let browsePath = requestedPath;
     if (requestedPath === ".") {
       browsePath = provider.getWorkingDirectory
         ? await provider.getWorkingDirectory()
