@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.2">
 <title data-rh="true">Security | FileBridge</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://go2engle.com/FileBridge/docs/Security"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Security | FileBridge"><meta data-rh="true" name="description" content="This page documents FileBridge&#x27;s current security controls, known gaps, and recommendations for hardening production deployments."><meta data-rh="true" property="og:description" content="This page documents FileBridge&#x27;s current security controls, known gaps, and recommendations for hardening production deployments."><link data-rh="true" rel="icon" href="/FileBridge/docs/img/logo.png"><link data-rh="true" rel="canonical" href="https://go2engle.com/FileBridge/docs/Security"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Security" hreflang="en"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Security" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://go2engle.com/FileBridge/docs/Security"}]}</script><link rel="stylesheet" href="/FileBridge/docs/assets/css/styles.3e5f2db8.css">
-<script src="/FileBridge/docs/assets/js/runtime~main.55ac253c.js" defer="defer"></script>
+<script src="/FileBridge/docs/assets/js/runtime~main.5c1cc2bc.js" defer="defer"></script>
 <script src="/FileBridge/docs/assets/js/main.a6f12db2.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -34,7 +34,7 @@
 <p>FileBridge enforces a two-tier role system:</p>
 <table><thead><tr><th>Role</th><th>Description</th></tr></thead><tbody><tr><td><strong>Administrator</strong></td><td>Full access — can create/edit/delete connections, jobs, users, and SSO settings</td></tr><tr><td><strong>Viewer</strong></td><td>Read-only access — can view connections, jobs, logs, and settings but cannot modify anything</td></tr></tbody></table>
 <p>Roles are enforced at three layers:</p>
-<table><thead><tr><th>Layer</th><th>Mechanism</th></tr></thead><tbody><tr><td>API routes</td><td><code>requireAuth()</code> for read operations, <code>requireRole(&quot;admin&quot;)</code> for mutations</td></tr><tr><td>Middleware</td><td>JWT validation (edge runtime — checks token existence)</td></tr><tr><td>UI components</td><td><code>useRole()</code> hook conditionally renders admin-only controls</td></tr></tbody></table>
+<table><thead><tr><th>Layer</th><th>Mechanism</th></tr></thead><tbody><tr><td>API routes</td><td><code>requireAuth()</code> for read operations, <code>requireRole(&quot;admin&quot;)</code> for mutations</td></tr><tr><td>Proxy (<code>proxy.ts</code>)</td><td>JWT validation (Node.js runtime — checks token existence)</td></tr><tr><td>UI components</td><td><code>useRole()</code> hook conditionally renders admin-only controls</td></tr></tbody></table>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="session-security">Session Security<a href="#session-security" class="hash-link" aria-label="Direct link to Session Security" title="Direct link to Session Security" translate="no">​</a></h3>
 <ul>
 <li class="">Sessions are JWT-based with a <strong>1-hour max age</strong></li>
@@ -43,7 +43,7 @@
 <li class="">Session cookies use <code>httpOnly</code>, <code>sameSite: lax</code>, and <code>secure</code> (in production) flags</li>
 </ul>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="dev-bypass">Dev Bypass<a href="#dev-bypass" class="hash-link" aria-label="Direct link to Dev Bypass" title="Direct link to Dev Bypass" translate="no">​</a></h3>
-<p>The <code>AUTH_BYPASS_DEV=true</code> mode is enforced by checking <code>NODE_ENV === &quot;development&quot;</code> in middleware. It cannot be activated in production builds. Do not set this flag in production.</p>
+<p>The <code>AUTH_BYPASS_DEV=true</code> mode is enforced by checking <code>NODE_ENV === &quot;development&quot;</code> in <code>proxy.ts</code>. It cannot be activated in production builds. Do not set this flag in production.</p>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="http-security-headers">HTTP Security Headers<a href="#http-security-headers" class="hash-link" aria-label="Direct link to HTTP Security Headers" title="Direct link to HTTP Security Headers" translate="no">​</a></h2>
 <p>The following security headers are set on all responses via <code>next.config.ts</code>:</p>
@@ -84,7 +84,7 @@
 </blockquote>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="request-correlation">Request Correlation<a href="#request-correlation" class="hash-link" aria-label="Direct link to Request Correlation" title="Direct link to Request Correlation" translate="no">​</a></h2>
-<p>Every HTTP request receives a <code>X-Request-ID</code> UUID header (injected by middleware). This ID:</p>
+<p>Every HTTP request receives a <code>X-Request-ID</code> UUID header (injected by <code>proxy.ts</code>). This ID:</p>
 <ul>
 <li class="">Is propagated through the request context via <code>AsyncLocalStorage</code></li>
 <li class="">Appears in all structured log lines emitted during that request</li>
