@@ -5,15 +5,36 @@ import { jobs } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
+import { CronExpressionParser } from "cron-parser";
+import { getSchedulerTimezone } from "@/lib/scheduler";
 
 const log = createLogger("api");
+
+function computeNextRunAt(schedule: string, timezone: string): string | null {
+  try {
+    const expr = CronExpressionParser.parse(schedule, { tz: timezone });
+    return expr.next().toDate().toISOString();
+  } catch {
+    return null;
+  }
+}
 
 export async function GET() {
   const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
   const rows = await db.select().from(jobs).orderBy(desc(jobs.createdAt));
-  return NextResponse.json(rows);
+  const timezone = await getSchedulerTimezone();
+
+  const enriched = rows.map((row) => ({
+    ...row,
+    nextRunAt:
+      row.status === "active" || row.status === "running"
+        ? computeNextRunAt(row.schedule, timezone)
+        : null,
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 export async function POST(req: NextRequest) {

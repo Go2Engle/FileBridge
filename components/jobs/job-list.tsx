@@ -249,6 +249,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
               <TableHead>Filter</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last Run</TableHead>
+              <TableHead>Next Run</TableHead>
               {isAdmin && <TableHead className="w-32" />}
             </TableRow>
           </TableHeader>
@@ -274,6 +275,11 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                   {job.lastRunAt
                     ? formatDistanceToNow(parseDBDate(job.lastRunAt), { addSuffix: true })
                     : "Never"}
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {job.nextRunAt
+                    ? formatDistanceToNow(new Date(job.nextRunAt), { addSuffix: true })
+                    : "—"}
                 </TableCell>
                 {isAdmin && (
                   <TableCell>
