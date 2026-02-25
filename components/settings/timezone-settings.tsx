@@ -141,18 +141,25 @@ export function TimezoneSettings() {
   const { data } = useQuery<{ timezone: string }>({
     queryKey: ["settings", "timezone"],
     queryFn: () => axios.get("/api/settings/timezone").then((r) => r.data),
+    staleTime: 30_000,
   });
+
+  // Extract the primitive so the effect only fires when the value actually changes,
+  // not every time TanStack Query returns a new object reference on a background refetch.
+  const savedTimezone = data?.timezone;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { timezone: "UTC" },
+    // Initialise from cache immediately on re-visits so the Select has the
+    // correct value on the very first render with no flash or reset needed.
+    defaultValues: { timezone: savedTimezone ?? "UTC" },
   });
 
   useEffect(() => {
-    if (data) {
-      form.reset({ timezone: data.timezone });
+    if (savedTimezone) {
+      form.reset({ timezone: savedTimezone });
     }
-  }, [data, form]);
+  }, [savedTimezone, form]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => axios.post("/api/settings/timezone", values),
