@@ -18,7 +18,7 @@ This guide walks you through installing FileBridge, running the setup wizard, an
 
 ## Prerequisites (From Source)
 
-- **Node.js 18+** (LTS recommended — v20 or v22)
+- **Node.js 20.9+** (LTS recommended — v20 or v22)
 - **npm**, **yarn**, or **pnpm**
 
 No external authentication provider is required to get started. FileBridge includes built-in local authentication.

@@ -68,7 +68,7 @@ FileBridge lets you define **transfer jobs** that move files between storage sys
 
 ## Key Facts
 
-- **Runtime**: Node.js 18+, Next.js 15 App Router
+- **Runtime**: Node.js 20.9+, Next.js 16 App Router
 - **Database**: SQLite (auto-created, no migration step required)
 - **Auth**: Azure AD SSO (Microsoft Entra ID) via NextAuth v5
 - **Deployment**: Single process — native install (systemd/launchd) or Docker (standalone output)

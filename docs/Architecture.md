@@ -42,6 +42,7 @@ FileBridge is a **monolithic Next.js application** — the UI, API, scheduler, a
    - Generates or propagates `X-Request-ID` UUID
    - Validates the NextAuth session cookie
    - Redirects to `/api/auth/signin` if unauthenticated
+   - Note: `middleware.ts` is deprecated in Next.js 16 (superseded by `proxy.ts` for Node.js runtime), but is retained for NextAuth edge runtime compatibility.
 3. The matching Next.js API route handler runs (Node.js runtime)
 4. Handler reads/writes the SQLite database via Drizzle ORM
 5. Handler may interact with storage providers (for connection testing, file browsing)

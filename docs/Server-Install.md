@@ -23,7 +23,7 @@ Everything else is automatic.
 ## What the Installer Does
 
 ### 1 — System check
-Verifies OS, CPU architecture, and `curl`. If Node.js 20+ is not found, it offers to install it automatically via NodeSource (Linux) or Homebrew (macOS).
+Verifies OS, CPU architecture, and `curl`. If Node.js 20.9+ is not found, it offers to install it automatically via NodeSource (Linux) or Homebrew (macOS).
 
 ### 2 — Fetch latest release
 Queries the GitHub Releases API for the latest version tag.
