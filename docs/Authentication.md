@@ -10,7 +10,7 @@ FileBridge uses **NextAuth v5** (Auth.js) with support for **local username/pass
 2. The wizard creates the first local administrator account
 3. Subsequent users sign in via the **Login** page using their username and password
 4. If SSO providers are configured by an admin, SSO buttons appear on the login page
-5. Sessions are JWT-based and validated on every request via `middleware.ts`
+5. Sessions are JWT-based and validated on every request via `proxy.ts`
 
 ---
 
@@ -105,7 +105,7 @@ FileBridge has two roles:
 | Layer | Mechanism |
 |---|---|
 | API routes | `requireAuth()` for read operations, `requireRole("admin")` for mutations |
-| Middleware | JWT validation (edge runtime — checks token existence, not role) |
+| Proxy (`proxy.ts`) | JWT validation (Node.js runtime — checks token existence, not role) |
 | UI components | `useRole()` hook conditionally renders admin-only controls |
 
 ---
@@ -171,9 +171,9 @@ FileBridge uses JWT-based sessions with a 1-hour max age. Sessions are validated
 
 ---
 
-## Middleware
+## Proxy
 
-`middleware.ts` intercepts every request (except public paths) and:
+`proxy.ts` intercepts every request (except public paths) and:
 
 1. Generates or propagates a `X-Request-ID` correlation UUID for log tracing
 2. Checks for a valid NextAuth JWT session

@@ -147,7 +147,7 @@ The IP address is extracted in order of preference:
 
 ## Correlation with Structured Logs
 
-Audit log entries work alongside the structured log output. The `X-Request-ID` header (set by middleware) appears in structured log lines for the same request, allowing you to correlate:
+Audit log entries work alongside the structured log output. The `X-Request-ID` header (set by `proxy.ts`) appears in structured log lines for the same request, allowing you to correlate:
 - The audit log entry (who did what, to what)
 - The structured log lines (what actually happened during execution)
 

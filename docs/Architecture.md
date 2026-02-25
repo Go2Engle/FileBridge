@@ -38,11 +38,10 @@ FileBridge is a **monolithic Next.js application** — the UI, API, scheduler, a
 ### Browser → API Request
 
 1. Browser sends an HTTP request (via TanStack Query)
-2. `middleware.ts` runs (Edge runtime):
+2. `proxy.ts` runs (Node.js runtime):
    - Generates or propagates `X-Request-ID` UUID
-   - Validates the NextAuth session cookie
-   - Redirects to `/api/auth/signin` if unauthenticated
-   - Note: `middleware.ts` is deprecated in Next.js 16 (superseded by `proxy.ts` for Node.js runtime), but is retained for NextAuth edge runtime compatibility.
+   - Validates the NextAuth session JWT
+   - Redirects to `/login` if unauthenticated
 3. The matching Next.js API route handler runs (Node.js runtime)
 4. Handler reads/writes the SQLite database via Drizzle ORM
 5. Handler may interact with storage providers (for connection testing, file browsing)
@@ -101,9 +100,8 @@ components/
 
 lib/
 ├── auth/                             # NextAuth config + session helpers
-│   ├── config.ts                     # Provider, callbacks, access control
-│   ├── index.ts                      # Node.js runtime auth export
-│   └── edge.ts                       # Edge runtime auth export (middleware)
+│   ├── config.ts                     # Shared callbacks, session strategy, cookie config
+│   └── index.ts                      # Full auth export (providers, DB, SSO)
 ├── db/
 │   ├── schema.ts                     # Drizzle table definitions + TypeScript types
 │   └── index.ts                      # SQLite connection + schema init
@@ -125,7 +123,7 @@ lib/
 ├── env.ts                            # Zod env validation (fail-fast startup)
 └── utils.ts                          # Shared utilities (cn, etc.)
 
-middleware.ts                         # Auth + request ID injection (Edge runtime)
+proxy.ts                              # Auth + request ID injection (Node.js runtime)
 instrumentation.ts                    # Scheduler init on Node.js server startup
 ```
 

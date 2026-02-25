@@ -203,7 +203,7 @@ log.info("Something happened", { key: "value" });
 log.error("Something failed", { error: err });
 ```
 
-Never use `console.log` in server-side code (except in `lib/auth/config.ts` which runs in the Edge runtime).
+Never use `console.log` in server-side code (except in `lib/auth/config.ts` which is initialized before the pino async context is available).
 
 ### Audit Logging
 

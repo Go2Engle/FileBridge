@@ -37,7 +37,7 @@ Roles are enforced at three layers:
 | Layer | Mechanism |
 |---|---|
 | API routes | `requireAuth()` for read operations, `requireRole("admin")` for mutations |
-| Middleware | JWT validation (edge runtime — checks token existence) |
+| Proxy (`proxy.ts`) | JWT validation (Node.js runtime — checks token existence) |
 | UI components | `useRole()` hook conditionally renders admin-only controls |
 
 ### Session Security
@@ -49,7 +49,7 @@ Roles are enforced at three layers:
 
 ### Dev Bypass
 
-The `AUTH_BYPASS_DEV=true` mode is enforced by checking `NODE_ENV === "development"` in middleware. It cannot be activated in production builds. Do not set this flag in production.
+The `AUTH_BYPASS_DEV=true` mode is enforced by checking `NODE_ENV === "development"` in `proxy.ts`. It cannot be activated in production builds. Do not set this flag in production.
 
 ---
 
@@ -115,7 +115,7 @@ Connection credentials are stored as JSON in the `connections.credentials` colum
 
 ## Request Correlation
 
-Every HTTP request receives a `X-Request-ID` UUID header (injected by middleware). This ID:
+Every HTTP request receives a `X-Request-ID` UUID header (injected by `proxy.ts`). This ID:
 
 - Is propagated through the request context via `AsyncLocalStorage`
 - Appears in all structured log lines emitted during that request

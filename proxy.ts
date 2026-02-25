@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth/edge";
+import { auth } from "@/lib/auth";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const requestId =
     request.headers.get("x-request-id") ?? crypto.randomUUID();
 
@@ -16,7 +16,6 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // @ts-expect-error NextAuth middleware signature
   const response = await auth(request);
   if (response instanceof NextResponse) {
     response.headers.set("x-request-id", requestId);

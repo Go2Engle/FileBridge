@@ -100,7 +100,7 @@ export async function POST(req: Request) {
 }
 ```
 
-The middleware automatically sets `X-Request-ID` on every incoming request, so the ID is consistent across the full request lifecycle.
+`proxy.ts` automatically sets `X-Request-ID` on every incoming request, so the ID is consistent across the full request lifecycle.
 
 ### Job Context
 
@@ -147,7 +147,7 @@ Components and their logger names:
 | Backup | `backup` |
 | Env validator | `env` |
 
-> **Note**: `lib/auth/config.ts` intentionally uses `console.*` instead of pino. The NextAuth config runs in the Edge runtime, which does not support the Node.js `async_hooks` module that pino's context propagation depends on.
+> **Note**: `lib/auth/config.ts` intentionally uses `console.*` instead of pino. NextAuth initializes this config during module load, before the pino async context is available.
 
 ---
 
@@ -221,7 +221,7 @@ Then configure Promtail to scrape the Docker json-file log driver and parse the 
 The `X-Request-ID` UUID ties structured log lines to audit events:
 
 1. A user clicks "Run Now" in the UI → browser sends `POST /api/jobs/7/run`
-2. Middleware generates `X-Request-ID: abc-123` and sets it on the response
+2. `proxy.ts` generates `X-Request-ID: abc-123` and sets it on the response
 3. The API handler uses `withRequestContext("abc-123", ...)` so all its log lines include `requestId: "abc-123"`
 4. The audit log entry for the execution contains the userId and action
 5. Structured logs with `requestId: "abc-123"` contain the full execution detail

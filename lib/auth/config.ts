@@ -1,9 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 
 /**
- * Edge-safe auth config — used by middleware (edge runtime).
- * Must NOT import anything that requires Node.js (fs, crypto, better-sqlite3, etc.).
- * Providers are NOT defined here — they're only needed for sign-in, not JWT validation.
+ * Shared auth config — used by both proxy.ts and lib/auth/index.ts.
+ * Providers are NOT defined here — they're added in lib/auth/index.ts at runtime.
  */
 
 // Use secure cookies only when the configured URL is actually HTTPS.
