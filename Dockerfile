@@ -14,18 +14,22 @@ FROM node:20-alpine AS base
 FROM base AS deps
 # libc6-compat: compatibility shim for some musl/glibc binaries
 # python3 + make + g++: required to compile native Node add-ons (better-sqlite3, ssh2, v9u-smb2)
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --no-cache libc6-compat python3 make g++
 
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # -----------------------------------------------------------------------------
 # builder: compile the Next.js application
 # -----------------------------------------------------------------------------
 FROM base AS builder
-RUN apk add --no-cache libc6-compat python3 make g++
+# Only libc6-compat needed — native modules are already compiled in deps
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --no-cache libc6-compat
 
 WORKDIR /app
 
@@ -47,7 +51,8 @@ FROM base AS runner
 
 # openssl: required for the legacy provider (--openssl-legacy-provider) which
 # v9u-smb2 needs for NTLM authentication (uses MD4, dropped in OpenSSL 3 defaults).
-RUN apk add --no-cache libc6-compat openssl
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --no-cache libc6-compat openssl
 
 WORKDIR /app
 

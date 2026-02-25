@@ -204,17 +204,31 @@ jobs:
           # Write version marker so install.sh can detect the installed version
           echo "$TAG" > "$STANDALONE/FILEBRIDGE_VERSION"
 
-          # Stage only the runtime files needed by the server.
-          # Next.js file tracing can pull source files and repo docs into the
-          # standalone directory — we explicitly include only what is required
-          # so that tarballs don't ship prd.md, README, website/, etc.
+          # Stage the full standalone output, then strip build-only artefacts.
+          # Next.js file tracing legitimately includes compiled lib/ files (needed
+          # by instrumentation.js dynamic imports) but also sweeps in docs, build
+          # configs, and other repo files. We copy everything then delete only what
+          # we know is not required at runtime.
           STAGE=$(mktemp -d)
-          cp    "$STANDALONE/server.js"   "$STAGE/"
-          cp    "$STANDALONE/package.json" "$STAGE/"
-          cp    "$STANDALONE/FILEBRIDGE_VERSION" "$STAGE/"
-          cp -r "$STANDALONE/.next"       "$STAGE/"
-          cp -r "$STANDALONE/node_modules" "$STAGE/"
-          [ -d "$STANDALONE/public" ] && cp -r "$STANDALONE/public" "$STAGE/" || true
+          cp -r "$STANDALONE/." "$STAGE/"
+
+          rm -rf \
+            "$STAGE/docs"             \
+            "$STAGE/website"          \
+            "$STAGE/images"           \
+            "$STAGE/prd.md"           \
+            "$STAGE/README.md"        \
+            "$STAGE/LICENSE"          \
+            "$STAGE/index.html"       \
+            "$STAGE/install.sh"       \
+            "$STAGE/Dockerfile"       \
+            "$STAGE/next.config.ts"   \
+            "$STAGE/tsconfig.json"    \
+            "$STAGE/eslint.config.mjs" \
+            "$STAGE/postcss.config.mjs" \
+            "$STAGE/drizzle.config.ts" \
+            "$STAGE/components.json"  \
+            "$STAGE/package-lock.json"
 
           # Create the tarball with contents at the root (not nested)
           tar -czf "$TARBALL" -C "$STAGE" .
