@@ -17,6 +17,7 @@ export async function GET() {
   const safeRows = rows.map(({ credentials, ...rest }) => ({
     ...rest,
     username: (credentials as Record<string, string>)?.username ?? "",
+    basePath: (credentials as Record<string, string>)?.basePath ?? "",
   }));
   return NextResponse.json(safeRows);
 }

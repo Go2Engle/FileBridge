@@ -33,6 +33,8 @@ const baseSchema = z.object({
   password: z.string().optional(),
   privateKey: z.string().optional(),
   passphrase: z.string().optional(),
+  // SFTP remote root path (for servers that restrict access to a subdirectory)
+  basePath: z.string().optional(),
   // SMB extra fields
   domain: z.string().optional(),
   share: z.string().optional(),
@@ -93,6 +95,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       password: "",
       privateKey: "",
       passphrase: "",
+      basePath: "",
       domain: "",
       share: "",
       container: "",
@@ -124,6 +127,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         password: creds.password ?? "",
         privateKey: creds.privateKey ?? "",
         passphrase: creds.passphrase ?? "",
+        basePath: creds.basePath ?? "",
         domain: creds.domain ?? "",
         share: creds.share ?? "",
         container: creds.container ?? "",
@@ -140,6 +144,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
         password: "",
         privateKey: "",
         passphrase: "",
+        basePath: "",
         domain: "",
         share: "",
         container: "",
@@ -160,7 +165,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   }, [protocol, isEditing, form]);
 
   function buildCredentials(values: FormValues): Record<string, string> {
-    const { protocol, host, username, password, privateKey, passphrase, domain, share, container, accountKey, connectionString } = values;
+    const { protocol, host, username, password, privateKey, passphrase, basePath, domain, share, container, accountKey, connectionString } = values;
     const credentials: Record<string, string> = {};
 
     if (protocol === "sftp") {
@@ -168,6 +173,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       if (password) credentials.password = password;
       if (privateKey) credentials.privateKey = privateKey;
       if (passphrase) credentials.passphrase = passphrase;
+      if (basePath?.trim()) credentials.basePath = basePath.trim();
     } else if (protocol === "smb") {
       credentials.username = username ?? "";
       if (password) credentials.password = password;
@@ -403,6 +409,26 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                       <FormControl>
                         <Input type="password" placeholder="Optional" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="basePath"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Remote Root Path{" "}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="/home/user" className="font-mono" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Starting directory for file browsing. Set this if the server restricts your
+                        access to a subdirectory (e.g. <span className="font-mono">/one/two</span>).
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

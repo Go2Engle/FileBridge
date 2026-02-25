@@ -20,7 +20,7 @@ import type { Connection } from "@/lib/db/schema";
 import { useRole } from "@/hooks/use-role";
 
 // The list endpoint strips credentials and adds a top-level username for display
-type ConnectionSummary = Omit<Connection, "credentials"> & { username: string };
+type ConnectionSummary = Omit<Connection, "credentials"> & { username: string; basePath: string };
 import { parseDBDate } from "@/lib/utils";
 import { FileBrowserDialog } from "@/components/ui/file-browser-dialog";
 
@@ -288,6 +288,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
         connectionId={browser.conn.id}
         connectionName={browser.conn.name}
         isAdmin={isAdmin}
+        initialPath={browser.conn.basePath || "/"}
         onClose={() => setBrowser(null)}
       />
     )}

@@ -80,9 +80,11 @@ function parentPath(p: string): string {
 
 function Breadcrumb({
   path,
+  rootPath,
   onNavigate,
 }: {
   path: string;
+  rootPath: string;
   onNavigate: (p: string) => void;
 }) {
   const parts = path.split("/").filter(Boolean);
@@ -94,9 +96,9 @@ function Breadcrumb({
   return (
     <div className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
       <button
-        onClick={() => onNavigate("/")}
+        onClick={() => onNavigate(rootPath)}
         className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-        title="Root"
+        title={rootPath === "/" ? "Root" : `Home (${rootPath})`}
       >
         <Home className="h-3.5 w-3.5" />
       </button>
@@ -430,7 +432,7 @@ export function FileBrowserDialog({
             </TooltipProvider>
 
             <div className="flex-1 min-w-0 flex items-center gap-2 rounded-md border bg-background px-3 py-1.5">
-              <Breadcrumb path={currentPath} onNavigate={setCurrentPath} />
+              <Breadcrumb path={currentPath} rootPath={initialPath} onNavigate={setCurrentPath} />
             </div>
 
             <TooltipProvider delayDuration={400}>
