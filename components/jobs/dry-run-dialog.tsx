@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  AlertCircle,
+  CircleAlert,
   ArrowRight,
   CheckCheck,
   Filter,
@@ -167,7 +167,7 @@ export function DryRunDialog({ job, open, onClose }: DryRunDialogProps) {
 
         {error && (
           <div className="flex flex-col items-center gap-3 py-10">
-            <AlertCircle className="h-6 w-6 text-destructive" />
+            <CircleAlert className="h-6 w-6 text-destructive" />
             <p className="text-sm text-destructive text-center max-w-sm">{error}</p>
             {job && (
               <Button variant="outline" size="sm" onClick={() => run(job.id)}>

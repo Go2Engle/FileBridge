@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -72,7 +72,7 @@ export default function SetupPage() {
   });
 
   const form = useForm<SetupFormValues>({
-    resolver: zodResolver(setupSchema),
+    resolver: zodResolver(setupSchema) as Resolver<SetupFormValues>,
     defaultValues: {
       username: "",
       displayName: "",

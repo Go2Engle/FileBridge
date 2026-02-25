@@ -18,7 +18,7 @@ import {
 import axios from "axios";
 import { formatBytes, parseDBDate } from "@/lib/utils";
 import { format } from "date-fns";
-import { AlertCircle, Search } from "lucide-react";
+import { CircleAlert, Search } from "lucide-react";
 import type { TransferLog } from "@/lib/db/schema";
 import type { Job } from "@/lib/db/schema";
 
@@ -192,7 +192,7 @@ export function LogTable() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger>
-                              <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                              <CircleAlert className="h-3.5 w-3.5 text-destructive" />
                             </TooltipTrigger>
                             <TooltipContent side="left" className="max-w-xs">
                               <p className="text-xs">{log.errorMessage}</p>

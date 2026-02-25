@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Edit2, FolderSearch, Loader2, Plus, PlugZap, Search, Trash2 } from "lucide-react";
+import { PenLine, FolderSearch, Loader2, Plus, PlugZap, Search, Trash2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -257,7 +257,7 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                           size="icon"
                           onClick={() => onEdit(conn)}
                         >
-                          <Edit2 className="h-4 w-4" />
+                          <PenLine className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"

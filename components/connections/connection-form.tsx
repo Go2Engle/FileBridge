@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -83,7 +83,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   const [isBrowsing, setIsBrowsing] = useState(false);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(baseSchema),
+    resolver: zodResolver(baseSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
       protocol: "sftp",

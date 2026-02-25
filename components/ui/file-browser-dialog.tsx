@@ -41,17 +41,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  AlertCircle,
+  CircleAlert,
   ArrowLeft,
   ChevronRight,
-  Edit2,
+  PenLine,
   File,
   Folder,
   FolderOpen,
   FolderPlus,
   Home,
   Loader2,
-  RefreshCcw,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import type { FileInfo } from "@/lib/storage/interface";
@@ -227,7 +227,7 @@ function RenameDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Edit2 className="h-4 w-4" />
+            <PenLine className="h-4 w-4" />
             Rename
           </DialogTitle>
         </DialogHeader>
@@ -443,7 +443,7 @@ export function FileBrowserDialog({
                     onClick={invalidate}
                     disabled={isFetching}
                   >
-                    <RefreshCcw
+                    <RotateCcw
                       className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
                     />
                   </Button>
@@ -479,7 +479,7 @@ export function FileBrowserDialog({
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive p-8 text-center">
-                <AlertCircle className="h-8 w-8" />
+                <CircleAlert className="h-8 w-8" />
                 <p className="text-sm font-medium">Failed to load directory</p>
                 <p className="text-xs text-muted-foreground max-w-sm">
                   {(
@@ -561,7 +561,7 @@ export function FileBrowserDialog({
                                       className="h-6 w-6"
                                       onClick={() => setRenameEntry(entry)}
                                     >
-                                      <Edit2 className="h-3 w-3" />
+                                      <PenLine className="h-3 w-3" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>Rename</TooltipContent>

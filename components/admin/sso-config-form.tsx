@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -59,7 +59,7 @@ export function SsoConfigForm({
   const isEdit = !!editProvider;
 
   const form = useForm<SsoFormValues>({
-    resolver: zodResolver(ssoSchema),
+    resolver: zodResolver(ssoSchema) as Resolver<SsoFormValues>,
     defaultValues: {
       provider: "azure-ad",
       enabled: true,

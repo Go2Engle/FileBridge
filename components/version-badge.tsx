@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpCircle } from "lucide-react";
+import { CircleArrowUp } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +44,7 @@ export function VersionBadge() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-[11px] font-medium text-amber-500 hover:text-amber-400 transition-colors"
               >
-                <ArrowUpCircle className="h-3 w-3" />
+                <CircleArrowUp className="h-3 w-3" />
                 Update available
               </a>
             </TooltipTrigger>

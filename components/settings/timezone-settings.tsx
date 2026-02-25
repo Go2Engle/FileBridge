@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -149,7 +149,7 @@ export function TimezoneSettings() {
   const savedTimezone = data?.timezone;
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<FormValues>,
     // Initialise from cache immediately on re-visits so the Select has the
     // correct value on the very first render with no flash or reset needed.
     defaultValues: { timezone: savedTimezone ?? "UTC" },

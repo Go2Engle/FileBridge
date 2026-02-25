@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import cron from "node-cron";
+import { schedule, validate } from "node-cron";
+import type { ScheduledTask } from "node-cron";
 import { db, sqlite } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -45,7 +46,7 @@ export interface BackupEntry {
   createdAt: string;
 }
 
-let backupTask: cron.ScheduledTask | null = null;
+let backupTask: ScheduledTask | null = null;
 
 export async function getBackupConfig(): Promise<BackupConfig> {
   const row = await db.query.settings.findFirst({
@@ -245,12 +246,12 @@ export async function initializeBackupScheduler(): Promise<void> {
     return;
   }
 
-  if (!cron.validate(config.schedule)) {
+  if (!validate(config.schedule)) {
     log.error("Invalid cron expression — backups not scheduled", { schedule: config.schedule });
     return;
   }
 
-  backupTask = cron.schedule(config.schedule, async () => {
+  backupTask = schedule(config.schedule, async () => {
     log.info("Starting scheduled backup");
     try {
       const result = await runBackup(config);

@@ -23,7 +23,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  Play, Edit2, AlertCircle, CheckCircle2, XCircle, Clock, FileText,
+  Play, PenLine, CircleAlert, CircleCheckBig, CircleX, Clock, FileText,
   ArrowLeft, Loader2, Search,
 } from "lucide-react";
 import axios from "axios";
@@ -183,7 +183,7 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
                 variant="outline"
                 onClick={() => onEdit(currentJob)}
               >
-                <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+                <PenLine className="h-3.5 w-3.5 mr-1.5" />
                 Edit
               </Button>
             </div>
@@ -400,7 +400,7 @@ function LastRunSummary({ run }: { run: JobRun }) {
       </div>
       {run.errorMessage && (
         <div className="text-xs text-destructive bg-destructive/10 rounded-md p-2 flex items-start gap-1.5">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <CircleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>{run.errorMessage}</span>
         </div>
       )}
@@ -499,7 +499,7 @@ function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
                     {run.errorMessage && (
                       <Tooltip>
                         <TooltipTrigger>
-                          <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                          <CircleAlert className="h-3.5 w-3.5 text-destructive" />
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
                           {run.errorMessage}
@@ -656,7 +656,7 @@ function JobLogsPanel({ job }: { job: Job }) {
                       {log.status === "failure" && log.errorMessage && (
                         <Tooltip>
                           <TooltipTrigger>
-                            <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                            <CircleAlert className="h-3.5 w-3.5 text-destructive" />
                           </TooltipTrigger>
                           <TooltipContent side="left" className="max-w-xs">
                             <p className="text-xs">{log.errorMessage}</p>
@@ -724,15 +724,15 @@ function TransferLogTable({ logs, compact }: { logs: TransferLog[]; compact?: bo
             <TableCell className="max-w-[200px]">
               <div className="flex items-center gap-1.5">
                 {log.status === "success" ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <CircleCheckBig className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                 ) : (
-                  <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                  <CircleX className="h-3.5 w-3.5 text-destructive shrink-0" />
                 )}
                 <span className="truncate text-sm">{log.fileName}</span>
                 {log.errorMessage && (
                   <Tooltip>
                     <TooltipTrigger>
-                      <AlertCircle className="h-3 w-3 text-destructive shrink-0" />
+                      <CircleAlert className="h-3 w-3 text-destructive shrink-0" />
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
                       {log.errorMessage}

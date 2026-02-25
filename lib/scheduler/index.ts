@@ -1,4 +1,5 @@
-import cron from "node-cron";
+import { schedule, validate } from "node-cron";
+import type { ScheduledTask } from "node-cron";
 import { db } from "@/lib/db";
 import { jobs, settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -7,7 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("scheduler");
-const scheduledTasks = new Map<number, cron.ScheduledTask>();
+const scheduledTasks = new Map<number, ScheduledTask>();
 
 export async function getSchedulerTimezone(): Promise<string> {
   try {
@@ -46,12 +47,12 @@ export async function initializeScheduler(): Promise<void> {
 function scheduleJobWithTimezone(jobId: number, cronExpression: string, timezone: string): void {
   unscheduleJob(jobId);
 
-  if (!cron.validate(cronExpression)) {
+  if (!validate(cronExpression)) {
     log.error("Invalid cron expression", { jobId, cronExpression });
     return;
   }
 
-  const task = cron.schedule(
+  const task = schedule(
     cronExpression,
     async () => {
       // Re-check status from DB before running — the in-memory map can drift

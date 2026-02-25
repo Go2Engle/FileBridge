@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -126,7 +126,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
   });
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(jobSchema),
+    resolver: zodResolver(jobSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
       sourceConnectionId: 0,

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, CheckCircle, Files, HardDrive } from "lucide-react";
+import { ArrowUpRight, CircleCheck, Files, HardDrive } from "lucide-react";
 import axios from "axios";
 import { formatBytes } from "@/lib/utils";
 
@@ -58,7 +58,7 @@ export function StatsCards() {
       title: "Success Rate",
       value: `${(data?.successRate ?? 0).toFixed(1)}%`,
       sub: "Last 7 days",
-      icon: CheckCircle,
+      icon: CircleCheck,
     },
     {
       title: "Active Jobs",

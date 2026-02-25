@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -115,7 +115,7 @@ export function BackupSettings() {
   });
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(backupSchema),
+    resolver: zodResolver(backupSchema) as Resolver<FormValues>,
     defaultValues: {
       enabled: false,
       schedulePreset: "0 2 * * *",

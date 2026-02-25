@@ -15,7 +15,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { AlertCircle, Edit2, FlaskConical, Play, Plus, Search, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { CircleAlert, PenLine, FlaskConical, Play, Plus, Search, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -49,7 +49,7 @@ function JobErrorInfo({ jobId }: { jobId: number }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <AlertCircle className="h-3.5 w-3.5 text-destructive cursor-help shrink-0" />
+        <CircleAlert className="h-3.5 w-3.5 text-destructive cursor-help shrink-0" />
       </TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
         {lastError}
@@ -332,7 +332,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                         <TooltipContent>Dry run</TooltipContent>
                       </Tooltip>
                       <Button variant="ghost" size="icon" onClick={() => onEdit(job)}>
-                        <Edit2 className="h-4 w-4" />
+                        <PenLine className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"

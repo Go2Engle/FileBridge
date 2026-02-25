@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ChevronRight, Folder, FolderOpen, File, Home, AlertCircle, ArrowLeft,
+  ChevronRight, Folder, FolderOpen, File, Home, CircleAlert, ArrowLeft,
 } from "lucide-react";
 import type { FileInfo } from "@/lib/storage/interface";
 
@@ -157,7 +157,7 @@ export function FolderBrowser({
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-destructive p-6 text-center">
-              <AlertCircle className="h-6 w-6" />
+              <CircleAlert className="h-6 w-6" />
               <p className="text-sm font-medium">Failed to load directory</p>
               <p className="text-xs text-muted-foreground">
                 {(error as { response?: { data?: { error?: string } } }).response?.data?.error ??
