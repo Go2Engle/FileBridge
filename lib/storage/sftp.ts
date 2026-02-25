@@ -139,4 +139,8 @@ export class SftpProvider implements StorageProvider {
       throw err;
     }
   }
+
+  async getWorkingDirectory(): Promise<string> {
+    return this.client.cwd();
+  }
 }

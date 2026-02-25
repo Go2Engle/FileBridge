@@ -17,6 +17,12 @@ export interface StorageProvider {
   moveFile(sourcePath: string, destinationPath: string): Promise<void>;
   /** Create a new directory at the given path. */
   createDirectory(path: string): Promise<void>;
+  /**
+   * Return the server's working directory for the connected user.
+   * Only implemented by providers that support it (e.g. SFTP).
+   * Used to auto-detect the starting browse path when none is configured.
+   */
+  getWorkingDirectory?(): Promise<string>;
 }
 
 /**

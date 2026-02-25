@@ -288,14 +288,22 @@ export function FileBrowserDialog({
   initialPath = "/",
 }: FileBrowserDialogProps) {
   const queryClient = useQueryClient();
-  const [currentPath, setCurrentPath] = useState(initialPath);
+  // When no explicit path is configured (initialPath is "/"), use "." so the
+  // server auto-detects the working directory (like WinSCP does via realpath).
+  const [currentPath, setCurrentPath] = useState(initialPath === "/" ? "." : initialPath);
+  // rootPath tracks the "home" destination for the breadcrumb Home button.
+  // Starts as "/" and is updated once the server resolves the real working dir.
+  const [rootPath, setRootPath] = useState(initialPath);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renameEntry, setRenameEntry] = useState<FileInfo | null>(null);
   const [deleteEntry, setDeleteEntry] = useState<FileInfo | null>(null);
 
-  // Reset path when dialog opens
+  // Reset path when dialog opens or initialPath changes
   useEffect(() => {
-    if (open) setCurrentPath(initialPath);
+    if (open) {
+      setCurrentPath(initialPath === "/" ? "." : initialPath);
+      setRootPath(initialPath);
+    }
   }, [open, initialPath]);
 
   const browseKey = ["browse", connectionId, currentPath];
@@ -315,6 +323,15 @@ export function FileBrowserDialog({
     retry: false,
     staleTime: 30_000,
   });
+
+  // When "." auto-detection resolves, sync currentPath and rootPath to the
+  // real server-side working directory returned in the response.
+  useEffect(() => {
+    if (data?.path && currentPath === "." && data.path !== ".") {
+      setCurrentPath(data.path);
+      setRootPath(data.path);
+    }
+  }, [data?.path, currentPath]);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: browseKey });
@@ -422,7 +439,7 @@ export function FileBrowserDialog({
                     size="icon"
                     className="h-7 w-7 shrink-0"
                     onClick={() => setCurrentPath(parentPath(currentPath))}
-                    disabled={currentPath === "/"}
+                    disabled={currentPath === "/" || currentPath === rootPath || currentPath === "."}
                   >
                     <ArrowLeft className="h-3.5 w-3.5" />
                   </Button>
@@ -432,7 +449,7 @@ export function FileBrowserDialog({
             </TooltipProvider>
 
             <div className="flex-1 min-w-0 flex items-center gap-2 rounded-md border bg-background px-3 py-1.5">
-              <Breadcrumb path={currentPath} rootPath={initialPath} onNavigate={setCurrentPath} />
+              <Breadcrumb path={currentPath} rootPath={rootPath} onNavigate={setCurrentPath} />
             </div>
 
             <TooltipProvider delayDuration={400}>

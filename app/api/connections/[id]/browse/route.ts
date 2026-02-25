@@ -17,7 +17,7 @@ export async function GET(
 
   const { id } = await params;
   const { searchParams } = new URL(req.url);
-  const browsePath = searchParams.get("path") || "/";
+  const requestedPath = searchParams.get("path") || "/";
 
   const conn = await db.query.connections.findFirst({
     where: eq(connections.id, Number(id)),
@@ -30,6 +30,15 @@ export async function GET(
 
   try {
     await provider.connect();
+
+    // "." means "auto-detect": ask the server for its working directory.
+    // This mirrors how WinSCP finds the correct starting folder without
+    // requiring the user to configure a remote root path manually.
+    let browsePath = requestedPath;
+    if (requestedPath === "." && provider.getWorkingDirectory) {
+      browsePath = await provider.getWorkingDirectory();
+    }
+
     const entries = await provider.listDirectory(browsePath);
     await provider.disconnect();
 
