@@ -35,8 +35,10 @@ export async function GET(
     // This mirrors how WinSCP finds the correct starting folder without
     // requiring the user to configure a remote root path manually.
     let browsePath = requestedPath;
-    if (requestedPath === "." && provider.getWorkingDirectory) {
-      browsePath = await provider.getWorkingDirectory();
+    if (requestedPath === ".") {
+      browsePath = provider.getWorkingDirectory
+        ? await provider.getWorkingDirectory()
+        : "/";
     }
 
     const entries = await provider.listDirectory(browsePath);

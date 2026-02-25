@@ -16,11 +16,15 @@ export async function POST(req: NextRequest) {
   const provider = createStorageProvider({ protocol, host, port, credentials });
   try {
     await provider.connect();
-    const items = await provider.listDirectory("/");
+    const testPath = provider.getWorkingDirectory
+      ? await provider.getWorkingDirectory()
+      : "/";
+    const items = await provider.listDirectory(testPath);
     await provider.disconnect();
+    const pathLabel = testPath === "/" ? "root" : testPath;
     return NextResponse.json({
       success: true,
-      message: `Connected successfully. Found ${items.length} item(s) at root.`,
+      message: `Connected successfully. Found ${items.length} item(s) at ${pathLabel}.`,
     });
   } catch (err) {
     await provider.disconnect().catch(() => {});
