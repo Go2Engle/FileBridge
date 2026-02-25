@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![Release & Publish](https://github.com/Go2Engle/FileBridge/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Go2Engle/FileBridge/actions/workflows/docker-publish.yml)
+[![Release & Publish](https://github.com/Go2Engle/FileBridge/actions/workflows/release.yml/badge.svg)](https://github.com/Go2Engle/FileBridge/actions/workflows/release.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/Go2Engle/FileBridge?logo=github&logoColor=white&color=4c1)](https://github.com/Go2Engle/FileBridge/releases/latest)
 [![Docker](https://img.shields.io/badge/ghcr.io%2Fgo2engle%2Ffilebridge-2496ED?logo=docker&logoColor=white&label=docker)](https://github.com/Go2Engle/FileBridge/pkgs/container/filebridge)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
