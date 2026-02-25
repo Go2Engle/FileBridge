@@ -708,14 +708,39 @@ run_install() {
 
   # Step 3 — Configuration
   print_step "Configuration"
+
+  # On reinstall, seed defaults from the existing env file so the user
+  # doesn't accidentally reset their URL/port to localhost defaults.
+  local _default_url _default_port
+  if [ "$FORCE_REINSTALL" = "true" ] && [ -f "$ENV_FILE" ]; then
+    _default_url=$(read_env_value "NEXTAUTH_URL" "http://localhost:${DEFAULT_PORT}")
+    _default_port=$(read_env_value "PORT" "$DEFAULT_PORT")
+  else
+    _default_url="http://localhost:${DEFAULT_PORT}"
+    _default_port="$DEFAULT_PORT"
+  fi
+
   local fb_url fb_port fb_secret
-  fb_url=$(prompt_or_env "FILEBRIDGE_URL"  "External URL" "http://localhost:3000")
-  fb_port=$(prompt_or_env "FILEBRIDGE_PORT" "Port"        "$DEFAULT_PORT")
+  fb_url=$(prompt_or_env "FILEBRIDGE_URL"  "External URL" "$_default_url")
+  fb_port=$(prompt_or_env "FILEBRIDGE_PORT" "Port"        "$_default_port")
   printf "\n"
 
   if [ -n "${FILEBRIDGE_AUTH_SECRET:-}" ]; then
     fb_secret="$FILEBRIDGE_AUTH_SECRET"
     ok "Using provided AUTH_SECRET"
+  elif [ "$FORCE_REINSTALL" = "true" ] && [ -f "$ENV_FILE" ]; then
+    # Preserve the existing secret so that SSO credentials (encrypted with
+    # this key and stored in the database) remain decryptable after reinstall.
+    local _existing_secret
+    _existing_secret=$(read_env_value "AUTH_SECRET")
+    if [ -n "$_existing_secret" ]; then
+      fb_secret="$_existing_secret"
+      ok "Preserving existing AUTH_SECRET (required to decrypt stored SSO credentials)"
+    else
+      start_spinner "Generating AUTH_SECRET"
+      fb_secret=$(generate_secret)
+      stop_spinner "ok"
+    fi
   else
     start_spinner "Generating AUTH_SECRET"
     fb_secret=$(generate_secret)
