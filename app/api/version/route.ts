@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { readFileSync } from "fs";
-import { join } from "path";
 import pkg from "@/package.json";
 
 const GITHUB_REPO = "Go2Engle/FileBridge";
@@ -16,19 +14,8 @@ function compareSemver(a: string, b: string): number {
   return aPatch - bPatch;
 }
 
-function getInstalledVersion(): string {
-  try {
-    return readFileSync(join(process.cwd(), "FILEBRIDGE_VERSION"), "utf-8")
-      .trim()
-      .replace(/^v/, "");
-  } catch {
-    // FILEBRIDGE_VERSION not present (Docker or dev) — fall back to build-time value
-    return pkg.version;
-  }
-}
-
 export async function GET() {
-  const currentVersion = getInstalledVersion();
+  const currentVersion = pkg.version;
   let latestVersion: string | null = null;
   let updateAvailable = false;
 
