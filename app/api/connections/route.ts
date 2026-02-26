@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireRole } from "@/lib/auth/rbac";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
+import { getAllConnections, encryptCreds } from "@/lib/db/connections";
 
 const log = createLogger("api");
 
@@ -12,12 +12,12 @@ export async function GET() {
   const auth = await requireAuth();
   if ("error" in auth) return auth.error;
 
-  const rows = await db.select().from(connections).orderBy(desc(connections.createdAt));
+  const rows = getAllConnections();
   // Strip credentials — return only safe display fields
   const safeRows = rows.map(({ credentials, ...rest }) => ({
     ...rest,
-    username: (credentials as Record<string, string>)?.username ?? "",
-    basePath: (credentials as Record<string, string>)?.basePath ?? "",
+    username: credentials?.username ?? "",
+    basePath: credentials?.basePath ?? "",
   }));
   return NextResponse.json(safeRows);
 }
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     const [row] = await db
       .insert(connections)
-      .values({ name, protocol, host, port, credentials })
+      .values({ name, protocol, host, port, credentials: encryptCreds(credentials) })
       .returning();
 
     logAudit({

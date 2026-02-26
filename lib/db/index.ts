@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
 import fs from "fs";
+import { encrypt } from "../crypto";
 
 const DB_PATH =
   process.env.DATABASE_PATH ||
@@ -236,6 +237,31 @@ if (connDef2 && !connDef2.sql.includes("'local'")) {
 sqlite.exec(
   `DELETE FROM transfer_logs WHERE file_size = 0 AND file_name NOT LIKE '%.%'`
 );
+
+// Migrate: encrypt any plaintext JSON credentials that pre-date field-level encryption.
+// Plain JSON starts with '{'; our encrypted format is base64:base64:base64.
+// This runs once per startup — already-encrypted rows are skipped.
+if (!isBuildPhase) {
+  try {
+    const credRows = sqlite
+      .prepare("SELECT id, credentials FROM connections")
+      .all() as Array<{ id: number; credentials: string }>;
+    const updateStmt = sqlite.prepare(
+      "UPDATE connections SET credentials = ? WHERE id = ?"
+    );
+    for (const row of credRows) {
+      if (row.credentials && row.credentials.trimStart().startsWith("{")) {
+        updateStmt.run(encrypt(row.credentials), row.id);
+      }
+    }
+  } catch (err) {
+    // Likely AUTH_SECRET is not configured. Credentials stay plaintext until it is.
+    console.warn(
+      "[FileBridge] Could not encrypt connection credentials at startup:",
+      err instanceof Error ? err.message : err
+    );
+  }
+}
 
 export const db = drizzle(sqlite, { schema });
 

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/rbac";
-import { db } from "@/lib/db";
-import { connections } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { createStorageProvider } from "@/lib/storage/registry";
+import { getConnection } from "@/lib/db/connections";
 
 export async function POST(
   _req: NextRequest,
@@ -13,10 +11,7 @@ export async function POST(
   if ("error" in result) return result.error;
 
   const { id } = await params;
-  const [conn] = await db
-    .select()
-    .from(connections)
-    .where(eq(connections.id, Number(id)));
+  const conn = getConnection(Number(id));
 
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

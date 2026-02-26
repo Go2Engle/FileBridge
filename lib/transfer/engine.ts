@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { jobs, jobRuns, transferLogs, connections } from "@/lib/db/schema";
+import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getConnection } from "@/lib/db/connections";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
@@ -147,16 +148,12 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
   if (!job) throw new Error(`Job ${jobId} not found`);
 
-  const srcConn = await db.query.connections.findFirst({
-    where: eq(connections.id, job.sourceConnectionId),
-  });
-  const dstConn = await db.query.connections.findFirst({
-    where: eq(connections.id, job.destinationConnectionId),
-  });
+  const srcConn = getConnection(job.sourceConnectionId);
+  const dstConn = getConnection(job.destinationConnectionId);
   if (!srcConn) throw new Error(`Source connection ${job.sourceConnectionId} not found`);
   if (!dstConn) throw new Error(`Destination connection ${job.destinationConnectionId} not found`);
 
-  const source = createStorageProvider(srcConn as Parameters<typeof createStorageProvider>[0]);
+  const source = createStorageProvider(srcConn);
   await source.connect();
 
   try {
@@ -190,7 +187,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
     let existingDestFiles: Set<string> = new Set();
     let destFileTimes: Map<string, Date> = new Map();
     if (!job.overwriteExisting || job.deltaSync) {
-      const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
+      const dest = createStorageProvider(dstConn);
       try {
         await dest.connect();
         const destListing = await dest.listFiles(job.destinationPath);
@@ -293,12 +290,8 @@ export async function runJob(jobId: number): Promise<void> {
   const previousStatus = job.status;
 
   // Load connections
-  const srcConn = await db.query.connections.findFirst({
-    where: eq(connections.id, job.sourceConnectionId),
-  });
-  const dstConn = await db.query.connections.findFirst({
-    where: eq(connections.id, job.destinationConnectionId),
-  });
+  const srcConn = getConnection(job.sourceConnectionId);
+  const dstConn = getConnection(job.destinationConnectionId);
 
   if (!srcConn) {
     throw new Error(`Source connection ${job.sourceConnectionId} not found for job ${jobId}`);
@@ -334,8 +327,8 @@ export async function runJob(jobId: number): Promise<void> {
       .set({ status: "running", updatedAt: new Date().toISOString() })
       .where(eq(jobs.id, jobId));
 
-    const source = createStorageProvider(srcConn as Parameters<typeof createStorageProvider>[0]);
-    const dest = createStorageProvider(dstConn as Parameters<typeof createStorageProvider>[0]);
+    const source = createStorageProvider(srcConn);
+    const dest = createStorageProvider(dstConn);
 
     try {
       log.info("Connecting to source", { protocol: srcConn.protocol });

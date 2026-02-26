@@ -7,9 +7,7 @@ export const connections = sqliteTable("connections", {
   protocol: text("protocol", { enum: ["sftp", "smb", "azure-blob", "local"] }).notNull(),
   host: text("host").notNull(),
   port: integer("port").notNull(),
-  credentials: text("credentials", { mode: "json" })
-    .notNull()
-    .$type<Record<string, string>>(),
+  credentials: text("credentials").notNull(),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),

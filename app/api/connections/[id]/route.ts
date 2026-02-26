@@ -5,6 +5,7 @@ import { connections, jobs } from "@/lib/db/schema";
 import { eq, or } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest, diffChanges } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
+import { getConnection, encryptCreds } from "@/lib/db/connections";
 
 const log = createLogger("api");
 
@@ -16,10 +17,7 @@ export async function GET(
   if ("error" in auth) return auth.error;
 
   const { id } = await params;
-  const [conn] = await db
-    .select()
-    .from(connections)
-    .where(eq(connections.id, Number(id)));
+  const conn = getConnection(Number(id));
 
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(conn);
@@ -51,7 +49,7 @@ export async function PUT(
         protocol,
         host,
         port,
-        credentials,
+        credentials: encryptCreds(credentials),
         updatedAt: new Date().toISOString(),
       })
       .where(eq(connections.id, Number(id)))

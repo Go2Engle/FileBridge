@@ -107,9 +107,16 @@ These are replaced with `"[REDACTED]"` before the log line is written — they n
 
 ### Database Storage
 
-Connection credentials are stored as JSON in the `connections.credentials` column of the SQLite database. The database file itself is not encrypted at rest.
+Connection credentials are **encrypted at rest** using AES-256-GCM before being stored in the `connections.credentials` column. The encryption key is derived from `AUTH_SECRET` (the same key used for SSO secrets).
 
-> **Known Gap**: Field-level encryption for connection credentials at rest is planned (see [Roadmap](Roadmap)). Until implemented, secure the database file with filesystem permissions (`chmod 600 data/filebridge.db`) and restrict access to the host.
+- **Algorithm**: AES-256-GCM
+- **Key derivation**: SHA-256 hash of `AUTH_SECRET`
+- **Storage format**: Base64-encoded IV + auth tag + ciphertext (`iv:tag:data`)
+- **Migration**: On startup, any pre-existing plaintext JSON credentials are automatically encrypted in place.
+
+If `AUTH_SECRET` is rotated, existing encrypted connection credentials must be re-entered.
+
+> The database file itself is not encrypted at rest. Restrict filesystem access with `chmod 600 data/filebridge.db` as an additional layer of defense.
 
 ---
 
@@ -177,7 +184,6 @@ The following issues are acknowledged and tracked in the [Roadmap](Roadmap):
 
 | Gap | Risk | Status |
 |---|---|---|
-| Connection credentials not encrypted at rest | If the database file is stolen, connection credentials are readable as JSON | Planned: libsodium field encryption |
 | No API input validation (Zod schemas on POST/PUT) | Malformed input could cause unexpected behavior | Planned |
 | No rate limiting | Brute-force or DoS possible on API routes (including login) | Planned |
 | No CSRF protection | Same-origin policy provides some protection, but no explicit CSRF tokens | Planned |

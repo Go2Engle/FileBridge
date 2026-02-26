@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import type { Connection } from "@/lib/db/schema";
+import type { DecryptedConnection } from "@/lib/db/connections";
 import { LocalFolderPicker } from "@/components/ui/local-folder-picker";
 
 const baseSchema = z.object({
@@ -108,7 +109,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
 
   // Fetch the full connection (including credentials) when editing.
   // The list endpoint strips credentials for security, so we need a dedicated fetch.
-  const { data: fullConnection } = useQuery<Connection>({
+  const { data: fullConnection } = useQuery<DecryptedConnection>({
     queryKey: ["connections", editConnection?.id],
     queryFn: () => axios.get(`/api/connections/${editConnection!.id}`).then((r) => r.data),
     enabled: !!editConnection,
@@ -117,7 +118,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   useEffect(() => {
     if (!open) return;
     if (editConnection && fullConnection) {
-      const creds = fullConnection.credentials as Record<string, string>;
+      const creds = fullConnection.credentials;
       form.reset({
         name: fullConnection.name,
         protocol: fullConnection.protocol as FormValues["protocol"],

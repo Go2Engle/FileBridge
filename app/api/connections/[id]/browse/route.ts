@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/rbac";
-import { db } from "@/lib/db";
-import { connections } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { createLogger } from "@/lib/logger";
+import { getConnection } from "@/lib/db/connections";
 
 const log = createLogger("api");
 
@@ -19,14 +17,10 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const requestedPath = searchParams.get("path") || "/";
 
-  const conn = await db.query.connections.findFirst({
-    where: eq(connections.id, Number(id)),
-  });
+  const conn = getConnection(Number(id));
   if (!conn) return NextResponse.json({ error: "Connection not found" }, { status: 404 });
 
-  const provider = createStorageProvider(
-    conn as Parameters<typeof createStorageProvider>[0]
-  );
+  const provider = createStorageProvider(conn);
 
   // Declared outside try so it's accessible in the catch log below.
   let browsePath = requestedPath;
