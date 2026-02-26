@@ -5,7 +5,7 @@ import { getConnection } from "@/lib/db/connections";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
-import { Readable, PassThrough } from "stream";
+import { Readable, Transform } from "stream";
 import { gunzipSync } from "zlib";
 import AdmZip from "adm-zip";
 import * as tar from "tar-stream";
@@ -88,7 +88,7 @@ async function verifyDestinationFileSize(
   const parentPath = path.posix.dirname(dstFilePath);
   const fileName = path.posix.basename(dstFilePath);
   const isSmbDestination = destinationProtocol === "smb";
-  const maxAttempts = isSmbDestination ? 30 : 5;
+  const maxAttempts = isSmbDestination ? 10 : 5;
   const pollIntervalMs = isSmbDestination ? 1000 : 500;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -680,12 +680,29 @@ export async function runJob(jobId: number): Promise<void> {
               .set({ currentFileSize: fileSize, currentFileBytesTransferred: 0 })
               .where(eq(jobRuns.id, run.id));
 
+            // Delete existing destination file BEFORE creating the download stream
+            // to avoid a race where data flows through the tracker before the
+            // upload consumer attaches.
+            if (job.overwriteExisting || job.deltaSync) {
+              try {
+                await dest.deleteFile(dstFilePath);
+                log.debug("Deleted existing destination file", { dstPath: dstFilePath });
+              } catch {
+                // File doesn't exist yet — that's fine
+              }
+            }
+
             const srcStream = await source.downloadFile(srcFilePath, fileSize);
 
-            // Wrap in a PassThrough to count bytes as chunks flow through
+            // Transform counts bytes inside _transform — stays paused until the
+            // consumer (uploadFile) starts pulling, so no data is lost.
             let currentBytes = 0;
-            const tracker = new PassThrough();
-            tracker.on("data", (chunk: Buffer) => { currentBytes += chunk.length; });
+            const tracker = new Transform({
+              transform(chunk, _encoding, callback) {
+                currentBytes += chunk.length;
+                callback(null, chunk);
+              },
+            });
             srcStream.pipe(tracker);
             // Propagate errors bidirectionally
             srcStream.on("error", (err) => tracker.destroy(err));
@@ -698,18 +715,6 @@ export async function runJob(jobId: number): Promise<void> {
                 .where(eq(jobRuns.id, run.id))
                 .catch(() => {});
             }, 500);
-
-            // Delete existing destination file first when overwrite is enabled, or when
-            // delta sync is replacing a file that passed the timestamp check (source is newer).
-            // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
-            if (job.overwriteExisting || job.deltaSync) {
-              try {
-                await dest.deleteFile(dstFilePath);
-                log.debug("Deleted existing destination file", { dstPath: dstFilePath });
-              } catch {
-                // File doesn't exist yet — that's fine
-              }
-            }
 
             try {
               await dest.uploadFile(tracker, dstFilePath, fileSize);
