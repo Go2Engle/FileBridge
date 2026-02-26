@@ -198,7 +198,7 @@ export class AzureBlobProvider implements StorageProvider {
     }
   }
 
-  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string, _sizeHint?: number): Promise<void> {
     const blobName = toBlobName(remotePath);
     log.info("Uploading blob (stream)", { blobName });
     try {

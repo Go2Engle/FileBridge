@@ -103,7 +103,7 @@ export class SftpProvider implements StorageProvider {
     return (this.client as any).createReadStream(remotePath) as Readable;
   }
 
-  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string, _sizeHint?: number): Promise<void> {
     // Ensure parent directory exists
     const dir = path.posix.dirname(remotePath);
     await this.client.mkdir(dir, true).catch(() => {});

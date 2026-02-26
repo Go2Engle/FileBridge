@@ -20,7 +20,7 @@ export interface StorageProvider {
    *   upload begins.
    */
   downloadFile(remotePath: string, sizeHint?: number): Promise<Readable>;
-  uploadFile(stream: Readable, remotePath: string): Promise<void>;
+  uploadFile(stream: Readable, remotePath: string, sizeHint?: number): Promise<void>;
   deleteFile(remotePath: string): Promise<void>;
   moveFile(sourcePath: string, destinationPath: string): Promise<void>;
   /** Create a new directory at the given path. */

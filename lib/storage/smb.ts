@@ -26,6 +26,7 @@ export interface SmbCredentials {
  * converted with toSmbPath() before being passed to the library.
  */
 export class SmbProvider implements StorageProvider {
+  private static readonly BUFFERED_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   private credentials: SmbCredentials;
@@ -108,6 +109,16 @@ export class SmbProvider implements StorageProvider {
       this.client.createWriteStream(smbPath, { flags: "w" }, (err: any, stream: Writable) => {
         if (err) reject(err);
         else resolve(stream);
+      });
+    });
+  }
+
+  private writeFileAsync(smbPath: string, content: Buffer): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.client.writeFile(smbPath, content, { flags: "w" }, (err: any) => {
+        if (err) reject(err);
+        else resolve();
       });
     });
   }
@@ -199,6 +210,14 @@ export class SmbProvider implements StorageProvider {
         }
       });
     };
+  }
+
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   /**
@@ -325,9 +344,19 @@ export class SmbProvider implements StorageProvider {
     throw new Error("[SMB] downloadFile: exceeded retry limit");
   }
 
-  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string, sizeHint?: number): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
     log.info("Uploading file (stream)", { smbPath });
+
+    if (typeof sizeHint === "number" && sizeHint <= SmbProvider.BUFFERED_UPLOAD_MAX_BYTES) {
+      const content = await this.streamToBuffer(stream);
+      if (content.length !== sizeHint) {
+        throw new Error(`SMB buffered upload byte mismatch: expected ${sizeHint}, got ${content.length}`);
+      }
+      await this.writeFileAsync(smbPath, content);
+      return;
+    }
+
     // Retry only the stream establishment — once pipeline starts, the source
     // stream is consumed and cannot be replayed.
     let dest!: Writable;

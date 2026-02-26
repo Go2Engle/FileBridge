@@ -107,7 +107,7 @@ export class LocalProvider implements StorageProvider {
     return createReadStream(fullPath);
   }
 
-  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string, _sizeHint?: number): Promise<void> {
     const fullPath = this.resolvePath(remotePath);
     log.info("Uploading file (stream)", { fullPath });
     try {

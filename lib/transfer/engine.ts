@@ -566,7 +566,7 @@ export async function runJob(jobId: number): Promise<void> {
                     }
                   }
 
-                  await dest.uploadFile(Readable.from(entry.content), entryDstPath);
+                  await dest.uploadFile(Readable.from(entry.content), entryDstPath, entry.content.length);
                   await verifyDestinationFileSize(dest, entryDstPath, entry.content.length, dstConn.protocol);
                   log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
 
@@ -632,7 +632,7 @@ export async function runJob(jobId: number): Promise<void> {
               }
             }
 
-            await dest.uploadFile(Readable.from(content), dstFilePath);
+            await dest.uploadFile(Readable.from(content), dstFilePath, actualSize);
             await verifyDestinationFileSize(dest, dstFilePath, actualSize, dstConn.protocol);
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
@@ -712,7 +712,7 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             try {
-              await dest.uploadFile(tracker, dstFilePath);
+              await dest.uploadFile(tracker, dstFilePath, fileSize);
             } finally {
               clearInterval(progressInterval);
               // Write final byte count (interval may not have fired for the last chunk)
