@@ -1,4 +1,7 @@
 import fs from "fs/promises";
+import { createReadStream, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
+import type { Readable } from "stream";
 import path from "path";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
@@ -98,23 +101,18 @@ export class LocalProvider implements StorageProvider {
     }
   }
 
-  async downloadFile(remotePath: string): Promise<Buffer> {
+  async downloadFile(remotePath: string): Promise<Readable> {
     const fullPath = this.resolvePath(remotePath);
-    log.info("Downloading file", { fullPath });
-    try {
-      return await fs.readFile(fullPath);
-    } catch (err) {
-      log.error("downloadFile failed", { fullPath, error: err });
-      throw err;
-    }
+    log.info("Downloading file (stream)", { fullPath });
+    return createReadStream(fullPath);
   }
 
-  async uploadFile(content: Buffer, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
     const fullPath = this.resolvePath(remotePath);
-    log.info("Uploading file", { fullPath, size: content.length });
+    log.info("Uploading file (stream)", { fullPath });
     try {
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
-      await fs.writeFile(fullPath, content);
+      await pipeline(stream, createWriteStream(fullPath));
     } catch (err) {
       log.error("uploadFile failed", { fullPath, error: err });
       throw err;

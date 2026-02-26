@@ -1,4 +1,5 @@
 import SftpClient from "ssh2-sftp-client";
+import type { Readable } from "stream";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
 import path from "path";
@@ -97,26 +98,17 @@ export class SftpProvider implements StorageProvider {
     }
   }
 
-  async downloadFile(remotePath: string): Promise<Buffer> {
-    const data = await this.client.get(remotePath);
-    if (Buffer.isBuffer(data)) return data;
-    if (typeof data === "string") return Buffer.from(data);
-    // Stream case — treat as unknown to work around ssh2-sftp-client type variance
+  async downloadFile(remotePath: string): Promise<Readable> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stream = data as unknown as NodeJS.ReadableStream;
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      stream.on("end", () => resolve(Buffer.concat(chunks)));
-      stream.on("error", reject);
-    });
+    return (this.client as any).createReadStream(remotePath) as Readable;
   }
 
-  async uploadFile(content: Buffer, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
     // Ensure parent directory exists
     const dir = path.posix.dirname(remotePath);
     await this.client.mkdir(dir, true).catch(() => {});
-    await this.client.put(content, remotePath);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (this.client as any).put(stream, remotePath);
   }
 
   async deleteFile(remotePath: string): Promise<void> {

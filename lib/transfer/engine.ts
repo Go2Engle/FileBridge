@@ -5,12 +5,21 @@ import { getConnection } from "@/lib/db/connections";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
+import { Readable } from "stream";
 import { gunzipSync } from "zlib";
 import AdmZip from "adm-zip";
 import * as tar from "tar-stream";
 import { createLogger, withJobContext } from "@/lib/logger";
 
 const log = createLogger("engine");
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Buffer));
+  }
+  return Buffer.concat(chunks);
+}
 
 interface ExtractedFile {
   name: string;
@@ -442,12 +451,13 @@ export async function runJob(jobId: number): Promise<void> {
         log.info("Transferring file", { fileName: file.name, fileSize: file.size });
 
         try {
-          const content = await source.downloadFile(srcFilePath);
-          const actualSize = content.length;
-          log.info("File downloaded", { fileName: file.name, actualSize });
-
-          // Archive extraction: if enabled and file is an archive, extract and upload individual files
+          // ── Archive path: buffer the stream so we can extract entries ─────────
           if (job.extractArchives && isArchive(file.name)) {
+            const srcStream = await source.downloadFile(srcFilePath);
+            const content = await streamToBuffer(srcStream);
+            const actualSize = content.length;
+            log.info("Archive downloaded", { fileName: file.name, actualSize });
+
             const extracted = await extractArchive(file.name, content);
             if (extracted && extracted.length > 0) {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
@@ -472,7 +482,7 @@ export async function runJob(jobId: number): Promise<void> {
                     }
                   }
 
-                  await dest.uploadFile(entry.content, entryDstPath);
+                  await dest.uploadFile(Readable.from(entry.content), entryDstPath);
                   log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
 
                   await db.insert(transferLogs).values({
@@ -524,60 +534,107 @@ export async function runJob(jobId: number): Promise<void> {
 
               continue; // Skip normal upload — we already handled this file
             }
-            // If extraction returned null or empty, fall through to normal transfer
+            // Archive yielded no entries — upload as-is (fall through using buffered content)
             log.info("Archive yielded no entries — transferring as-is", { fileName: file.name });
-          }
 
-          // Normal transfer (non-archive or extraction not enabled)
-          log.info("Uploading file", { fileName: file.name });
+            if (job.overwriteExisting || job.deltaSync) {
+              try {
+                await dest.deleteFile(dstFilePath);
+                log.debug("Deleted existing destination file", { dstPath: dstFilePath });
+              } catch {
+                // File doesn't exist yet — that's fine
+              }
+            }
 
-          // Delete existing destination file first when overwrite is enabled, or when
-          // delta sync is replacing a file that passed the timestamp check (source is newer).
-          // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
-          if (job.overwriteExisting || job.deltaSync) {
+            await dest.uploadFile(Readable.from(content), dstFilePath);
+            log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+
+            await db.insert(transferLogs).values({
+              jobId,
+              jobRunId: run.id,
+              fileName: file.name,
+              sourcePath: srcFilePath,
+              destinationPath: dstFilePath,
+              fileSize: actualSize,
+              transferredAt: new Date().toISOString(),
+              status: "success",
+            });
+
             try {
-              await dest.deleteFile(dstFilePath);
-              log.debug("Deleted existing destination file", { dstPath: dstFilePath });
-            } catch {
-              // File doesn't exist yet — that's fine
+              if (job.postTransferAction === "delete") {
+                log.info("Deleting source file", { srcPath: srcFilePath });
+                await source.deleteFile(srcFilePath);
+              } else if (job.postTransferAction === "move" && job.movePath) {
+                const moveDest = path.posix.join(job.movePath, file.name);
+                log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
+                await source.moveFile(srcFilePath, moveDest);
+              }
+            } catch (postErr) {
+              log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
             }
-          }
 
-          await dest.uploadFile(content, dstFilePath);
-          log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+            filesTransferred++;
+            bytesTransferred += actualSize;
+            await db
+              .update(jobRuns)
+              .set({ filesTransferred, bytesTransferred })
+              .where(eq(jobRuns.id, run.id));
+          } else {
+            // ── Streaming path: pipe directly from source to destination ─────────
+            // fileSize comes from the directory listing — no need to buffer.
+            const fileSize = file.size;
+            log.info("Streaming file", { fileName: file.name, expectedSize: fileSize });
 
-          // Log success
-          await db.insert(transferLogs).values({
-            jobId,
-            jobRunId: run.id,
-            fileName: file.name,
-            sourcePath: srcFilePath,
-            destinationPath: dstFilePath,
-            fileSize: actualSize,
-            transferredAt: new Date().toISOString(),
-            status: "success",
-          });
+            const srcStream = await source.downloadFile(srcFilePath, fileSize);
 
-          // Post-transfer action
-          try {
-            if (job.postTransferAction === "delete") {
-              log.info("Deleting source file", { srcPath: srcFilePath });
-              await source.deleteFile(srcFilePath);
-            } else if (job.postTransferAction === "move" && job.movePath) {
-              const moveDest = path.posix.join(job.movePath, file.name);
-              log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
-              await source.moveFile(srcFilePath, moveDest);
+            // Delete existing destination file first when overwrite is enabled, or when
+            // delta sync is replacing a file that passed the timestamp check (source is newer).
+            // SMB writeFile fails with STATUS_OBJECT_NAME_COLLISION on existing files.
+            if (job.overwriteExisting || job.deltaSync) {
+              try {
+                await dest.deleteFile(dstFilePath);
+                log.debug("Deleted existing destination file", { dstPath: dstFilePath });
+              } catch {
+                // File doesn't exist yet — that's fine
+              }
             }
-          } catch (postErr) {
-            log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
-          }
 
-          filesTransferred++;
-          bytesTransferred += actualSize;
-          await db
-            .update(jobRuns)
-            .set({ filesTransferred, bytesTransferred })
-            .where(eq(jobRuns.id, run.id));
+            await dest.uploadFile(srcStream, dstFilePath);
+            log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+
+            // Log success
+            await db.insert(transferLogs).values({
+              jobId,
+              jobRunId: run.id,
+              fileName: file.name,
+              sourcePath: srcFilePath,
+              destinationPath: dstFilePath,
+              fileSize,
+              transferredAt: new Date().toISOString(),
+              status: "success",
+            });
+
+            // Post-transfer action
+            try {
+              if (job.postTransferAction === "delete") {
+                log.info("Deleting source file", { srcPath: srcFilePath });
+                await source.deleteFile(srcFilePath);
+              } else if (job.postTransferAction === "move" && job.movePath) {
+                const moveDest = path.posix.join(job.movePath, file.name);
+                log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
+                await source.moveFile(srcFilePath, moveDest);
+              }
+            } catch (postErr) {
+              log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
+            }
+
+            filesTransferred++;
+            bytesTransferred += fileSize;
+            await db
+              .update(jobRuns)
+              .set({ filesTransferred, bytesTransferred })
+              .where(eq(jobRuns.id, run.id));
+          }
         } catch (fileError) {
           // Skip directories that slipped through the listing filter
           if (isDirectoryError(fileError)) {

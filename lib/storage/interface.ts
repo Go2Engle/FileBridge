@@ -1,3 +1,5 @@
+import type { Readable } from "stream";
+
 export interface FileInfo {
   name: string;
   size: number;
@@ -11,8 +13,14 @@ export interface StorageProvider {
   listFiles(path: string, filter?: string): Promise<FileInfo[]>;
   /** List all entries (files + directories) at a path for UI browsing. */
   listDirectory(path: string): Promise<FileInfo[]>;
-  downloadFile(remotePath: string): Promise<Buffer>;
-  uploadFile(content: Buffer, remotePath: string): Promise<void>;
+  /**
+   * @param sizeHint Optional file size in bytes from the directory listing.
+   *   Providers that cannot stream (e.g. SMB) use this to decide whether to
+   *   spool the download to a temp file so the RAM buffer is freed before the
+   *   upload begins.
+   */
+  downloadFile(remotePath: string, sizeHint?: number): Promise<Readable>;
+  uploadFile(stream: Readable, remotePath: string): Promise<void>;
   deleteFile(remotePath: string): Promise<void>;
   moveFile(sourcePath: string, destinationPath: string): Promise<void>;
   /** Create a new directory at the given path. */

@@ -1,3 +1,9 @@
+import os from "os";
+import path from "path";
+import { createReadStream } from "fs";
+import fsp from "fs/promises";
+import { randomUUID } from "crypto";
+import { Readable } from "stream";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
 import { createLogger } from "@/lib/logger";
@@ -128,6 +134,18 @@ export class SmbProvider implements StorageProvider {
     });
   }
 
+  /**
+   * Collect a Readable stream into a Buffer.
+   * v9u-smb2 has no streaming API, so uploads must be buffered before writing.
+   */
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Buffer));
+    }
+    return Buffer.concat(chunks);
+  }
+
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   /**
@@ -238,9 +256,14 @@ export class SmbProvider implements StorageProvider {
     }
   }
 
-  async downloadFile(remotePath: string): Promise<Buffer> {
+  async downloadFile(remotePath: string, sizeHint?: number): Promise<Readable> {
     const smbPath = this.toSmbPath(remotePath);
-    log.info("Downloading file", { smbPath });
+    // Spool to a temp file when the file is large relative to available RAM so
+    // the buffer can be freed from memory before the upload phase begins.
+    // v9u-smb2 has no streaming read API — we must buffer the whole file first.
+    const freeRam = os.freemem();
+    const useTempFile = sizeHint !== undefined && sizeHint > freeRam * 0.5;
+    log.info("Downloading file", { smbPath, sizeHint, freeRam, useTempFile });
     // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
     // while the connection was idle; reconnect creates a fresh session.
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -249,7 +272,22 @@ export class SmbProvider implements StorageProvider {
         // Record when the read completed so sharingViolationWaitMs() knows how
         // long to wait before any subsequent delete/move on this connection.
         this.lastDownloadAt = Date.now();
-        return data;
+
+        if (useTempFile) {
+          // Write buffer to disk so it can be freed from RAM before uploading.
+          const tmpPath = path.join(
+            os.tmpdir(),
+            `filebridge-smb-${Date.now()}-${randomUUID()}`
+          );
+          await fsp.writeFile(tmpPath, data);
+          log.info("Large SMB file spooled to temp storage", { smbPath, tmpPath, size: data.length });
+          const stream = createReadStream(tmpPath);
+          const cleanup = () => fsp.unlink(tmpPath).catch(() => {});
+          stream.on("close", cleanup);
+          return stream;
+        }
+
+        return Readable.from(data);
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         const isStaleSession =
@@ -269,8 +307,10 @@ export class SmbProvider implements StorageProvider {
     throw new Error("[SMB] downloadFile: exceeded retry limit");
   }
 
-  async uploadFile(content: Buffer, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
+    // v9u-smb2 has no streaming API — collect the stream into a Buffer first.
+    const content = await this.streamToBuffer(stream);
     log.info("Uploading file", { smbPath, size: content.length });
     // Retry on ERR_STREAM_WRITE_AFTER_END / STATUS_FILE_CLOSED: auto-close fired
     // while the SMB connection was idle (e.g. during a long SFTP extraction loop);

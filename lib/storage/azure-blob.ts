@@ -3,6 +3,7 @@ import {
   StorageSharedKeyCredential,
   ContainerClient,
 } from "@azure/storage-blob";
+import type { Readable } from "stream";
 import path from "path";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
@@ -179,9 +180,9 @@ export class AzureBlobProvider implements StorageProvider {
     }
   }
 
-  async downloadFile(remotePath: string): Promise<Buffer> {
+  async downloadFile(remotePath: string): Promise<Readable> {
     const blobName = toBlobName(remotePath);
-    log.info("Downloading blob", { blobName });
+    log.info("Downloading blob (stream)", { blobName });
     try {
       const blobClient = this.containerClient.getBlobClient(blobName);
       const response = await blobClient.download(0);
@@ -190,25 +191,19 @@ export class AzureBlobProvider implements StorageProvider {
         throw new Error(`[AzureBlob] No stream body returned for "${blobName}"`);
       }
 
-      const chunks: Buffer[] = [];
-      for await (const chunk of response.readableStreamBody) {
-        // chunk may be Buffer, Uint8Array, or string depending on stream encoding
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as any));
-      }
-      return Buffer.concat(chunks);
+      return response.readableStreamBody as unknown as Readable;
     } catch (err) {
       log.error("downloadFile failed", { blobName, error: err });
       throw err;
     }
   }
 
-  async uploadFile(content: Buffer, remotePath: string): Promise<void> {
+  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
     const blobName = toBlobName(remotePath);
-    log.info("Uploading blob", { blobName, size: content.length });
+    log.info("Uploading blob (stream)", { blobName });
     try {
       const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
-      await blockBlobClient.upload(content, content.length, {
+      await blockBlobClient.uploadStream(stream, 4 * 1024 * 1024, 4, {
         blobHTTPHeaders: {
           blobContentType: inferContentType(blobName),
         },
