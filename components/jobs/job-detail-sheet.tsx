@@ -157,9 +157,17 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
           <SheetDescription className="text-xs">
             {currentJob && (
               <>
-                {connMap.get(currentJob.sourceConnectionId) ?? "Source"}:{currentJob.sourcePath}
+                <span className="font-medium text-foreground">
+                  {connMap.get(currentJob.sourceConnectionId) ?? "Source"}
+                </span>
+                {" "}
+                <span className="font-mono">{currentJob.sourcePath}</span>
                 {" → "}
-                {connMap.get(currentJob.destinationConnectionId) ?? "Destination"}:{currentJob.destinationPath}
+                <span className="font-medium text-foreground">
+                  {connMap.get(currentJob.destinationConnectionId) ?? "Destination"}
+                </span>
+                {" "}
+                <span className="font-mono">{currentJob.destinationPath}</span>
               </>
             )}
           </SheetDescription>
@@ -331,12 +339,18 @@ function OverviewPanel({
       <div className="text-sm font-medium">Job Configuration</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div className="text-muted-foreground">Source</div>
-        <div className="truncate">
-          {connMap.get(job.sourceConnectionId) ?? `Connection #${job.sourceConnectionId}`}:{job.sourcePath}
+        <div className="min-w-0">
+          <div className="font-medium truncate">
+            {connMap.get(job.sourceConnectionId) ?? `Connection #${job.sourceConnectionId}`}
+          </div>
+          <div className="font-mono text-xs text-muted-foreground truncate">{job.sourcePath}</div>
         </div>
         <div className="text-muted-foreground">Destination</div>
-        <div className="truncate">
-          {connMap.get(job.destinationConnectionId) ?? `Connection #${job.destinationConnectionId}`}:{job.destinationPath}
+        <div className="min-w-0">
+          <div className="font-medium truncate">
+            {connMap.get(job.destinationConnectionId) ?? `Connection #${job.destinationConnectionId}`}
+          </div>
+          <div className="font-mono text-xs text-muted-foreground truncate">{job.destinationPath}</div>
         </div>
         <div className="text-muted-foreground">File Filter</div>
         <div className="font-mono text-xs">{job.fileFilter}</div>
