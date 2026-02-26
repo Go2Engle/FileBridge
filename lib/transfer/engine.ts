@@ -82,12 +82,14 @@ async function deleteSourceAndConfirm(source: ReturnType<typeof createStoragePro
 async function verifyDestinationFileSize(
   dest: ReturnType<typeof createStorageProvider>,
   dstFilePath: string,
-  expectedSize: number
+  expectedSize: number,
+  destinationProtocol?: string
 ): Promise<void> {
   const parentPath = path.posix.dirname(dstFilePath);
   const fileName = path.posix.basename(dstFilePath);
-  const maxAttempts = 5;
-  const pollIntervalMs = 500;
+  const isSmbDestination = destinationProtocol === "smb";
+  const maxAttempts = isSmbDestination ? 30 : 5;
+  const pollIntervalMs = isSmbDestination ? 1000 : 500;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -565,7 +567,7 @@ export async function runJob(jobId: number): Promise<void> {
                   }
 
                   await dest.uploadFile(Readable.from(entry.content), entryDstPath);
-                  await verifyDestinationFileSize(dest, entryDstPath, entry.content.length);
+                  await verifyDestinationFileSize(dest, entryDstPath, entry.content.length, dstConn.protocol);
                   log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
 
                   await db.insert(transferLogs).values({
@@ -631,7 +633,7 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             await dest.uploadFile(Readable.from(content), dstFilePath);
-            await verifyDestinationFileSize(dest, dstFilePath, actualSize);
+            await verifyDestinationFileSize(dest, dstFilePath, actualSize, dstConn.protocol);
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
             await db.insert(transferLogs).values({
@@ -724,7 +726,7 @@ export async function runJob(jobId: number): Promise<void> {
               throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
             }
 
-            await verifyDestinationFileSize(dest, dstFilePath, fileSize);
+            await verifyDestinationFileSize(dest, dstFilePath, fileSize, dstConn.protocol);
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
             // Log success
