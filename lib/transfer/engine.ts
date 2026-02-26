@@ -44,6 +44,83 @@ function isArchive(fileName: string): boolean {
   return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
+async function verifySourceFileDeleted(source: ReturnType<typeof createStorageProvider>, srcFilePath: string): Promise<void> {
+  const parentPath = path.posix.dirname(srcFilePath);
+  const fileName = path.posix.basename(srcFilePath);
+  const maxAttempts = 30;
+  const pollIntervalMs = 1000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const files = await source.listFiles(parentPath);
+      const stillExists = files.some((f) => f.name === fileName);
+      if (!stillExists) {
+        log.info("Source delete confirmed", { srcPath: srcFilePath, attempt });
+        return;
+      }
+    } catch (err) {
+      log.warn("Delete verification list failed — retrying", {
+        srcPath: srcFilePath,
+        attempt,
+        error: err,
+      });
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+  }
+
+  throw new Error(`Source file still present after delete verification window: ${srcFilePath}`);
+}
+
+async function deleteSourceAndConfirm(source: ReturnType<typeof createStorageProvider>, srcFilePath: string): Promise<void> {
+  await source.deleteFile(srcFilePath);
+  await verifySourceFileDeleted(source, srcFilePath);
+}
+
+async function verifyDestinationFileSize(
+  dest: ReturnType<typeof createStorageProvider>,
+  dstFilePath: string,
+  expectedSize: number
+): Promise<void> {
+  const parentPath = path.posix.dirname(dstFilePath);
+  const fileName = path.posix.basename(dstFilePath);
+  const maxAttempts = 5;
+  const pollIntervalMs = 500;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const files = await dest.listFiles(parentPath);
+      const uploaded = files.find((f) => f.name === fileName);
+      if (uploaded && uploaded.size === expectedSize) {
+        return;
+      }
+      if (uploaded) {
+        log.warn("Destination file size mismatch", {
+          dstPath: dstFilePath,
+          expectedSize,
+          actualSize: uploaded.size,
+          attempt,
+        });
+      }
+    } catch (err) {
+      log.warn("Destination size verification list failed — retrying", {
+        dstPath: dstFilePath,
+        expectedSize,
+        attempt,
+        error: err,
+      });
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+  }
+
+  throw new Error(`Destination file size verification failed: ${dstFilePath}`);
+}
+
 /**
  * WARNING: Delta sync does not apply to archive extraction.
  * When extractArchives is enabled, files land at the destination under their
@@ -451,7 +528,11 @@ export async function runJob(jobId: number): Promise<void> {
 
         log.info("Transferring file", { fileName: file.name, fileSize: file.size });
 
-        try {
+        const maxTransferAttempts = 3;
+        let fileHandled = false;
+        let directorySkipped = false;
+        for (let transferAttempt = 1; transferAttempt <= maxTransferAttempts; transferAttempt++) {
+          try {
           // ── Archive path: buffer the stream so we can extract entries ─────────
           if (job.extractArchives && isArchive(file.name)) {
             const srcStream = await source.downloadFile(srcFilePath);
@@ -484,6 +565,7 @@ export async function runJob(jobId: number): Promise<void> {
                   }
 
                   await dest.uploadFile(Readable.from(entry.content), entryDstPath);
+                  await verifyDestinationFileSize(dest, entryDstPath, entry.content.length);
                   log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
 
                   await db.insert(transferLogs).values({
@@ -523,7 +605,7 @@ export async function runJob(jobId: number): Promise<void> {
               try {
                 if (job.postTransferAction === "delete") {
                   log.info("Deleting source archive", { srcPath: srcFilePath });
-                  await source.deleteFile(srcFilePath);
+                  await deleteSourceAndConfirm(source, srcFilePath);
                 } else if (job.postTransferAction === "move" && job.movePath) {
                   const moveDest = path.posix.join(job.movePath, file.name);
                   log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
@@ -533,7 +615,8 @@ export async function runJob(jobId: number): Promise<void> {
                 log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
               }
 
-              continue; // Skip normal upload — we already handled this file
+              fileHandled = true;
+              break;
             }
             // Archive yielded no entries — upload as-is (fall through using buffered content)
             log.info("Archive yielded no entries — transferring as-is", { fileName: file.name });
@@ -548,6 +631,7 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             await dest.uploadFile(Readable.from(content), dstFilePath);
+            await verifyDestinationFileSize(dest, dstFilePath, actualSize);
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
             await db.insert(transferLogs).values({
@@ -564,7 +648,7 @@ export async function runJob(jobId: number): Promise<void> {
             try {
               if (job.postTransferAction === "delete") {
                 log.info("Deleting source file", { srcPath: srcFilePath });
-                await source.deleteFile(srcFilePath);
+                await deleteSourceAndConfirm(source, srcFilePath);
               } else if (job.postTransferAction === "move" && job.movePath) {
                 const moveDest = path.posix.join(job.movePath, file.name);
                 log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
@@ -580,6 +664,9 @@ export async function runJob(jobId: number): Promise<void> {
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            fileHandled = true;
+            break;
           } else {
             // ── Streaming path: pipe directly from source to destination ─────────
             const fileSize = file.size;
@@ -632,6 +719,12 @@ export async function runJob(jobId: number): Promise<void> {
                 .set({ currentFileBytesTransferred: currentBytes })
                 .where(eq(jobRuns.id, run.id));
             }
+
+            if (currentBytes !== fileSize) {
+              throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
+            }
+
+            await verifyDestinationFileSize(dest, dstFilePath, fileSize);
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
             // Log success
@@ -650,7 +743,7 @@ export async function runJob(jobId: number): Promise<void> {
             try {
               if (job.postTransferAction === "delete") {
                 log.info("Deleting source file", { srcPath: srcFilePath });
-                await source.deleteFile(srcFilePath);
+                await deleteSourceAndConfirm(source, srcFilePath);
               } else if (job.postTransferAction === "move" && job.movePath) {
                 const moveDest = path.posix.join(job.movePath, file.name);
                 log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
@@ -666,27 +759,57 @@ export async function runJob(jobId: number): Promise<void> {
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            fileHandled = true;
+            break;
           }
-        } catch (fileError) {
+          } catch (fileError) {
           // Skip directories that slipped through the listing filter
           if (isDirectoryError(fileError)) {
             log.info("Skipping directory entry", { fileName: file.name });
             filesSkipped++;
-            continue;
+            directorySkipped = true;
+            break;
           }
-          log.error("Failed to transfer file", { fileName: file.name, error: fileError });
-          await db.insert(transferLogs).values({
-            jobId,
-            jobRunId: run.id,
+
+          log.warn("Transfer attempt failed", {
             fileName: file.name,
-            sourcePath: srcFilePath,
-            destinationPath: dstFilePath,
-            fileSize: 0,
-            transferredAt: new Date().toISOString(),
-            status: "failure",
-            errorMessage:
-              fileError instanceof Error ? fileError.message : "Unknown error",
+            attempt: transferAttempt,
+            maxAttempts: maxTransferAttempts,
+            error: fileError,
           });
+
+          try {
+            await dest.deleteFile(dstFilePath);
+            log.warn("Deleted destination file after failed transfer", { fileName: file.name, dstPath: dstFilePath });
+          } catch {
+            // Best effort cleanup only
+          }
+
+          if (transferAttempt >= maxTransferAttempts) {
+            log.error("Failed to transfer file", { fileName: file.name, error: fileError });
+            await db.insert(transferLogs).values({
+              jobId,
+              jobRunId: run.id,
+              fileName: file.name,
+              sourcePath: srcFilePath,
+              destinationPath: dstFilePath,
+              fileSize: 0,
+              transferredAt: new Date().toISOString(),
+              status: "failure",
+              errorMessage:
+                fileError instanceof Error ? fileError.message : "Unknown error",
+            });
+          }
+          }
+        }
+
+        if (directorySkipped) {
+          continue;
+        }
+
+        if (!fileHandled) {
+          continue;
         }
       }
 
