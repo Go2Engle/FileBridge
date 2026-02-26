@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.2">
 <title data-rh="true">Security | FileBridge</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://go2engle.com/FileBridge/docs/Security"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Security | FileBridge"><meta data-rh="true" name="description" content="This page documents FileBridge&#x27;s current security controls, known gaps, and recommendations for hardening production deployments."><meta data-rh="true" property="og:description" content="This page documents FileBridge&#x27;s current security controls, known gaps, and recommendations for hardening production deployments."><link data-rh="true" rel="icon" href="/FileBridge/docs/img/logo.png"><link data-rh="true" rel="canonical" href="https://go2engle.com/FileBridge/docs/Security"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Security" hreflang="en"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Security" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Security","item":"https://go2engle.com/FileBridge/docs/Security"}]}</script><link rel="stylesheet" href="/FileBridge/docs/assets/css/styles.3e5f2db8.css">
-<script src="/FileBridge/docs/assets/js/runtime~main.5c1cc2bc.js" defer="defer"></script>
+<script src="/FileBridge/docs/assets/js/runtime~main.828821e5.js" defer="defer"></script>
 <script src="/FileBridge/docs/assets/js/main.a6f12db2.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -78,9 +78,16 @@
 <p><code>password</code>, <code>privateKey</code>, <code>passphrase</code>, <code>accountKey</code>, <code>connectionString</code>, <code>token</code>, <code>secret</code>, <code>credentials</code></p>
 <p>These are replaced with <code>&quot;[REDACTED]&quot;</code> before the log line is written — they never reach your log aggregation system.</p>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="database-storage">Database Storage<a href="#database-storage" class="hash-link" aria-label="Direct link to Database Storage" title="Direct link to Database Storage" translate="no">​</a></h3>
-<p>Connection credentials are stored as JSON in the <code>connections.credentials</code> column of the SQLite database. The database file itself is not encrypted at rest.</p>
+<p>Connection credentials are <strong>encrypted at rest</strong> using AES-256-GCM before being stored in the <code>connections.credentials</code> column. The encryption key is derived from <code>AUTH_SECRET</code> (the same key used for SSO secrets).</p>
+<ul>
+<li class=""><strong>Algorithm</strong>: AES-256-GCM</li>
+<li class=""><strong>Key derivation</strong>: SHA-256 hash of <code>AUTH_SECRET</code></li>
+<li class=""><strong>Storage format</strong>: Base64-encoded IV + auth tag + ciphertext (<code>iv:tag:data</code>)</li>
+<li class=""><strong>Migration</strong>: On startup, any pre-existing plaintext JSON credentials are automatically encrypted in place.</li>
+</ul>
+<p>If <code>AUTH_SECRET</code> is rotated, existing encrypted connection credentials must be re-entered.</p>
 <blockquote>
-<p><strong>Known Gap</strong>: Field-level encryption for connection credentials at rest is planned (see <a class="" href="/FileBridge/docs/Roadmap">Roadmap</a>). Until implemented, secure the database file with filesystem permissions (<code>chmod 600 data/filebridge.db</code>) and restrict access to the host.</p>
+<p>The database file itself is not encrypted at rest. Restrict filesystem access with <code>chmod 600 data/filebridge.db</code> as an additional layer of defense.</p>
 </blockquote>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="request-correlation">Request Correlation<a href="#request-correlation" class="hash-link" aria-label="Direct link to Request Correlation" title="Direct link to Request Correlation" translate="no">​</a></h2>
@@ -121,7 +128,7 @@
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="known-security-gaps">Known Security Gaps<a href="#known-security-gaps" class="hash-link" aria-label="Direct link to Known Security Gaps" title="Direct link to Known Security Gaps" translate="no">​</a></h2>
 <p>The following issues are acknowledged and tracked in the <a class="" href="/FileBridge/docs/Roadmap">Roadmap</a>:</p>
-<table><thead><tr><th>Gap</th><th>Risk</th><th>Status</th></tr></thead><tbody><tr><td>Connection credentials not encrypted at rest</td><td>If the database file is stolen, connection credentials are readable as JSON</td><td>Planned: libsodium field encryption</td></tr><tr><td>No API input validation (Zod schemas on POST/PUT)</td><td>Malformed input could cause unexpected behavior</td><td>Planned</td></tr><tr><td>No rate limiting</td><td>Brute-force or DoS possible on API routes (including login)</td><td>Planned</td></tr><tr><td>No CSRF protection</td><td>Same-origin policy provides some protection, but no explicit CSRF tokens</td><td>Planned</td></tr></tbody></table>
+<table><thead><tr><th>Gap</th><th>Risk</th><th>Status</th></tr></thead><tbody><tr><td>No API input validation (Zod schemas on POST/PUT)</td><td>Malformed input could cause unexpected behavior</td><td>Planned</td></tr><tr><td>No rate limiting</td><td>Brute-force or DoS possible on API routes (including login)</td><td>Planned</td></tr><tr><td>No CSRF protection</td><td>Same-origin policy provides some protection, but no explicit CSRF tokens</td><td>Planned</td></tr></tbody></table>
 <hr>
 <h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="production-hardening-checklist">Production Hardening Checklist<a href="#production-hardening-checklist" class="hash-link" aria-label="Direct link to Production Hardening Checklist" title="Direct link to Production Hardening Checklist" translate="no">​</a></h2>
 <ul class="contains-task-list containsTaskList_mC6p">
