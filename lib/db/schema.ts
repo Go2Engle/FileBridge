@@ -74,7 +74,10 @@ export const jobRuns = sqliteTable("job_runs", {
   filesTransferred: integer("files_transferred").notNull().default(0),
   bytesTransferred: integer("bytes_transferred").notNull().default(0),
   totalFiles: integer("total_files"),
+  totalBytes: integer("total_bytes"),
   currentFile: text("current_file"),
+  currentFileSize: integer("current_file_size"),
+  currentFileBytesTransferred: integer("current_file_bytes_transferred"),
 });
 
 export const transferLogs = sqliteTable("transfer_logs", {

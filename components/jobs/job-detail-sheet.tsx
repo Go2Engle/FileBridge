@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -78,12 +78,12 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
   const currentJob = freshJob ?? job;
   const isRunning = currentJob?.status === "running";
 
-  // Fetch runs
+  // Fetch runs — poll at 2 s when running for smoother per-file progress updates
   const { data: runs } = useQuery<JobRun[]>({
     queryKey: ["job-runs", job?.id],
     queryFn: () => axios.get(`/api/jobs/${job!.id}/runs`).then((r) => r.data),
     enabled: open && !!job,
-    refetchInterval: isRunning ? 3_000 : 30_000,
+    refetchInterval: isRunning ? 2_000 : 30_000,
   });
 
   // Fetch connections for display names
@@ -255,57 +255,110 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
 function LiveProgressPanel({ job, run }: { job: Job; run: JobRun }) {
   const [elapsed, setElapsed] = useState("");
 
+  // Elapsed timer — ticks every second
   useEffect(() => {
     const startTime = parseDBDate(run.startedAt).getTime();
-    const tick = () => {
-      setElapsed(formatDuration(Date.now() - startTime));
-    };
+    const tick = () => setElapsed(formatDuration(Date.now() - startTime));
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [run.startedAt]);
 
+  // Transfer speed — computed from consecutive poll snapshots
+  const speedRef = useRef<{ bytes: number; time: number } | null>(null);
+  const [speed, setSpeed] = useState(0); // bytes / second
+
+  const totalBytesInFlight = (run.bytesTransferred ?? 0) + (run.currentFileBytesTransferred ?? 0);
+  useEffect(() => {
+    const now = Date.now();
+    if (speedRef.current) {
+      const deltaBytes = totalBytesInFlight - speedRef.current.bytes;
+      const deltaSecs = (now - speedRef.current.time) / 1000;
+      if (deltaSecs > 0 && deltaBytes >= 0) {
+        setSpeed(deltaBytes / deltaSecs);
+      }
+    }
+    speedRef.current = { bytes: totalBytesInFlight, time: now };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.bytesTransferred, run.currentFileBytesTransferred]);
+
+  // Overall progress
   const totalFiles = run.totalFiles ?? 0;
-  const progressPct = totalFiles > 0
-    ? Math.round((run.filesTransferred / totalFiles) * 100)
-    : 0;
+  const totalBytes = run.totalBytes ?? 0;
+  const filePct = totalFiles > 0 ? Math.round((run.filesTransferred / totalFiles) * 100) : 0;
+  const bytesPct = totalBytes > 0 ? Math.min(100, Math.round((totalBytesInFlight / totalBytes) * 100)) : null;
+  const displayPct = bytesPct ?? filePct;
+
+  // Per-file progress
+  const fileSize = run.currentFileSize ?? 0;
+  const fileBytesTransferred = run.currentFileBytesTransferred ?? 0;
+  const fileProgressPct = run.currentFileSize != null && fileSize > 0
+    ? Math.min(100, Math.round((fileBytesTransferred / fileSize) * 100))
+    : null;
+
+  // ETA
+  const eta = useMemo(() => {
+    if (speed <= 0 || totalBytes <= 0) return null;
+    const remaining = totalBytes - totalBytesInFlight;
+    if (remaining <= 0) return null;
+    return formatDuration(Math.round(remaining / speed) * 1000);
+  }, [speed, totalBytes, totalBytesInFlight]);
 
   const { data: logs } = useQuery<TransferLog[]>({
     queryKey: ["run-logs", job.id, run.id],
     queryFn: () =>
       axios.get(`/api/jobs/${job.id}/runs/${run.id}/logs`).then((r) => r.data),
-    refetchInterval: 3_000,
+    refetchInterval: 2_000,
   });
 
   return (
     <div className="space-y-4 pt-2">
+      {/* Overall progress */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground flex items-center gap-1.5">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Transferring...
           </span>
-          <span className="font-medium">{progressPct}%</span>
+          <span className="font-medium">{displayPct}%</span>
         </div>
-        <Progress value={progressPct} />
+        <Progress value={displayPct} />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{run.filesTransferred} / {totalFiles > 0 ? totalFiles : "?"} files</span>
           <span>
-            {run.filesTransferred} / {totalFiles > 0 ? totalFiles : "?"} files
+            {formatBytes(totalBytesInFlight)}
+            {totalBytes > 0 && ` / ${formatBytes(totalBytes)}`}
           </span>
-          <span>{formatBytes(run.bytesTransferred)}</span>
         </div>
       </div>
 
+      {/* Current file with per-file progress bar */}
       {run.currentFile && (
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted/50 rounded-md px-3 py-2">
-          <FileText className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">Current: {run.currentFile}</span>
+        <div className="space-y-1.5 bg-muted/50 rounded-md px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs font-medium truncate">{run.currentFile}</span>
+          </div>
+          {fileProgressPct !== null && (
+            <>
+              <Progress value={fileProgressPct} className="h-1.5" />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{formatBytes(fileBytesTransferred)} / {formatBytes(fileSize)}</span>
+                <span>{fileProgressPct}%</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-        <Clock className="h-3.5 w-3.5" />
-        Elapsed: {elapsed}
+      {/* Speed · elapsed · ETA */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5" />
+          <span>Elapsed: {elapsed}</span>
+          {eta && <span>· ETA: {eta}</span>}
+        </div>
+        {speed > 0 && <span>{formatBytes(Math.round(speed))}/s</span>}
       </div>
 
       {logs && logs.length > 0 && (

@@ -144,6 +144,9 @@ const migrations = [
   `ALTER TABLE job_runs ADD COLUMN total_files INTEGER`,
   `ALTER TABLE job_runs ADD COLUMN current_file TEXT`,
   `ALTER TABLE jobs ADD COLUMN delta_sync INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE job_runs ADD COLUMN total_bytes INTEGER`,
+  `ALTER TABLE job_runs ADD COLUMN current_file_size INTEGER`,
+  `ALTER TABLE job_runs ADD COLUMN current_file_bytes_transferred INTEGER`,
 ];
 
 for (const sql of migrations) {

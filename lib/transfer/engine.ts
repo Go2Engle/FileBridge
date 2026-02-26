@@ -5,7 +5,7 @@ import { getConnection } from "@/lib/db/connections";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
-import { Readable } from "stream";
+import { Readable, PassThrough } from "stream";
 import { gunzipSync } from "zlib";
 import AdmZip from "adm-zip";
 import * as tar from "tar-stream";
@@ -383,10 +383,11 @@ export async function runJob(jobId: number): Promise<void> {
         log.debug("Files to transfer", { files: files.map((f) => ({ name: f.name, size: f.size })) });
       }
 
-      // Update totalFiles on the run so the UI can show progress
+      // Update totalFiles + totalBytes so the UI can show progress
+      const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
       await db
         .update(jobRuns)
-        .set({ totalFiles: files.length })
+        .set({ totalFiles: files.length, totalBytes })
         .where(eq(jobRuns.id, run.id));
 
       // Build a set of existing destination file names so we can skip duplicates
@@ -416,10 +417,10 @@ export async function runJob(jobId: number): Promise<void> {
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
         const dstFilePath = path.posix.join(job.destinationPath, file.name);
 
-        // Update currentFile so the UI shows what's being processed
+        // Update currentFile and clear stale per-file progress from previous file
         await db
           .update(jobRuns)
-          .set({ currentFile: file.name })
+          .set({ currentFile: file.name, currentFileSize: null, currentFileBytesTransferred: null })
           .where(eq(jobRuns.id, run.id));
 
         // Delta sync: skip if destination file is the same age or newer than the source.
@@ -581,11 +582,33 @@ export async function runJob(jobId: number): Promise<void> {
               .where(eq(jobRuns.id, run.id));
           } else {
             // ── Streaming path: pipe directly from source to destination ─────────
-            // fileSize comes from the directory listing — no need to buffer.
             const fileSize = file.size;
             log.info("Streaming file", { fileName: file.name, expectedSize: fileSize });
 
+            // Record the file size so the UI can show a per-file progress bar
+            await db
+              .update(jobRuns)
+              .set({ currentFileSize: fileSize, currentFileBytesTransferred: 0 })
+              .where(eq(jobRuns.id, run.id));
+
             const srcStream = await source.downloadFile(srcFilePath, fileSize);
+
+            // Wrap in a PassThrough to count bytes as chunks flow through
+            let currentBytes = 0;
+            const tracker = new PassThrough();
+            tracker.on("data", (chunk: Buffer) => { currentBytes += chunk.length; });
+            srcStream.pipe(tracker);
+            // Propagate errors bidirectionally
+            srcStream.on("error", (err) => tracker.destroy(err));
+            tracker.on("error", () => { if (!srcStream.destroyed) srcStream.destroy(); });
+
+            // Flush byte count to DB every 500 ms — throttled to avoid DB overload
+            const progressInterval = setInterval(() => {
+              db.update(jobRuns)
+                .set({ currentFileBytesTransferred: currentBytes })
+                .where(eq(jobRuns.id, run.id))
+                .catch(() => {});
+            }, 500);
 
             // Delete existing destination file first when overwrite is enabled, or when
             // delta sync is replacing a file that passed the timestamp check (source is newer).
@@ -599,7 +622,16 @@ export async function runJob(jobId: number): Promise<void> {
               }
             }
 
-            await dest.uploadFile(srcStream, dstFilePath);
+            try {
+              await dest.uploadFile(tracker, dstFilePath);
+            } finally {
+              clearInterval(progressInterval);
+              // Write final byte count (interval may not have fired for the last chunk)
+              await db
+                .update(jobRuns)
+                .set({ currentFileBytesTransferred: currentBytes })
+                .where(eq(jobRuns.id, run.id));
+            }
             log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
 
             // Log success
@@ -671,6 +703,8 @@ export async function runJob(jobId: number): Promise<void> {
           filesTransferred,
           bytesTransferred,
           currentFile: null,
+          currentFileSize: null,
+          currentFileBytesTransferred: null,
         })
         .where(eq(jobRuns.id, run.id));
 
@@ -701,6 +735,8 @@ export async function runJob(jobId: number): Promise<void> {
           status: "failure",
           errorMessage,
           currentFile: null,
+          currentFileSize: null,
+          currentFileBytesTransferred: null,
         })
         .where(eq(jobRuns.id, run.id));
 
