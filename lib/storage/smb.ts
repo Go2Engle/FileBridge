@@ -64,11 +64,36 @@ export class SmbProvider implements StorageProvider {
    */
   private createReadStreamAsync(smbPath: string): Promise<Readable> {
     return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.client.createReadStream(smbPath, (err: any, stream: Readable) => {
-        if (err) reject(err);
-        else resolve(stream);
-      });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const SMB2Request = require("v9u-smb2/lib/tools/smb2-forge").request;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const constants = require("v9u-smb2/lib/structures/constants");
+
+      SMB2Request(
+        "create",
+        {
+          path: smbPath,
+          createDisposition: constants.FILE_OPEN,
+          shareAccess:
+            constants.FILE_SHARE_READ |
+            constants.FILE_SHARE_WRITE |
+            constants.FILE_SHARE_DELETE,
+        },
+        this.client,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (openErr: any, file: any) => {
+          if (openErr) {
+            reject(openErr);
+            return;
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          this.client.createReadStream(smbPath, { fd: file }, (streamErr: any, stream: Readable) => {
+            if (streamErr) reject(streamErr);
+            else resolve(stream);
+          });
+        }
+      );
     });
   }
 
@@ -89,11 +114,47 @@ export class SmbProvider implements StorageProvider {
 
   private unlinkAsync(smbPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.client.unlink(smbPath, (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const SMB2Request = require("v9u-smb2/lib/tools/smb2-forge").request;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const constants = require("v9u-smb2/lib/structures/constants");
+
+      SMB2Request(
+        "create",
+        {
+          path: smbPath,
+          shareAccess:
+            constants.FILE_SHARE_READ |
+            constants.FILE_SHARE_WRITE |
+            constants.FILE_SHARE_DELETE,
+          createDisposition: constants.FILE_OPEN,
+        },
+        this.client,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (openErr: any, file: any) => {
+          if (openErr) {
+            reject(openErr);
+            return;
+          }
+
+          SMB2Request(
+            "set_info",
+            {
+              FileId: file.FileId,
+              FileInfoClass: "FileDispositionInformation",
+              Buffer: Buffer.from([1]),
+            },
+            this.client,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (setInfoErr: any) => {
+              SMB2Request("close", file, this.client, () => {
+                if (setInfoErr) reject(setInfoErr);
+                else resolve();
+              });
+            }
+          );
+        }
+      );
     });
   }
 
@@ -296,29 +357,31 @@ export class SmbProvider implements StorageProvider {
   async deleteFile(remotePath: string): Promise<void> {
     const smbPath = this.toSmbPath(remotePath);
     log.info("Deleting file", { smbPath });
-    for (let attempt = 1; attempt <= 5; attempt++) {
+    const maxAttempts = 10;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         await this.unlinkAsync(smbPath);
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
-        if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
+        if (code === "STATUS_FILE_CLOSED" && attempt < maxAttempts) {
           log.info("STATUS_FILE_CLOSED on delete — reconnecting", { smbPath, attempt });
           await this.reconnect();
           continue;
         }
-        if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
-          const waitMs = 500;
+        if (code === "STATUS_SHARING_VIOLATION" && attempt < maxAttempts) {
+          const waitMs = Math.min(500 * 2 ** (attempt - 1), 5000);
           log.info("STATUS_SHARING_VIOLATION on delete — waiting for handle release", { smbPath, waitMs, attempt });
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
-        if (code === "STATUS_PENDING" && attempt < 5) {
-          const delay = attempt * 1000;
-          log.info("STATUS_PENDING on delete — retrying", { smbPath, delayMs: delay, attempt });
-          await new Promise((r) => setTimeout(r, delay));
+        if (code === "STATUS_PENDING" && attempt < maxAttempts) {
+          const delayMs = Math.min(500 * attempt, 5000);
+          log.info("STATUS_PENDING on delete — retrying", { smbPath, delayMs, attempt });
+          await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
+        log.warn("Delete file retries exhausted", { smbPath, attempt, code });
         throw err;
       }
     }
