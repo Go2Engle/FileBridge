@@ -13,6 +13,7 @@ A storage provider implements the `StorageProvider` interface defined in `lib/st
 Create `lib/storage/s3.ts` (or `ftp.ts`, `gcs.ts`, etc.):
 
 ```typescript
+import type { Readable } from "stream";
 import { StorageProvider, FileInfo } from "./interface";
 
 interface S3Credentials {
@@ -51,12 +52,12 @@ export class S3Provider implements StorageProvider {
     // Like listFiles but also include "directory" prefixes
   }
 
-  async downloadFile(remotePath: string): Promise<Buffer> {
-    // GetObjectCommand → collect stream → return Buffer
+  async downloadFile(remotePath: string): Promise<Readable> {
+    // GetObjectCommand → return response.Body as Readable stream
   }
 
-  async uploadFile(content: Buffer, remotePath: string): Promise<void> {
-    // PutObjectCommand
+  async uploadFile(stream: Readable, remotePath: string): Promise<void> {
+    // Upload stream — e.g. @aws-sdk/lib-storage Upload() for multipart streaming
   }
 
   async deleteFile(remotePath: string): Promise<void> {

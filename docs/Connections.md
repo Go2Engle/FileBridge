@@ -71,15 +71,17 @@ FileBridge uses the `v9u-smb2` library, a fork with full NTLMv2 support. This en
 
 > **Note**: MD4 (used internally by NTLM) requires OpenSSL legacy mode. The `npm` scripts set `NODE_OPTIONS=--openssl-legacy-provider` automatically. In Docker, include `ENV NODE_OPTIONS=--openssl-legacy-provider` in your Dockerfile.
 
+### SMB Streaming
+
+File transfers use v9u-smb2's native `createReadStream`/`createWriteStream` for true 64 KB chunk streaming. Files of any size can be transferred with constant memory usage — no full-file buffering.
+
 ### SMB Reliability
 
 The SMB provider includes automatic retry logic to handle common transient errors:
 
 - **STATUS_FILE_CLOSED** — Reconnects and retries the operation
-- **STATUS_SHARING_VIOLATION** — Waits for the auto-close timeout and retries
+- **STATUS_SHARING_VIOLATION** — Waits briefly for handle release and retries
 - **STATUS_PENDING** — Backs off and retries
-
-An auto-close timeout of 100ms is configured to release server FIDs (File IDs) promptly after each operation.
 
 ---
 

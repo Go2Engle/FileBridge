@@ -26,9 +26,9 @@ When a job is triggered (scheduled or manual), the engine executes these steps i
     a. Update job_runs.currentFile
     b. Delta sync check → skip if destination is same age or newer
     c. Overwrite check → skip if exists and overwrite = false
-    d. Download file from source
-    e. If extractArchives → extract and upload each entry individually
-    f. Else → upload file to destination (delete existing first if overwrite/delta)
+    d. Download file from source (streamed — not buffered in memory)
+    e. If extractArchives → buffer and extract archive, upload each entry individually
+    f. Else → stream directly to destination (delete existing first if overwrite/delta)
     g. Apply post-transfer action (retain / delete / move)
     h. Insert transfer_logs record (success or failure)
     i. Increment filesTransferred + bytesTransferred counters
@@ -76,7 +76,7 @@ Delta sync implicitly enables overwrite for files that pass the timestamp check.
 
 When `extractArchives = true` and a file is recognized as an archive:
 
-1. The archive is downloaded from the source
+1. The archive is downloaded from the source and buffered in memory (archives cannot be streamed because ZIP requires random access and TAR requires sequential parsing of the full file)
 2. The engine extracts all file entries (directories are skipped)
 3. Nested paths within the archive are **flattened** — files land directly in `destinationPath`
 4. Each extracted entry is uploaded individually

@@ -254,7 +254,7 @@ FileBridge is lightweight. Typical resource usage:
 | Disk (app) | 200 MB | 200 MB |
 | Disk (data) | 50 MB + logs | 1–5 GB |
 
-Memory usage spikes temporarily while files are in transit, as files are buffered in memory during download/upload. For large files (100MB+), size your container accordingly or use streaming transfers (planned feature).
+File transfers use streaming (no full-file buffering), so memory usage stays low regardless of file size. The base memory requirement covers the Node.js runtime, SQLite, and the Next.js server. Archive extraction (`extractArchives` option) is the one exception — archives are buffered in memory for extraction, so size your container accordingly if extracting large archives.
 
 ---
 

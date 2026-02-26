@@ -249,8 +249,8 @@ interface StorageProvider {
   disconnect(): Promise<void>
   listFiles(path: string, filter?: string): Promise<FileInfo[]>
   listDirectory(path: string): Promise<FileInfo[]>
-  downloadFile(remotePath: string): Promise<Buffer>
-  uploadFile(content: Buffer, remotePath: string): Promise<void>
+  downloadFile(remotePath: string, sizeHint?: number): Promise<Readable>
+  uploadFile(stream: Readable, remotePath: string): Promise<void>
   deleteFile(remotePath: string): Promise<void>
   moveFile(sourcePath: string, destinationPath: string): Promise<void>
   createDirectory(path: string): Promise<void>
@@ -266,6 +266,8 @@ interface FileInfo {
 
 - `listFiles` applies the glob filter and returns only files (no directories)
 - `listDirectory` returns everything (files + directories) for the UI file browser
+- `downloadFile` returns a Node.js `Readable` stream — providers stream data in chunks (typically 64 KB) rather than buffering the entire file in memory
+- `uploadFile` accepts a `Readable` stream and pipes it to the destination
 - `createDirectory` creates a new directory at the given path (used by the file browser and API)
 
 The provider factory in `lib/storage/registry.ts` maps protocol names to concrete classes.
@@ -314,6 +316,15 @@ The scheduler (`lib/scheduler/index.ts`) maintains an in-memory `Map<jobId, Sche
 - Server Components for fast initial loads
 - Standalone output mode makes Docker images small and self-contained
 
-### Buffer-Based File Transfer
+### Streaming File Transfer
 
-The current implementation downloads entire files into memory (`Buffer`) before uploading. This is simple and works well for typical file sizes (KB to tens of MB). For very large files (hundreds of MB to GB), streaming transfers (piping source stream directly to destination) are planned to avoid memory pressure.
+All storage providers use Node.js streams (`Readable`/`Writable`) for file transfers. Downloads return a `Readable` stream and uploads accept one — the transfer engine pipes the source stream directly to the destination with no full-file buffering. This keeps memory usage at O(chunk-size) regardless of file size, allowing multi-GB files to transfer on machines with limited RAM.
+
+| Provider | Download | Upload | Chunk Size |
+|---|---|---|---|
+| SFTP | `createReadStream` | `put(stream)` | 64 KB |
+| SMB | `createReadStream` (v9u-smb2) | `createWriteStream` + `pipeline` | 64 KB |
+| Azure Blob | `readableStreamBody` | `uploadStream` | 4 MB |
+| Local | `fs.createReadStream` | `fs.createWriteStream` + `pipeline` | 64 KB |
+
+The one exception is **archive extraction** (`extractArchives = true`): archives must be fully buffered in memory for extraction (ZIP random access, TAR sequential parse). Non-archive files always stream end-to-end.
