@@ -431,8 +431,12 @@ function Register-FileBridgeService {
         Start-Sleep -Seconds 1
     }
 
-    # Install the service
-    & $NSSM_EXE install    $SERVICE_NAME $nodePath "$APP_DIR\server.js" | Out-Null
+    # Install the service.
+    # Pass node.exe alone as the application; set AppParameters separately with inner
+    # quotes so the space in "C:\Program Files\..." survives the Windows command-line
+    # split that NSSM performs when it spawns the process.
+    & $NSSM_EXE install    $SERVICE_NAME $nodePath | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppParameters  "`"$APP_DIR\server.js`"" | Out-Null
     & $NSSM_EXE set        $SERVICE_NAME AppDirectory    $APP_DIR         | Out-Null
     & $NSSM_EXE set        $SERVICE_NAME DisplayName     "$APP_NAME File Transfer Service" | Out-Null
     & $NSSM_EXE set        $SERVICE_NAME Description     "Automated File Transfer Scheduler - https://github.com/$REPO" | Out-Null
