@@ -324,7 +324,7 @@ function LiveProgressPanel({ job, run }: { job: Job; run: JobRun }) {
         </div>
         <Progress value={displayPct} />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{run.filesTransferred} / {totalFiles > 0 ? totalFiles : "?"} files</span>
+          <span>{run.currentFile ? run.filesTransferred + 1 : run.filesTransferred} / {totalFiles > 0 ? totalFiles : "?"} files</span>
           <span>
             {formatBytes(totalBytesInFlight)}
             {totalBytes > 0 && ` / ${formatBytes(totalBytes)}`}
