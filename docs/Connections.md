@@ -157,12 +157,13 @@ The file browser supports the following operations (admin role required):
 
 ## Security
 
-- Connection credentials are stored as JSON in the SQLite `connections.credentials` column
-- API responses **never** return the `credentials` field — the connection list returns only `username` for display
-- The edit form fetches full connection data via `GET /api/connections/[id]` (authenticated endpoint) — only the server ever has full credentials
-- All credential fields are redacted (`[REDACTED]`) from structured log output
+- Connection credentials are **encrypted at rest** using AES-256-GCM before being stored in the SQLite `connections.credentials` column.
+- The encryption key is derived from the `AUTH_SECRET` environment variable.
+- API responses **never** return the `credentials` field — the connection list returns only `username` for display.
+- The edit form fetches connection data via `GET /api/connections/[id]` (authenticated endpoint) where credentials are decrypted on-the-fly for the UI.
+- All credential fields are redacted (`[REDACTED]`) from structured log output.
 
-> **Planned**: Field-level encryption for credentials at rest using libsodium. See [Security](Security) and [Roadmap](Roadmap).
+See [Security](Security) for more details.
 
 ---
 
