@@ -123,7 +123,7 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 ### Windows (PowerShell — run as Administrator)
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
+$env:FILEBRIDGE_MODE = 'upgrade'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
 The upgrade process:
@@ -148,7 +148,7 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 ### Windows (PowerShell — run as Administrator)
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Uninstall
+$env:FILEBRIDGE_MODE = 'uninstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
 This removes the application files, service registration, and (on Linux) the system user. Your data and config directories are **preserved**.
@@ -262,6 +262,7 @@ irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 | `FILEBRIDGE_URL` | External URL (`NEXTAUTH_URL`) | `http://localhost:3000` |
 | `FILEBRIDGE_PORT` | Port to listen on | `3000` |
 | `FILEBRIDGE_AUTH_SECRET` | Use an existing secret instead of generating one | *(auto-generated)* |
+| `FILEBRIDGE_MODE` | `install` \| `upgrade` \| `uninstall` \| `reinstall` | `install` |
 
 ---
 

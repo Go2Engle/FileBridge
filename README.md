@@ -110,10 +110,17 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 **Windows** (PowerShell — run as Administrator):
 
 ```powershell
+# Fresh install
 irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+
+# Upgrade to latest version
+$env:FILEBRIDGE_MODE = 'upgrade';   irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+
+# Uninstall
+$env:FILEBRIDGE_MODE = 'uninstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
-→ See the [Server Install](../../wiki/Server-Install) guide for upgrade, uninstall, service management, and non-interactive options.
+→ See the [Server Install](../../wiki/Server-Install) guide for service management and non-interactive/CI options.
 
 ---
 
