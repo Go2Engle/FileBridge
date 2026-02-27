@@ -464,16 +464,15 @@ function Register-FileBridgeService {
     # Start the service (redirect stderr so NSSM status messages don't bleed to console)
     & $NSSM_EXE start $SERVICE_NAME 2>&1 | Out-Null
 
-    # NSSM 2.24 has a bug where it can leave the service in PAUSED on first start.
-    # Give the SCM a moment to settle, then resume or start if needed.
+    # NSSM 2.24 sometimes leaves the service in PAUSED on first start.
+    # Node.js does not implement the Resume control code, so Resume-Service won't work.
+    # The only reliable fix is a full stop → start cycle.
     Start-Sleep -Seconds 2
     $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-    if ($svc) {
-        if ($svc.Status -eq 'Paused') {
-            Resume-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-        } elseif ($svc.Status -ne 'Running') {
-            Start-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-        }
+    if ($svc -and $svc.Status -ne 'Running') {
+        & $NSSM_EXE stop  $SERVICE_NAME 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        & $NSSM_EXE start $SERVICE_NAME 2>&1 | Out-Null
     }
 }
 
