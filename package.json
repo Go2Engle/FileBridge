@@ -1,6 +1,6 @@
 {
   "name": "filebridge",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--openssl-legacy-provider' next dev",
@@ -31,7 +31,6 @@
     "@radix-ui/react-tooltip": "^1.1.7",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-query-devtools": "^5.62.0",
-    "adm-zip": "^0.5.16",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.0.0",
@@ -59,11 +58,11 @@
     "tar-stream": "^3.1.7",
     "tw-animate-css": "^1.2.5",
     "v9u-smb2": "^1.0.6",
+    "yauzl": "^3.2.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/adm-zip": "^0.5.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22",
@@ -72,6 +71,7 @@
     "@types/react-dom": "^19",
     "@types/ssh2-sftp-client": "^9.0.4",
     "@types/tar-stream": "^3.1.4",
+    "@types/yauzl": "^2.10.3",
     "drizzle-kit": "^0.31.0",
     "eslint": "^9",
     "eslint-config-next": "^16.1.0",

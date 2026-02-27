@@ -85,7 +85,7 @@ When `extractArchives = true` and a file is recognized as an archive:
 7. The post-transfer action (retain/delete/move) is applied to the **original archive** on the source
 
 Supported formats:
-- `.zip` — via `adm-zip`
+- `.zip` — via `yauzl`
 - `.tar` — via `tar-stream`
 - `.tar.gz` and `.tgz` — via `tar-stream` + Node.js built-in `zlib.gunzipSync`
 

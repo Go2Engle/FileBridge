@@ -7,7 +7,7 @@ import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
 import { Readable, Transform } from "stream";
 import { gunzipSync } from "zlib";
-import AdmZip from "adm-zip";
+import yauzl from "yauzl";
 import * as tar from "tar-stream";
 import { createLogger, withJobContext } from "@/lib/logger";
 
@@ -137,7 +137,7 @@ function extractArchive(fileName: string, content: Buffer): Promise<ExtractedFil
   const lower = fileName.toLowerCase();
 
   if (lower.endsWith(".zip")) {
-    return Promise.resolve(extractZip(content));
+    return extractZip(content);
   }
   if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
     return extractTar(gunzipSync(content));
@@ -148,18 +148,34 @@ function extractArchive(fileName: string, content: Buffer): Promise<ExtractedFil
   return Promise.resolve(null);
 }
 
-function extractZip(content: Buffer): ExtractedFile[] {
-  const zip = new AdmZip(content);
-  const entries: ExtractedFile[] = [];
-  for (const entry of zip.getEntries()) {
-    // Skip directories
-    if (entry.isDirectory) continue;
-    const data = entry.getData();
-    // Use only the base filename (flatten nested paths)
-    const name = path.posix.basename(entry.entryName);
-    if (name) entries.push({ name, content: data });
-  }
-  return entries;
+function extractZip(content: Buffer): Promise<ExtractedFile[]> {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(content, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      const entries: ExtractedFile[] = [];
+      zipfile.readEntry();
+      zipfile.on("entry", (entry) => {
+        // Skip directories
+        if (/\/$/.test(entry.fileName)) {
+          zipfile.readEntry();
+          return;
+        }
+        zipfile.openReadStream(entry, (streamErr, stream) => {
+          if (streamErr) return reject(streamErr);
+          const chunks: Buffer[] = [];
+          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+          stream.on("end", () => {
+            const name = path.posix.basename(entry.fileName);
+            if (name) entries.push({ name, content: Buffer.concat(chunks) });
+            zipfile.readEntry();
+          });
+          stream.on("error", reject);
+        });
+      });
+      zipfile.on("end", () => resolve(entries));
+      zipfile.on("error", reject);
+    });
+  });
 }
 
 function extractTar(content: Buffer): Promise<ExtractedFile[]> {

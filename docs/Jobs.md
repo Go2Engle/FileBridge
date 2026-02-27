@@ -133,7 +133,7 @@ See [Transfer Engine](Transfer-Engine#dry-run) for the detailed logic.
 When **Extract Archives** is enabled, FileBridge intercepts archive files during transfer and extracts their contents to the destination instead of copying the archive itself.
 
 Supported formats:
-- `.zip` — via `adm-zip`
+- `.zip` — via `yauzl`
 - `.tar` — via `tar-stream`
 - `.tar.gz` / `.tgz` — via `tar-stream` + Node.js `zlib`
 
