@@ -1,0 +1,238 @@
+name: Build Test Artifacts
+
+# Builds standalone binaries (no Docker) from any branch and publishes them as
+# a pre-release so you can test install.sh / install.ps1 against real artifacts.
+#
+# Usage after the workflow completes:
+#   Linux/macOS:
+#     curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/<BRANCH>/install.sh \
+#       | sudo bash -s -- --version <TAG>
+#   Windows (PowerShell):
+#     $env:FILEBRIDGE_VERSION='<TAG>'
+#     irm https://raw.githubusercontent.com/go2engle/filebridge/<BRANCH>/install.ps1 | iex
+#
+# Where <TAG> is the tag printed in the "Compute tag" step of the prepare job,
+# e.g. "test-feature-updater-abc1234".
+
+on:
+  workflow_dispatch:
+    inputs:
+      cleanup:
+        description: 'Delete previous test pre-releases for this branch before building'
+        type: boolean
+        default: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Step 1: Compute tag, optionally clean up old test releases, create pre-release ──
+  prepare:
+    name: Create pre-release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compute tag
+        id: tag
+        run: |
+          # Sanitise the branch name: replace '/' and any non-alphanumeric (except '-') with '-'
+          branch="${GITHUB_REF_NAME//\//-}"
+          branch=$(echo "$branch" | tr -cs 'a-zA-Z0-9-' '-' | sed 's/-*$//')
+          sha="${GITHUB_SHA::7}"
+          tag="test-${branch}-${sha}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "branch_slug=$branch" >> "$GITHUB_OUTPUT"
+          echo "Tag: $tag"
+
+      - name: Delete previous test pre-releases for this branch
+        if: inputs.cleanup
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prefix="test-${{ steps.tag.outputs.branch_slug }}-"
+          echo "Cleaning up pre-releases with prefix: $prefix"
+          gh release list --limit 50 --json tagName,isPrerelease \
+            --jq ".[] | select(.isPrerelease and (.tagName | startswith(\"$prefix\"))) | .tagName" \
+          | while read -r old_tag; do
+              echo "Deleting old test release: $old_tag"
+              gh release delete "$old_tag" --yes --cleanup-tag 2>/dev/null || true
+            done
+
+      - name: Create pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" \
+            --title "Test build: ${{ github.ref_name }} @ ${GITHUB_SHA::7}" \
+            --notes "**Test build** — not for production use.
+
+Branch: \`${{ github.ref_name }}\`
+Commit: \`${{ github.sha }}\`
+
+### Install
+
+**Linux / macOS:**
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/${{ github.ref_name }}/install.sh \\
+  | sudo bash -s -- --version $tag
+\`\`\`
+
+**Windows (PowerShell):**
+\`\`\`powershell
+\$env:FILEBRIDGE_VERSION='$tag'
+irm https://raw.githubusercontent.com/go2engle/filebridge/${{ github.ref_name }}/install.ps1 | iex
+\`\`\`" \
+            --prerelease
+
+  # ── Step 2: Build standalone bundles for all platforms ───────────────────────
+  standalone:
+    name: Standalone ${{ matrix.os-label }}/${{ matrix.arch }}
+    needs: prepare
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os-label: linux
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            os-label: linux
+            arch: arm64
+          - runner: macos-latest
+            os-label: darwin
+            arch: arm64
+          - runner: windows-latest
+            os-label: windows
+            arch: amd64
+          - runner: windows-11-arm
+            os-label: windows
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        env:
+          NODE_OPTIONS: "--openssl-legacy-provider"
+        run: npm run build
+
+      # ── Unix: package as .tar.gz ─────────────────────────────────────────────
+      - name: Package standalone tarball (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          SLUG="${{ matrix.os-label }}-${{ matrix.arch }}"
+          ARTIFACT="filebridge-${TAG}-${SLUG}.tar.gz"
+
+          STANDALONE=".next/standalone"
+
+          cp -r .next/static "$STANDALONE/.next/static"
+          [ -d public ] && cp -r public "$STANDALONE/public" || true
+
+          echo "$TAG" > "$STANDALONE/FILEBRIDGE_VERSION"
+
+          STAGE=$(mktemp -d)
+          cp -r "$STANDALONE/." "$STAGE/"
+
+          rm -rf \
+            "$STAGE/docs"               \
+            "$STAGE/website"            \
+            "$STAGE/images"             \
+            "$STAGE/prd.md"             \
+            "$STAGE/README.md"          \
+            "$STAGE/CONTRIBUTING.md"    \
+            "$STAGE/LICENSE"            \
+            "$STAGE/index.html"         \
+            "$STAGE/install.sh"         \
+            "$STAGE/install.ps1"        \
+            "$STAGE/Dockerfile"         \
+            "$STAGE/next.config.ts"     \
+            "$STAGE/tsconfig.json"      \
+            "$STAGE/eslint.config.mjs"  \
+            "$STAGE/postcss.config.mjs" \
+            "$STAGE/drizzle.config.ts"  \
+            "$STAGE/components.json"    \
+            "$STAGE/package-lock.json"
+
+          tar -czf "$ARTIFACT" -C "$STAGE" .
+          rm -rf "$STAGE"
+
+          echo "ARTIFACT=$ARTIFACT" >> "$GITHUB_ENV"
+          echo "Built: $ARTIFACT ($(du -sh "$ARTIFACT" | cut -f1))"
+
+      # ── Windows: package as .zip ─────────────────────────────────────────────
+      - name: Package standalone zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag      = "${{ needs.prepare.outputs.tag }}"
+          $slug     = "windows-${{ matrix.arch }}"
+          $artifact = "filebridge-$tag-$slug.zip"
+
+          $standalone = ".next\standalone"
+
+          Copy-Item -Path ".next\static" -Destination "$standalone\.next\static" -Recurse -Force
+          if (Test-Path "public") {
+            Copy-Item -Path "public" -Destination "$standalone\public" -Recurse -Force
+          }
+
+          $tag | Set-Content "$standalone\FILEBRIDGE_VERSION" -NoNewline -Encoding UTF8
+
+          $stage = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+          Copy-Item -Path "$standalone\*" -Destination $stage -Recurse -Force
+
+          @(
+            'docs', 'website', 'images',
+            'prd.md', 'README.md', 'CONTRIBUTING.md',
+            'LICENSE', 'index.html',
+            'install.sh', 'install.ps1', 'Dockerfile',
+            'next.config.ts', 'tsconfig.json', 'eslint.config.mjs',
+            'postcss.config.mjs', 'drizzle.config.ts',
+            'components.json', 'package-lock.json'
+          ) | ForEach-Object {
+            $p = Join-Path $stage $_
+            if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+          }
+
+          Compress-Archive -Path "$stage\*" -DestinationPath $artifact
+          Remove-Item $stage -Recurse -Force
+
+          "ARTIFACT=$artifact" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $mb = [math]::Round((Get-Item $artifact).Length / 1MB, 1)
+          Write-Host "Built: $artifact ($mb MB)"
+
+      # ── Upload to pre-release (all platforms via bash) ───────────────────────
+      - name: Upload to GitHub pre-release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.prepare.outputs.tag }}" \
+            "$ARTIFACT" --clobber

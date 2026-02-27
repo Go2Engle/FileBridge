@@ -15,7 +15,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# ── Constants ────────────────────────────────────────────────
+# -- Constants
 REPO="go2engle/filebridge"
 APP_NAME="FileBridge"
 REQUIRED_NODE_MAJOR=20
@@ -23,7 +23,13 @@ DEFAULT_PORT=3000
 HEALTH_TIMEOUT=60
 HEALTH_INTERVAL=2
 
-# ── Colors ───────────────────────────────────────────────────
+# Branch / version overrides (can be set via environment variables)
+# FILEBRIDGE_BRANCH: pull install.sh from this branch (default: main)
+# FILEBRIDGE_VERSION: install a specific release tag instead of latest (e.g. v0.5.6)
+BRANCH="${FILEBRIDGE_BRANCH:-main}"
+PIN_VERSION="${FILEBRIDGE_VERSION:-}"
+
+# -- Colors
 if [ -t 1 ] && [ "${NO_COLOR:-}" != "1" ]; then
   R=$'\033[0m'          # reset
   BOLD=$'\033[1m'
@@ -43,7 +49,7 @@ else
   CYAN=''; WHITE=''; BGREEN=''; BRED=''; BYELLOW=''; BCYAN=''; BWHITE=''
 fi
 
-# ── Spinner ──────────────────────────────────────────────────
+# -- Spinner
 SPINNER_PID=''
 SPINNER_MSG=''
 
@@ -83,7 +89,7 @@ stop_spinner() {
 # cleanup on any exit
 trap 'if [ -n "$SPINNER_PID" ]; then kill "$SPINNER_PID" 2>/dev/null || true; printf "\r\033[K"; fi' EXIT
 
-# ── Print helpers ────────────────────────────────────────────
+# -- Print helpers
 _step_num=0
 _total_steps=7
 
@@ -103,7 +109,7 @@ die() {
   exit 1
 }
 
-# ── Banner ───────────────────────────────────────────────────
+# -- Banner
 print_banner() {
   printf "\n"
   printf "  ${BCYAN}╔══════════════════════════════════════════╗${R}\n"
@@ -115,7 +121,7 @@ print_banner() {
   printf "\n"
 }
 
-# ── Argument parsing ─────────────────────────────────────────
+# -- Argument parsing
 MODE="install"
 FORCE_REINSTALL=false
 
@@ -124,19 +130,37 @@ while [[ $# -gt 0 ]]; do
     --upgrade)   MODE="upgrade"; shift ;;
     --uninstall) MODE="uninstall"; shift ;;
     --reinstall) MODE="install"; FORCE_REINSTALL=true; shift ;;
+    --branch)
+      [ -n "${2:-}" ] || die "--branch requires a branch name (e.g. --branch my-feature)"
+      BRANCH="$2"; shift 2 ;;
+    --branch=*)  BRANCH="${1#--branch=}"; shift ;;
+    --version)
+      [ -n "${2:-}" ] || die "--version requires a tag (e.g. --version v0.5.6)"
+      PIN_VERSION="$2"; shift 2 ;;
+    --version=*) PIN_VERSION="${1#--version=}"; shift ;;
     --help|-h)
-      printf "Usage: install.sh [--upgrade|--uninstall|--reinstall]\n\n"
-      printf "Environment variable overrides:\n"
+      printf "Usage: install.sh [OPTIONS]\n\n"
+      printf "Options:\n"
+      printf "  --upgrade            Upgrade an existing installation\n"
+      printf "  --uninstall          Remove FileBridge\n"
+      printf "  --reinstall          Re-install from scratch (preserves data)\n"
+      printf "  --branch <name>      Use a specific GitHub branch (default: main)\n"
+      printf "  --version <tag>      Install a specific release version (e.g. v0.5.6)\n"
+      printf "\nEnvironment variable overrides:\n"
       printf "  FILEBRIDGE_URL          External URL (e.g. https://files.example.com)\n"
       printf "  FILEBRIDGE_PORT         Port (default: 3000)\n"
       printf "  FILEBRIDGE_AUTH_SECRET  Use an existing AUTH_SECRET\n"
+      printf "  FILEBRIDGE_BRANCH       Same as --branch\n"
+      printf "  FILEBRIDGE_VERSION      Same as --version\n"
+      printf "\nTesting a branch:\n"
+      printf "  curl -fsSL https://raw.githubusercontent.com/%s/<branch>/install.sh | sudo bash -s -- --branch <branch>\n" "$REPO"
       exit 0
       ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
 
-# ── OS / Arch detection ──────────────────────────────────────
+# -- OS / Arch detection
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS" in
   linux|darwin) ;;
@@ -156,7 +180,7 @@ if [ -f /etc/os-release ]; then
   DISTRO=$(. /etc/os-release && echo "${ID:-unknown}")
 fi
 
-# ── Path configuration ───────────────────────────────────────
+# -- Path configuration
 if [ "$OS" = "linux" ]; then
   APP_DIR="/opt/filebridge"
   CONFIG_DIR="/etc/filebridge"
@@ -178,14 +202,14 @@ else
   LAUNCH_WRAPPER="${APP_DIR}/start.sh"
 fi
 
-# ── Privilege check ──────────────────────────────────────────
+# -- Privilege check
 check_privileges() {
   if [ "$OS" = "linux" ] && [ "$(id -u)" -ne 0 ]; then
     die "This script must be run as root on Linux.\nTry: sudo bash install.sh"
   fi
 }
 
-# ── Prerequisite checks ──────────────────────────────────────
+# -- Prerequisite checks
 cmd_exists() { command -v "$1" >/dev/null 2>&1; }
 
 check_curl() {
@@ -253,8 +277,14 @@ check_node() {
   fi
 }
 
-# ── GitHub release helpers ───────────────────────────────────
+# -- GitHub release helpers
 get_latest_version() {
+  # Honour the PIN_VERSION override (--version flag or FILEBRIDGE_VERSION env)
+  if [ -n "$PIN_VERSION" ]; then
+    # Normalise: add leading 'v' if absent
+    case "$PIN_VERSION" in v*) echo "$PIN_VERSION" ;; *) echo "v${PIN_VERSION}" ;; esac
+    return
+  fi
   local v
   v=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep '"tag_name"' \
@@ -288,7 +318,7 @@ download_tarball() {
   stop_spinner "ok"
 }
 
-# ── Generate AUTH_SECRET ─────────────────────────────────────
+# -- Generate AUTH_SECRET
 generate_secret() {
   if cmd_exists openssl; then
     openssl rand -base64 48 | tr -d '\n/+=' | head -c 64
@@ -301,7 +331,7 @@ generate_secret() {
   fi
 }
 
-# ── Interactive prompt helper ────────────────────────────────
+# -- Interactive prompt helper
 # Usage: VAL=$(prompt_or_env VAR_NAME "Prompt text" "default")
 prompt_or_env() {
   local varname="$1"
@@ -327,7 +357,7 @@ prompt_or_env() {
   echo "${val:-$default}"
 }
 
-# ── Write env file ───────────────────────────────────────────
+# -- Write env file
 write_env_file() {
   local secret="$1" url="$2" port="$3"
   mkdir -p "$CONFIG_DIR"
@@ -341,28 +371,28 @@ write_env_file() {
 # This file contains your AUTH_SECRET.  Back it up alongside
 # your database.  Without it you cannot recover encrypted
 # connection credentials after a server rebuild.
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 
 NODE_ENV=production
 NODE_OPTIONS=--openssl-legacy-provider
 
-# ── Authentication ────────────────────────────────────────────
+# -- Authentication
 # Used to sign sessions and encrypt stored SSO credentials.
 AUTH_SECRET=${secret}
 
-# ── Network ──────────────────────────────────────────────────
+# -- Network
 NEXTAUTH_URL=${url}
 PORT=${port}
 HOSTNAME=0.0.0.0
 
-# ── Storage ──────────────────────────────────────────────────
+# -- Storage
 DATABASE_PATH=${DATA_DIR}/filebridge.db
 BACKUP_PATH=${BACKUP_DIR}
 
-# ── Logging ──────────────────────────────────────────────────
+# -- Logging
 LOG_LEVEL=info
 
-# ── Install metadata (used by the built-in updater) ──────
+# -- Install metadata (used by the built-in updater)
 FILEBRIDGE_INSTALL_TYPE=native
 FILEBRIDGE_OS=${OS}
 FILEBRIDGE_ARCH=${OS}-${ARCH}
@@ -374,7 +404,7 @@ EOF
   chmod 600 "$ENV_FILE"
 }
 
-# ── System user (Linux only) ─────────────────────────────────
+# -- System user (Linux only)
 ensure_system_user() {
   [ "$OS" = "linux" ] || return 0
   if ! id "filebridge" >/dev/null 2>&1; then
@@ -386,7 +416,7 @@ ensure_system_user() {
   fi
 }
 
-# ── Directory setup ──────────────────────────────────────────
+# -- Directory setup
 create_directories() {
   start_spinner "Creating directories"
   mkdir -p "$APP_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$LOG_DIR"
@@ -401,7 +431,7 @@ create_directories() {
   stop_spinner "ok"
 }
 
-# ── Install / extract tarball ────────────────────────────────
+# -- Install / extract tarball
 install_app() {
   local version="$1"
   local tmp
@@ -431,13 +461,13 @@ install_app() {
   stop_spinner "ok"
 }
 
-# ── Node binary ──────────────────────────────────────────────
+# -- Node binary
 node_binary() {
   # Return absolute path to node — needed for service definitions
   command -v node
 }
 
-# ── Systemd service (Linux) ──────────────────────────────────
+# -- Systemd service (Linux)
 write_systemd_service() {
   local node_bin
   node_bin=$(node_binary)
@@ -473,7 +503,7 @@ EOF
   chmod 644 "$SERVICE_FILE"
 }
 
-# ── Upgrade helper script ────────────────────────────────
+# -- Upgrade helper script
 # Writes a privileged upgrade helper to APP_DIR and configures the
 # OS-appropriate privilege escalation mechanism so the running app
 # can trigger an upgrade without requiring interactive sudo.
@@ -481,7 +511,7 @@ write_upgrade_helper() {
   local node_bin
   node_bin=$(node_binary)
 
-  # ── Common upgrade helper (Linux & macOS) ────────────────
+  # -- Common upgrade helper (Linux & macOS)
   cat > "${APP_DIR}/upgrade-helper.sh" <<'UPGRADE_EOF'
 #!/usr/bin/env bash
 # FileBridge in-app upgrade helper
@@ -492,13 +522,13 @@ set -euo pipefail
 TRIGGER_FILE="${1:-}"
 TARBALL_URL="${2:-}"
 
-# ── Linux: read URL from trigger file ────────────────────
+# -- Linux: read URL from trigger file
 if [ -z "$TARBALL_URL" ] && [ -n "$TRIGGER_FILE" ] && [ -f "$TRIGGER_FILE" ]; then
   TARBALL_URL=$(cat "$TRIGGER_FILE")
   rm -f "$TRIGGER_FILE"
 fi
 
-# ── macOS: URL passed directly as $1 ─────────────────────
+# -- macOS: URL passed directly as $1
 if [ -z "$TARBALL_URL" ] && [ -n "${1:-}" ]; then
   TARBALL_URL="$1"
 fi
@@ -568,7 +598,7 @@ UPGRADE_EOF
   chown root "${APP_DIR}/upgrade-helper.sh" 2>/dev/null || true
 }
 
-# ── Linux: systemd path + updater units ──────────────────
+# -- Linux: systemd path + updater units
 write_linux_updater_units() {
   # Path unit: watches for /var/lib/filebridge/.update-trigger
   cat > /etc/systemd/system/filebridge-update.path <<EOF
@@ -606,7 +636,7 @@ EOF
   systemctl start filebridge-update.path 2>/dev/null || true
 }
 
-# ── macOS: sudoers entry ──────────────────────────────────
+# -- macOS: sudoers entry
 write_macos_sudoers() {
   local current_user="${SUDO_USER:-$(whoami)}"
   local sudoers_file="/etc/sudoers.d/filebridge"
@@ -617,7 +647,7 @@ write_macos_sudoers() {
   chmod 440 "$sudoers_file"
 }
 
-# ── launchd service (macOS) ──────────────────────────────────
+# -- launchd service (macOS)
 write_launchd_service() {
   local node_bin
   node_bin=$(node_binary)
@@ -669,7 +699,7 @@ EOF
 EOF
 }
 
-# ── Service lifecycle ────────────────────────────────────────
+# -- Service lifecycle
 register_and_start_service() {
   start_spinner "Registering service"
   if [ "$OS" = "linux" ]; then
@@ -719,7 +749,7 @@ unregister_service() {
   fi
 }
 
-# ── Health check ─────────────────────────────────────────────
+# -- Health check
 wait_for_health() {
   local port="$1"
   local url="http://localhost:${port}/api/health"
@@ -739,7 +769,7 @@ wait_for_health() {
   info "Check logs with: $([ "$OS" = "linux" ] && echo "journalctl -fu filebridge" || echo "tail -f ${LOG_DIR}/filebridge.log")"
 }
 
-# ── Pre-upgrade DB backup ────────────────────────────────────
+# -- Pre-upgrade DB backup
 backup_database() {
   local db="${DATA_DIR}/filebridge.db"
   [ -f "$db" ] || return 0
@@ -755,7 +785,7 @@ backup_database() {
   info "Database backed up to: $dest"
 }
 
-# ── Read value from existing env file ────────────────────────
+# -- Read value from existing env file
 read_env_value() {
   local key="$1"
   local default="${2:-}"
@@ -768,7 +798,7 @@ read_env_value() {
   fi
 }
 
-# ── Final summary panel ──────────────────────────────────────
+# -- Final summary panel
 print_summary() {
   local version="$1"
   local url="$2"
@@ -829,7 +859,7 @@ print_summary() {
   fi
 }
 
-# ── Detect existing install, auto-switch to upgrade ─────────
+# -- Detect existing install, auto-switch to upgrade
 auto_detect_mode() {
   [ "$MODE" = "install" ]              || return 0
   [ "$FORCE_REINSTALL" = "false" ]     || return 0
@@ -1058,8 +1088,11 @@ run_uninstall() {
 # ════════════════════════════════════════════════════════════════
 main() {
   print_banner
-  printf "  ${DIM}Platform: %s/%s%s${R}\n\n" \
+  printf "  ${DIM}Platform: %s/%s%s${R}\n" \
     "$OS" "$ARCH" "${DISTRO:+  •  ${DISTRO}}"
+  [ "$BRANCH" != "main" ] && printf "  ${BYELLOW}Branch:   %s${R}\n" "$BRANCH"
+  [ -n "$PIN_VERSION" ]   && printf "  ${BYELLOW}Version:  %s (pinned)${R}\n" "$PIN_VERSION"
+  printf "\n"
 
   case "$MODE" in
     install)

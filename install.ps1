@@ -22,7 +22,7 @@ $ProgressPreference    = 'SilentlyContinue'   # Suppress Invoke-WebRequest progr
 # Force TLS 1.2 — PowerShell 5.1 defaults to TLS 1.0 which many sites now reject
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# ── Constants ──────────────────────────────────────────────────────────────
+# -- Constants
 $REPO                = 'go2engle/filebridge'
 $APP_NAME            = 'FileBridge'
 $REQUIRED_NODE_MAJOR = 20
@@ -32,7 +32,7 @@ $HEALTH_INTERVAL     = 2
 $SERVICE_NAME        = 'FileBridge'
 $NSSM_VERSION        = '2.24'
 
-# ── Paths ──────────────────────────────────────────────────────────────────
+# -- Paths
 $APP_DIR    = 'C:\Program Files\FileBridge'
 $CONFIG_DIR = 'C:\ProgramData\FileBridge'
 $DATA_DIR   = 'C:\ProgramData\FileBridge\data'
@@ -41,7 +41,7 @@ $LOG_DIR    = 'C:\ProgramData\FileBridge\logs'
 $ENV_FILE   = 'C:\ProgramData\FileBridge\filebridge.env'
 $NSSM_EXE   = "$APP_DIR\nssm.exe"
 
-# ── Mode Resolution ────────────────────────────────────────────────────────
+# -- Mode Resolution
 # Set $env:FILEBRIDGE_MODE before running to select a mode other than install.
 $script:MODE = 'install'
 if ($env:FILEBRIDGE_MODE -match '^(upgrade|uninstall|reinstall|install)$') {
@@ -51,7 +51,7 @@ if ($env:FILEBRIDGE_MODE -match '^(upgrade|uninstall|reinstall|install)$') {
 $FORCE_REINSTALL = $script:MODE -eq 'reinstall'
 if ($FORCE_REINSTALL) { $script:MODE = 'install' }
 
-# ── Architecture ───────────────────────────────────────────────────────────
+# -- Architecture
 $ARCH = switch ($env:PROCESSOR_ARCHITECTURE) {
     'AMD64' { 'amd64' }
     'ARM64' { 'arm64' }
@@ -61,11 +61,11 @@ $ARCH = switch ($env:PROCESSOR_ARCHITECTURE) {
     }
 }
 
-# ── Step Counter ───────────────────────────────────────────────────────────
+# -- Step Counter
 $script:_step_num    = 0
 $script:_total_steps = 7
 
-# ── Print Helpers ──────────────────────────────────────────────────────────
+# -- Print Helpers
 function Write-Banner {
     Write-Host ""
     Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
@@ -122,14 +122,14 @@ function Write-Die {
     exit 1
 }
 
-# ── Administrator Check ────────────────────────────────────────────────────
+# -- Administrator Check
 function Test-IsAdministrator {
     $id        = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]$id
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# ── Node.js Helpers ────────────────────────────────────────────────────────
+# -- Node.js Helpers
 function Get-NodeMajor {
     try {
         $ver = & node --version 2>$null
@@ -223,7 +223,7 @@ function Assert-Node {
     }
 }
 
-# ── GitHub Release Helpers ─────────────────────────────────────────────────
+# -- GitHub Release Helpers
 function Get-LatestVersion {
     try {
         $release = Invoke-RestMethod "https://api.github.com/repos/$REPO/releases/latest" -UseBasicParsing
@@ -239,7 +239,7 @@ function Get-InstalledVersion {
     return 'unknown'
 }
 
-# ── NSSM Helpers ───────────────────────────────────────────────────────────
+# -- NSSM Helpers
 function Install-NSSM {
     if (Test-Path $NSSM_EXE) { return }
 
@@ -290,7 +290,7 @@ function Install-NSSM {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ── Download & Extract App ─────────────────────────────────────────────────
+# -- Download & Extract App
 function Install-App {
     param([string]$Version)
 
@@ -328,7 +328,7 @@ function Install-App {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ── Generate AUTH_SECRET ───────────────────────────────────────────────────
+# -- Generate AUTH_SECRET
 function New-AuthSecret {
     $rng   = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $bytes = [byte[]]::new(48)
@@ -337,7 +337,7 @@ function New-AuthSecret {
     return $b64.Substring(0, [Math]::Min(64, $b64.Length))
 }
 
-# ── Prompt Helper ──────────────────────────────────────────────────────────
+# -- Prompt Helper
 function Get-PromptOrEnv {
     param([string]$VarName, [string]$PromptText, [string]$Default)
     $current = [System.Environment]::GetEnvironmentVariable($VarName)
@@ -349,7 +349,7 @@ function Get-PromptOrEnv {
     return Read-Host "  $PromptText"
 }
 
-# ── Write .env File ────────────────────────────────────────────────────────
+# -- Write .env File
 function Write-EnvFile {
     param([string]$Secret, [string]$Url, [string]$Port)
 
@@ -365,28 +365,28 @@ function Write-EnvFile {
 # This file contains your AUTH_SECRET.  Back it up alongside
 # your database.  Without it you cannot recover encrypted
 # connection credentials after a server rebuild.
-# ─────────────────────────────────────────────────────────────
+# -------------------------------------------------------------
 
 NODE_ENV=production
 NODE_OPTIONS=--openssl-legacy-provider
 
-# ── Authentication ────────────────────────────────────────────
+# -- Authentication
 # Used to sign sessions and encrypt stored SSO credentials.
 AUTH_SECRET=$Secret
 
-# ── Network ──────────────────────────────────────────────────
+# -- Network
 NEXTAUTH_URL=$Url
 PORT=$Port
 HOSTNAME=0.0.0.0
 
-# ── Storage ──────────────────────────────────────────────────
+# -- Storage
 DATABASE_PATH=$DATA_DIR\filebridge.db
 BACKUP_PATH=$BACKUP_DIR
 
-# ── Logging ──────────────────────────────────────────────────
+# -- Logging
 LOG_LEVEL=info
 
-# ── Install metadata (used by the built-in updater) ──────
+# -- Install metadata (used by the built-in updater)
 FILEBRIDGE_INSTALL_TYPE=native
 FILEBRIDGE_OS=windows
 FILEBRIDGE_ARCH=windows-$ARCH
@@ -412,7 +412,7 @@ FILEBRIDGE_SERVICE_NAME=$SERVICE_NAME
     }
 }
 
-# ── Read Value from Existing .env ──────────────────────────────────────────
+# -- Read Value from Existing .env
 function Get-EnvValue {
     param([string]$Key, [string]$Default = '')
     if (Test-Path $ENV_FILE) {
@@ -426,14 +426,14 @@ function Get-EnvValue {
     return $Default
 }
 
-# ── Directories ────────────────────────────────────────────────────────────
+# -- Directories
 function New-AppDirectories {
     foreach ($dir in @($APP_DIR, $CONFIG_DIR, $DATA_DIR, $BACKUP_DIR, $LOG_DIR)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
     }
 }
 
-# ── Windows Service (NSSM) ─────────────────────────────────────────────────
+# -- Windows Service (NSSM)
 function Register-FileBridgeService {
     Install-NSSM
 
@@ -529,7 +529,7 @@ function Unregister-FileBridgeService {
     Start-Sleep -Seconds 2
 }
 
-# ── Upgrade Helper Script ───────────────────────────────────────────────────
+# -- Upgrade Helper Script
 # Writes upgrade-helper.ps1 to the install dir and creates a scheduled task
 # that runs as SYSTEM so the app can trigger an upgrade without admin prompts.
 function Write-UpgradeHelper {
@@ -619,7 +619,7 @@ function Register-UpgradeTask {
     Write-Ok "Registered FileBridgeUpdater scheduled task"
 }
 
-# ── Health Check ───────────────────────────────────────────────────────────
+# -- Health Check
 function Wait-ForHealth {
     param([string]$Port)
     $url     = "http://localhost:$Port/api/health"
@@ -642,7 +642,7 @@ function Wait-ForHealth {
     Write-Info "Service status: Get-Service -Name $SERVICE_NAME"
 }
 
-# ── Pre-upgrade Database Backup ────────────────────────────────────────────
+# -- Pre-upgrade Database Backup
 function Backup-Database {
     $db = "$DATA_DIR\filebridge.db"
     if (-not (Test-Path $db)) { return }
@@ -655,7 +655,7 @@ function Backup-Database {
     Write-Ok "Database backed up to: $dest"
 }
 
-# ── Auto-detect Upgrade ────────────────────────────────────────────────────
+# -- Auto-detect Upgrade
 function Select-AutoMode {
     if ($script:MODE -ne 'install') { return }
     if ($FORCE_REINSTALL) { return }
@@ -666,7 +666,7 @@ function Select-AutoMode {
     if ($ans -notmatch '^[Nn]') { $script:MODE = 'upgrade' }
 }
 
-# ── Summary Box ────────────────────────────────────────────────────────────
+# -- Summary Box
 function Write-Summary {
     param([string]$Version, [string]$Url, [string]$Port, [string]$Secret, [bool]$IsUpgrade)
 
