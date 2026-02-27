@@ -68,7 +68,7 @@ const config = {
             position: 'right',
           },
           {
-            href: 'https://github.com/cengle/FileBridge',
+            href: 'https://github.com/go2engle/FileBridge',
             label: 'GitHub',
             position: 'right',
           },
@@ -90,7 +90,7 @@ const config = {
             title: 'More',
             items: [
               { label: 'Home', href: 'https://go2engle.com' },
-              { label: 'GitHub', href: 'https://github.com/cengle/FileBridge' },
+              { label: 'GitHub', href: 'https://github.com/go2engle/FileBridge' },
             ],
           },
         ],
