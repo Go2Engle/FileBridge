@@ -231,6 +231,24 @@ function Get-InstalledVersion {
 function Install-NSSM {
     if (Test-Path $NSSM_EXE) { return }
 
+    New-Item -ItemType Directory -Force -Path $APP_DIR | Out-Null
+
+    # Try winget first — avoids any external download reliability issues
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Installing NSSM via winget..."
+        & winget install NSSM.NSSM --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+        Invoke-RefreshPath
+        $found = Get-Command nssm -ErrorAction SilentlyContinue
+        if ($found) {
+            Copy-Item $found.Source $NSSM_EXE -Force
+            Write-Ok "NSSM installed via winget"
+            return
+        }
+        Write-Warn "winget install did not succeed; falling back to direct download."
+    }
+
+    # Direct download from nssm.cc with a browser User-Agent (nssm.cc blocks non-browser agents)
     Write-Info "Downloading NSSM $NSSM_VERSION (Windows service manager)..."
     $nssmUrl  = "https://nssm.cc/release/nssm-$NSSM_VERSION.zip"
     $tmpDir   = "$env:TEMP\nssm-dl"
@@ -239,7 +257,8 @@ function Install-NSSM {
     New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
     try {
-        Invoke-WebRequest -Uri $nssmUrl -OutFile $zipPath -UseBasicParsing
+        Invoke-WebRequest -Uri $nssmUrl -OutFile $zipPath -UseBasicParsing `
+            -UserAgent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     } catch {
         Write-Die "Failed to download NSSM from: $nssmUrl`nCheck your internet connection."
     }
@@ -255,7 +274,6 @@ function Install-NSSM {
         Write-Die "Could not find nssm.exe in the downloaded archive."
     }
 
-    New-Item -ItemType Directory -Force -Path $APP_DIR | Out-Null
     Copy-Item $nssmBin $NSSM_EXE -Force
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
