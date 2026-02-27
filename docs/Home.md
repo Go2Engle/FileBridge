@@ -6,13 +6,19 @@ Welcome to the FileBridge documentation. FileBridge is a self-hosted web applica
 
 ## Quick Start
 
-Get FileBridge running on a Linux server or macOS machine in one command:
+Get FileBridge running in one command. The script installs Node.js if needed, downloads the latest release, creates OS-standard directories, generates a secure `AUTH_SECRET`, and registers FileBridge as a system service that starts automatically on boot.
+
+**Linux / macOS:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash
 ```
 
-The script installs Node.js if needed, downloads the latest release, creates OS-standard directories, generates a secure `AUTH_SECRET`, and registers FileBridge as a system service that starts automatically on boot.
+**Windows** (PowerShell — run as Administrator):
+
+```powershell
+irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+```
 
 :::tip Already using Docker?
 Pull the pre-built image instead: `docker pull ghcr.io/go2engle/filebridge:latest` — see the [Docker Deployment](Docker-Deployment) guide.
@@ -21,7 +27,11 @@ Pull the pre-built image instead: `docker pull ghcr.io/go2engle/filebridge:lates
 **Upgrading an existing install:**
 
 ```bash
+# Linux / macOS
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash -s -- --upgrade
+
+# Windows (PowerShell — run as Administrator)
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
 ```
 
 → [Full Server Install guide](Server-Install) — options, directory layout, service management, non-interactive installs
@@ -33,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 | Topic | Description |
 |---|---|
 | [Getting Started](Getting-Started) | Dev setup from source, first run, setup wizard |
-| [Server Install](Server-Install) | One-liner production install for Linux and macOS |
+| [Server Install](Server-Install) | One-liner production install for Linux, macOS, and Windows |
 | [Docker Deployment](Docker-Deployment) | Container deployment (Docker, Compose, Kubernetes) |
 | [Configuration](Configuration) | Environment variables and application settings |
 | [Authentication](Authentication) | Azure AD SSO setup, access control, dev bypass |

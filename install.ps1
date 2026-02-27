@@ -320,8 +320,8 @@ function Get-PromptOrEnv {
     $current = [System.Environment]::GetEnvironmentVariable($VarName)
     if ($current) { return $current }
     if ($Default) {
-        $input = Read-Host "  $PromptText [$Default]"
-        return if ($input) { $input } else { $Default }
+        $val = Read-Host "  $PromptText [$Default]"
+        if ($val) { return $val } else { return $Default }
     }
     return Read-Host "  $PromptText"
 }

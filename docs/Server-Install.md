@@ -1,16 +1,26 @@
 # Server Install
 
-The quickest way to deploy FileBridge on a Linux server or macOS machine is the one-liner install script. It handles everything: checking prerequisites, installing Node.js if needed, downloading the latest release, creating OS-standard directories, generating a secure `AUTH_SECRET`, and registering FileBridge as a system service that starts automatically on boot.
+The quickest way to deploy FileBridge on a Linux server, macOS machine, or Windows host is the one-liner install script. It handles everything: checking prerequisites, installing Node.js if needed, downloading the latest release, creating OS-standard directories, generating a secure `AUTH_SECRET`, and registering FileBridge as a system service that starts automatically on boot.
 
 ---
 
 ## One-Liner Install
+
+### Linux / macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash
 ```
 
 > **macOS**: The installer runs without `sudo` — it installs to user-local directories and registers a launchd agent.
+
+### Windows (PowerShell — run as Administrator)
+
+```powershell
+irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+```
+
+> Open PowerShell by right-clicking the Start button and selecting **"Windows PowerShell (Admin)"** or **"Terminal (Admin)"**.
 
 The script is interactive. It will ask for:
 - Your external URL (e.g. `https://files.example.com` or `http://localhost:3000`)
@@ -23,25 +33,36 @@ Everything else is automatic.
 ## What the Installer Does
 
 ### 1 — System check
-Verifies OS, CPU architecture, and `curl`. If Node.js 20.9+ is not found, it offers to install it automatically via NodeSource (Linux) or Homebrew (macOS).
+Verifies OS and CPU architecture. If Node.js 20+ is not found, it offers to install it automatically:
+- **Linux**: via NodeSource (apt/yum)
+- **macOS**: via Homebrew
+- **Windows**: via `winget`, falling back to a silent `.msi` download from nodejs.org
 
 ### 2 — Fetch latest release
 Queries the GitHub Releases API for the latest version tag.
 
 ### 3 — Configuration
-Prompts for your URL and port, then generates a cryptographically secure `AUTH_SECRET` using `openssl rand`.
+Prompts for your URL and port, then generates a cryptographically secure `AUTH_SECRET`:
+- **Linux / macOS**: `openssl rand` or Python `secrets`
+- **Windows**: .NET `RandomNumberGenerator`
 
 ### 4 — Prepare system *(Linux only)*
 Creates a locked-down `filebridge` system user (`--no-create-home --shell /bin/false`) and sets directory ownership.
 
 ### 5 — Download and extract
-Downloads the pre-built standalone tarball for your platform from GitHub Releases and extracts it to the app directory.
+Downloads the pre-built standalone package for your platform from GitHub Releases:
+- **Linux / macOS**: `.tar.gz` extracted with `tar`
+- **Windows**: `.zip` extracted with `Expand-Archive`
 
 ### 6 — Write configuration
-Writes `/etc/filebridge/filebridge.env` (Linux) or `~/.config/filebridge/filebridge.env` (macOS) with all required environment variables.
+Writes the environment file with all required variables (paths vary by OS — see [Directory Layout](#directory-layout) below).
 
 ### 7 — Register and start service
-Installs and enables a **systemd** unit (Linux) or **launchd** plist (macOS), then starts the service and waits for the `/api/health` endpoint to respond.
+- **Linux**: installs and enables a **systemd** unit
+- **macOS**: installs and loads a **launchd** plist
+- **Windows**: downloads [NSSM](https://nssm.cc) and registers a **Windows Service** set to auto-start
+
+The script then waits for the `/api/health` endpoint to confirm the service is up.
 
 ---
 
@@ -67,6 +88,16 @@ Installs and enables a **systemd** unit (Linux) or **launchd** plist (macOS), th
 | `~/.local/share/filebridge/backups/` | Database backups |
 | `~/.local/share/filebridge/logs/` | Log files |
 
+### Windows
+
+| Path | Purpose |
+|---|---|
+| `C:\Program Files\FileBridge\` | Application files |
+| `C:\ProgramData\FileBridge\filebridge.env` | Environment config and `AUTH_SECRET` |
+| `C:\ProgramData\FileBridge\data\` | SQLite database (`filebridge.db`) |
+| `C:\ProgramData\FileBridge\backups\` | Database backups |
+| `C:\ProgramData\FileBridge\logs\` | Log files |
+
 ---
 
 ## AUTH_SECRET
@@ -83,17 +114,23 @@ The full value is displayed at the end of a fresh install. On upgrades, the exis
 
 ## Upgrading
 
-Re-run the script with `--upgrade`:
+### Linux / macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash -s -- --upgrade
+```
+
+### Windows (PowerShell — run as Administrator)
+
+```powershell
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
 ```
 
 The upgrade process:
 1. Compares the installed version to the latest GitHub release
 2. Backs up `filebridge.db` to the backups directory with a timestamp
 3. Stops the service
-4. Extracts the new release over `/opt/filebridge/` (config and data directories are untouched)
+4. Extracts the new release over the app directory (config and data directories are untouched)
 5. Restarts the service and waits for the health check
 
 If FileBridge is already at the latest version, the script exits with a confirmation message.
@@ -102,11 +139,19 @@ If FileBridge is already at the latest version, the script exits with a confirma
 
 ## Uninstalling
 
+### Linux / macOS
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash -s -- --uninstall
 ```
 
-This removes the application files, service unit, and system user. Your data and config (`/var/lib/filebridge/`, `/etc/filebridge/`) are **preserved**.
+### Windows (PowerShell — run as Administrator)
+
+```powershell
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Uninstall
+```
+
+This removes the application files, service registration, and (on Linux) the system user. Your data and config directories are **preserved**.
 
 ---
 
@@ -141,6 +186,23 @@ launchctl stop com.filebridge.app
 launchctl start com.filebridge.app
 ```
 
+### Windows (Windows Service)
+
+```powershell
+# Status
+Get-Service -Name FileBridge
+
+# Stop / Start / Restart
+Stop-Service    -Name FileBridge
+Start-Service   -Name FileBridge
+Restart-Service -Name FileBridge
+
+# Logs (follow)
+Get-Content 'C:\ProgramData\FileBridge\logs\filebridge.log' -Tail 50 -Wait
+```
+
+You can also manage the service from **Services** (`services.msc`) in the Windows administrative tools.
+
 ---
 
 ## Reverse Proxy
@@ -157,13 +219,20 @@ sudo nano /etc/filebridge/filebridge.env
 nano ~/.config/filebridge/filebridge.env
 ```
 
+```powershell
+# Windows
+notepad 'C:\ProgramData\FileBridge\filebridge.env'
+```
+
 Then restart the service.
 
 ---
 
 ## Non-Interactive (Automated) Install
 
-Set environment variables before running the script to skip prompts — useful for provisioning scripts and CI pipelines:
+Set environment variables before running the script to skip prompts — useful for provisioning scripts and CI pipelines.
+
+### Linux / macOS
 
 ```bash
 FILEBRIDGE_URL=https://files.example.com \
@@ -177,6 +246,15 @@ To reuse an existing `AUTH_SECRET` (e.g. when rebuilding a server):
 FILEBRIDGE_URL=https://files.example.com \
 FILEBRIDGE_AUTH_SECRET=your-existing-secret \
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash
+```
+
+### Windows
+
+```powershell
+$env:FILEBRIDGE_URL         = 'https://files.example.com'
+$env:FILEBRIDGE_PORT        = '3000'
+$env:FILEBRIDGE_AUTH_SECRET = 'your-existing-secret'   # omit to auto-generate
+irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
 | Variable | Description | Default |
@@ -195,8 +273,9 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 | RHEL / CentOS / Rocky / AlmaLinux 8+ | x86_64, arm64 | systemd |
 | Fedora 36+ | x86_64, arm64 | systemd |
 | macOS 13+ (Ventura+) | x86_64 (Intel), arm64 (Apple Silicon) | launchd |
+| Windows 10+ / Windows Server 2019+ | x86_64, arm64 | Windows Service (NSSM) |
 
-> The install script builds the Node.js process manager integration for whichever platform it detects. Pre-built tarballs for all four platform/arch combinations are published to [GitHub Releases](https://github.com/go2engle/filebridge/releases) on every version tag.
+> Pre-built packages for all platform/arch combinations are published to [GitHub Releases](https://github.com/go2engle/filebridge/releases) on every version tag (`.tar.gz` for Linux/macOS, `.zip` for Windows).
 
 ---
 

@@ -97,6 +97,26 @@ The SQLite database is created automatically at `data/filebridge.db` on first st
 
 ---
 
+## Native Install (Linux / macOS / Windows)
+
+The one-liner installer handles Node.js, downloads the latest release, and registers FileBridge as a system service (systemd, launchd, or Windows Service).
+
+**Linux / macOS:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash
+```
+
+**Windows** (PowerShell — run as Administrator):
+
+```powershell
+irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+```
+
+→ See the [Server Install](../../wiki/Server-Install) guide for upgrade, uninstall, service management, and non-interactive options.
+
+---
+
 ## Docker
 
 ```bash
