@@ -71,29 +71,40 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ steps.tag.outputs.tag }}"
+          branch="${{ github.ref_name }}"
+          sha="${{ github.sha }}"
+
           git tag "$tag"
           git push origin "$tag"
+
+          # Write release notes to a temp file to avoid YAML/shell quoting issues
+          notes_file=$(mktemp)
+          cat > "$notes_file" <<NOTES
+          **Test build** -- not for production use.
+
+          Branch: \`${branch}\`
+          Commit: \`${sha}\`
+
+          ### Install
+
+          **Linux / macOS:**
+          \`\`\`bash
+          curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/${branch}/install.sh \\
+            | sudo bash -s -- --version ${tag}
+          \`\`\`
+
+          **Windows (PowerShell):**
+          \`\`\`powershell
+          \$env:FILEBRIDGE_VERSION='${tag}'
+          irm https://raw.githubusercontent.com/go2engle/filebridge/${branch}/install.ps1 | iex
+          \`\`\`
+          NOTES
+
           gh release create "$tag" \
-            --title "Test build: ${{ github.ref_name }} @ ${GITHUB_SHA::7}" \
-            --notes "**Test build** — not for production use.
-
-Branch: \`${{ github.ref_name }}\`
-Commit: \`${{ github.sha }}\`
-
-### Install
-
-**Linux / macOS:**
-\`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/${{ github.ref_name }}/install.sh \\
-  | sudo bash -s -- --version $tag
-\`\`\`
-
-**Windows (PowerShell):**
-\`\`\`powershell
-\$env:FILEBRIDGE_VERSION='$tag'
-irm https://raw.githubusercontent.com/go2engle/filebridge/${{ github.ref_name }}/install.ps1 | iex
-\`\`\`" \
+            --title "Test build: ${branch} @ ${sha::7}" \
+            --notes-file "$notes_file" \
             --prerelease
+          rm -f "$notes_file"
 
   # ── Step 2: Build standalone bundles for all platforms ───────────────────────
   standalone:
