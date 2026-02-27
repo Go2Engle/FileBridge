@@ -70,8 +70,6 @@ ENV NODE_ENV=production
 ENV NODE_OPTIONS=--openssl-legacy-provider
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-# Signals to the app that it is running in a Docker container (disables in-app updater)
-ENV FILEBRIDGE_INSTALL_TYPE=docker
 
 # Run as a non-root user
 RUN addgroup --system --gid 1001 nodejs \

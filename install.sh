@@ -756,17 +756,12 @@ stop_service() {
 unregister_service() {
   if [ "$OS" = "linux" ]; then
     systemctl disable --now filebridge 2>/dev/null || true
-    systemctl disable --now filebridge-update.path 2>/dev/null || true
     rm -f "$SERVICE_FILE"
-    rm -f /etc/systemd/system/filebridge-update.path
-    rm -f /etc/systemd/system/filebridge-updater.service
-    rm -f /etc/sudoers.d/filebridge 2>/dev/null || true
     systemctl daemon-reload
   else
     launchctl unload "$SERVICE_FILE" 2>/dev/null || true
     rm -f "$SERVICE_FILE"
     rm -f "$LAUNCH_WRAPPER"
-    rm -f /etc/sudoers.d/filebridge 2>/dev/null || true
   fi
 }
 
@@ -974,16 +969,6 @@ run_install() {
   stop_spinner "ok"
   ok "Config written to ${ENV_FILE}"
 
-  # Write upgrade helper + privilege setup (after config so APP_DIR/DATA_DIR are set)
-  start_spinner "Installing upgrade helper"
-  write_upgrade_helper
-  if [ "$OS" = "linux" ]; then
-    write_linux_updater_units
-  else
-    write_macos_sudoers
-  fi
-  stop_spinner "ok"
-
   # Step 7 — Start service
   print_step "Starting service"
   register_and_start_service
@@ -1044,12 +1029,10 @@ run_upgrade() {
   # Re-register service in case the service unit changed
   if [ "$OS" = "linux" ]; then
     write_systemd_service
-    write_linux_updater_units
     systemctl daemon-reload
     systemctl enable filebridge >/dev/null 2>&1
   else
     write_launchd_service
-    write_macos_sudoers
     launchctl unload "$SERVICE_FILE" 2>/dev/null || true
     launchctl load "$SERVICE_FILE"
   fi

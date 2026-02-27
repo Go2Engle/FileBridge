@@ -879,11 +879,6 @@ function Invoke-Install {
     Write-EnvFile $fbSecret $fbUrl $fbPort
     Write-Ok "Config written to $ENV_FILE"
 
-    # Write upgrade helper and register the scheduled task
-    Write-Info "Installing upgrade helper..."
-    Write-UpgradeHelper
-    Register-UpgradeTask
-
     # Step 7 — Register & start service
     Write-Step "Starting service"
     Register-FileBridgeService
@@ -939,10 +934,6 @@ function Invoke-Upgrade {
     Write-Ok "Updated to $latest"
     Patch-EnvFile
 
-    # Refresh upgrade helper in case it changed in this release
-    Write-UpgradeHelper
-    Register-UpgradeTask
-
     # Step 6 — Re-register & start service
     Write-Step "Starting service"
     Register-FileBridgeService
@@ -975,7 +966,6 @@ function Invoke-Uninstall {
 
     Write-Info "Stopping and removing service..."
     Unregister-FileBridgeService
-    Unregister-ScheduledTask -TaskName 'FileBridgeUpdater' -Confirm:$false -ErrorAction SilentlyContinue
     Write-Ok "Service removed"
 
     Write-Info "Removing application files..."
