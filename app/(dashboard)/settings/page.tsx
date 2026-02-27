@@ -7,7 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const metadata = { title: "Settings — FileBridge" };
 
-export default function SettingsPage() {
+const VALID_TABS = ["general", "notifications", "data", "about"] as const;
+type Tab = (typeof VALID_TABS)[number];
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
+  const activeTab: Tab = VALID_TABS.includes(tab as Tab) ? (tab as Tab) : "general";
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -17,7 +27,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs defaultValue={activeTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>

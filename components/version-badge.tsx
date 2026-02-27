@@ -14,6 +14,7 @@ interface VersionInfo {
   latestVersion: string | null;
   updateAvailable: boolean;
   releasesUrl: string;
+  installType: string;
 }
 
 export function VersionBadge() {
@@ -26,7 +27,13 @@ export function VersionBadge() {
 
   const currentVersion = data?.currentVersion ?? "…";
   const updateAvailable = data?.updateAvailable ?? false;
-  const releasesUrl = data?.releasesUrl ?? "https://github.com/Go2Engle/FileBridge/releases/latest";
+  const isNative = data?.installType === "native";
+
+  // All install types go to Settings > About — native users get the one-click
+  // updater there, everyone else can view release notes from the same page.
+  const tooltipText = isNative
+    ? `v${data?.latestVersion} is available — click to update`
+    : `v${data?.latestVersion} is available — click for details`;
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-2">
@@ -39,9 +46,7 @@ export function VersionBadge() {
           <Tooltip>
             <TooltipTrigger asChild>
               <a
-                href={releasesUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/settings?tab=about"
                 className="flex items-center gap-1 text-[11px] font-medium text-amber-500 hover:text-amber-400 transition-colors"
               >
                 <CircleArrowUp className="h-3 w-3" />
@@ -49,7 +54,7 @@ export function VersionBadge() {
               </a>
             </TooltipTrigger>
             <TooltipContent side="right">
-              <p>v{data?.latestVersion} is available — click to view release notes</p>
+              <p>{tooltipText}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
