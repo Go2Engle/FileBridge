@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileBridge — Automated File Transfer Scheduling</title>
-  <meta name="description" content="Self-hosted automated file transfers over SFTP, SMB/CIFS, and Azure Blob Storage with cron scheduling, glob filtering, archive extraction, and a modern dashboard. Docker-ready and open source." />
+  <meta name="description" content="Self-hosted automated file transfers over SFTP, SMB/CIFS, Azure Blob Storage, and Local File System with cron scheduling, glob filtering, archive extraction, and a modern dashboard. Docker-ready and open source." />
   <link rel="icon" href="images/FileBridgeLogo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -579,20 +579,37 @@
     }
 
     .protocol-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 24px;
-      max-width: 1100px;
+      display: flex;
+      max-width: 100%;
       margin: 0 auto;
+      overflow: hidden;
+      padding: 20px 0;
+      cursor: grab;
+      user-select: none;
+      mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+      -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    }
+
+    .protocol-grid:active {
+      cursor: grabbing;
+    }
+
+    .protocol-track {
+      display: flex;
+      gap: 24px;
+      width: max-content;
+      will-change: transform;
     }
 
     .protocol-card {
+      flex: 0 0 320px;
       background: var(--bg-3);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 36px 32px;
       text-align: center;
-      transition: all 0.25s ease;
+      transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+      pointer-events: all;
     }
 
     .protocol-card:hover {
@@ -1211,11 +1228,6 @@
       .nav-links { display: none; }
       .btn-ghost { display: none; }
 
-      .protocol-grid {
-        grid-template-columns: 1fr;
-        max-width: 100%;
-      }
-
       .steps {
         grid-template-columns: 1fr;
         gap: 24px;
@@ -1315,7 +1327,7 @@
         <span class="grad">scheduled and monitored</span>
       </h1>
       <p>
-        FileBridge automates your SFTP, SMB/CIFS, and Azure Blob Storage transfers with
+        FileBridge automates your SFTP, SMB/CIFS, Azure Blob Storage, and Local File System transfers with
         cron scheduling, glob filtering, archive extraction, and a modern audit dashboard.
         No cloud vendor lock-in. Runs anywhere.
       </p>
@@ -1335,15 +1347,15 @@
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
-          <div class="hero-stat-value">3 Protocols</div>
-          <div class="hero-stat-label">SFTP · SMB · Azure Blob</div>
+          <div class="hero-stat-value">4 Protocols</div>
+          <div class="hero-stat-label">SFTP · SMB · Azure Blob · Local</div>
         </div>
         <div class="hero-stat">
           <div class="hero-stat-value">ZIP/TAR/TGZ</div>
           <div class="hero-stat-label">Archive extraction</div>
         </div>
         <div class="hero-stat">
-          <div class="hero-stat-value">Azure AD</div>
+          <div class="hero-stat-value">Azure AD & GitHub</div>
           <div class="hero-stat-label">Enterprise SSO</div>
         </div>
       </div>
@@ -1427,7 +1439,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
           <h3>Enterprise SSO</h3>
-          <p>Azure Active Directory single sign-on via NextAuth v5. Lock access to specific email addresses or Azure AD group IDs. Full dev bypass mode for local development.</p>
+          <p>Azure Active Directory & GitHub single sign-on via NextAuth v5. Lock access to specific email addresses or group IDs. Full dev bypass mode for local development.</p>
         </div>
 
         <div class="feature-card fade-up fade-up-delay-5">
@@ -1462,6 +1474,14 @@
           <p>SMTP email and Microsoft Teams webhook alerts are config-ready. Set rules to notify on failure or after N consecutive errors. Notification history tracked in the audit log.</p>
         </div>
 
+        <div class="feature-card fade-up">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 17l-4 4-4-4"/><path d="M16 21V3"/><path d="M4 7l4-4 4 4"/><path d="M8 3v18"/></svg>
+          </div>
+          <h3>Local Filesystem</h3>
+          <p>Use FileBridge to transfer files to and from the local filesystem of the server it's running on. Perfect for integrating with local scripts and applications.</p>
+        </div>
+
       </div>
     </div>
   </section>
@@ -1471,41 +1491,92 @@
     <div class="container">
       <div class="section-header">
         <span class="section-tag">Protocols</span>
-        <h2>Three protocols, one interface</h2>
-        <p class="lead">Connect to SFTP servers, Windows/NAS SMB shares, or Azure Blob Storage — all through the same job configuration and transfer pipeline.</p>
+        <h2>Four protocols, one interface</h2>
+        <p class="lead">Connect to SFTP servers, Windows/NAS SMB shares, Azure Blob Storage, or Local storage — all through the same job configuration and transfer pipeline.</p>
       </div>
       <div class="protocol-grid">
-        <div class="protocol-card fade-up">
-          <div class="protocol-logo">🔐</div>
-          <h3>SFTP</h3>
-          <p>Secure FTP over SSH. Supports both username/password and SSH private key authentication for maximum compatibility with Linux servers and network appliances.</p>
-          <div class="protocol-tags">
-            <span class="protocol-tag">SSH2</span>
-            <span class="protocol-tag">Password Auth</span>
-            <span class="protocol-tag">Private Key Auth</span>
-            <span class="protocol-tag">ssh2-sftp-client</span>
+        <div class="protocol-track">
+          <!-- First set of cards -->
+          <div class="protocol-card fade-up">
+            <div class="protocol-logo">🔐</div>
+            <h3>SFTP</h3>
+            <p>Secure FTP over SSH. Supports both username/password and SSH private key authentication.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">SSH2</span>
+              <span class="protocol-tag">Password</span>
+              <span class="protocol-tag">Private Key</span>
+            </div>
           </div>
-        </div>
-        <div class="protocol-card fade-up fade-up-delay-1">
-          <div class="protocol-logo">🖥</div>
-          <h3>SMB / CIFS</h3>
-          <p>Windows file sharing and NAS devices. Full NTLMv2 authentication with optional domain support, automatic retry on stale sessions, and sharing violation handling.</p>
-          <div class="protocol-tags">
-            <span class="protocol-tag">NTLMv2</span>
-            <span class="protocol-tag">Domain Auth</span>
-            <span class="protocol-tag">Auto-Retry</span>
-            <span class="protocol-tag">v9u-smb2</span>
+          <div class="protocol-card fade-up fade-up-delay-1">
+            <div class="protocol-logo">🖥</div>
+            <h3>SMB / CIFS</h3>
+            <p>Windows file sharing and NAS devices. Full NTLMv2 authentication with optional domain support.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">NTLMv2</span>
+              <span class="protocol-tag">Domain</span>
+              <span class="protocol-tag">Auto-Retry</span>
+            </div>
           </div>
-        </div>
-        <div class="protocol-card fade-up fade-up-delay-2">
-          <div class="protocol-logo">☁️</div>
-          <h3>Azure Blob Storage</h3>
-          <p>Microsoft Azure object storage. Authenticate with an Account Key or Connection String. Container-scoped access, server-side move operations, and virtual directory browsing built in.</p>
-          <div class="protocol-tags">
-            <span class="protocol-tag">Account Key</span>
-            <span class="protocol-tag">Connection String</span>
-            <span class="protocol-tag">Server-Side Copy</span>
-            <span class="protocol-tag">@azure/storage-blob</span>
+          <div class="protocol-card fade-up fade-up-delay-2">
+            <div class="protocol-logo">☁️</div>
+            <h3>Azure Blob</h3>
+            <p>Microsoft Azure object storage. Authenticate with an Account Key or Connection String.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">Account Key</span>
+              <span class="protocol-tag">Conn String</span>
+              <span class="protocol-tag">Server-Side Copy</span>
+            </div>
+          </div>
+          <div class="protocol-card fade-up fade-up-delay-3">
+            <div class="protocol-logo">📂</div>
+            <h3>Local FS</h3>
+            <p>Direct access to the server's local storage. Seamlessly bridge them to remote protocols.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">POSIX</span>
+              <span class="protocol-tag">Windows</span>
+              <span class="protocol-tag">Recursive</span>
+            </div>
+          </div>
+          <!-- Second set of cards (clones for seamless looping) -->
+          <div class="protocol-card">
+            <div class="protocol-logo">🔐</div>
+            <h3>SFTP</h3>
+            <p>Secure FTP over SSH. Supports both username/password and SSH private key authentication.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">SSH2</span>
+              <span class="protocol-tag">Password</span>
+              <span class="protocol-tag">Private Key</span>
+            </div>
+          </div>
+          <div class="protocol-card">
+            <div class="protocol-logo">🖥</div>
+            <h3>SMB / CIFS</h3>
+            <p>Windows file sharing and NAS devices. Full NTLMv2 authentication with optional domain support.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">NTLMv2</span>
+              <span class="protocol-tag">Domain</span>
+              <span class="protocol-tag">Auto-Retry</span>
+            </div>
+          </div>
+          <div class="protocol-card">
+            <div class="protocol-logo">☁️</div>
+            <h3>Azure Blob</h3>
+            <p>Microsoft Azure object storage. Authenticate with an Account Key or Connection String.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">Account Key</span>
+              <span class="protocol-tag">Conn String</span>
+              <span class="protocol-tag">Server-Side Copy</span>
+            </div>
+          </div>
+          <div class="protocol-card">
+            <div class="protocol-logo">📂</div>
+            <h3>Local FS</h3>
+            <p>Direct access to the server's local storage. Seamlessly bridge them to remote protocols.</p>
+            <div class="protocol-tags">
+              <span class="protocol-tag">POSIX</span>
+              <span class="protocol-tag">Windows</span>
+              <span class="protocol-tag">Recursive</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1732,7 +1803,7 @@
       <div class="section-header">
         <span class="section-tag">How it works</span>
         <h2>Up and running in three steps</h2>
-        <p class="lead">No agents, no cloud accounts, no complex config. Just Docker and your environment variables.</p>
+        <p class="lead">No agents, no cloud accounts, no complex config. Run it with a native installer or use the official Docker image.</p>
       </div>
       <div class="steps">
         <div class="step fade-up">
@@ -1858,6 +1929,71 @@
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    // Protocol Marquee & Drag
+    const track = document.querySelector('.protocol-track');
+    const grid = document.querySelector('.protocol-grid');
+    let x = 0;
+    let isDragging = false;
+    let startX, scrollLeftX;
+    let speed = 0.3; // pixels per frame
+
+    function marquee() {
+      if (!isDragging) {
+        x -= speed;
+        // Half of track (with clones) + half the gap
+        const halfWidth = track.scrollWidth / 2;
+        if (x <= -halfWidth) x = 0;
+        track.style.transform = `translateX(${x}px)`;
+      }
+      requestAnimationFrame(marquee);
+    }
+
+    grid.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.pageX;
+      scrollLeftX = x;
+    });
+
+    grid.addEventListener('mouseleave', () => isDragging = false);
+    grid.addEventListener('mouseup', () => isDragging = false);
+
+    grid.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const currentX = e.pageX;
+      const walk = (currentX - startX);
+      x = scrollLeftX + walk;
+
+      // Infinite loop handling for dragging
+      const halfWidth = track.scrollWidth / 2;
+      if (x > 0) x = -halfWidth;
+      if (x <= -halfWidth) x = 0;
+
+      track.style.transform = `translateX(${x}px)`;
+    });
+
+    // Support touch devices
+    grid.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      startX = e.touches[0].pageX;
+      scrollLeftX = x;
+    }, { passive: true });
+
+    grid.addEventListener('touchend', () => isDragging = false);
+
+    grid.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const currentX = e.touches[0].pageX;
+      const walk = (currentX - startX);
+      x = scrollLeftX + walk;
+      const halfWidth = track.scrollWidth / 2;
+      if (x > 0) x = -halfWidth;
+      if (x <= -halfWidth) x = 0;
+      track.style.transform = `translateX(${x}px)`;
+    }, { passive: true });
+
+    marquee();
   </script>
 </body>
 </html>
