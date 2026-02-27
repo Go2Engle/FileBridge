@@ -443,8 +443,20 @@ function Register-FileBridgeService {
         }
     }
 
-    # Start the service
-    & $NSSM_EXE start $SERVICE_NAME | Out-Null
+    # Start the service (redirect stderr so NSSM status messages don't bleed to console)
+    & $NSSM_EXE start $SERVICE_NAME 2>&1 | Out-Null
+
+    # NSSM 2.24 has a bug where it can leave the service in PAUSED on first start.
+    # Give the SCM a moment to settle, then resume or start if needed.
+    Start-Sleep -Seconds 2
+    $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+    if ($svc) {
+        if ($svc.Status -eq 'Paused') {
+            Resume-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+        } elseif ($svc.Status -ne 'Running') {
+            Start-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function Stop-FileBridgeService {
