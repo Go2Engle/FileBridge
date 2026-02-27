@@ -403,15 +403,20 @@ FILEBRIDGE_DATA_DIR=$DATA_DIR
 FILEBRIDGE_SERVICE_NAME=$SERVICE_NAME
 "@ | Set-Content $ENV_FILE -Encoding UTF8
 
-    # Restrict read access — Administrators + SYSTEM only
+    # Restrict write access — full control for Administrators + SYSTEM only.
+    # The current (installing) user gets Read so they can view the config
+    # without needing an elevated editor (UAC strips admin token for ACL access).
     try {
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $acl = Get-Acl $ENV_FILE
         $acl.SetAccessRuleProtection($true, $false)
         $rules = @(
             [System.Security.AccessControl.FileSystemAccessRule]::new(
                 'BUILTIN\Administrators', 'FullControl', 'Allow'),
             [System.Security.AccessControl.FileSystemAccessRule]::new(
-                'NT AUTHORITY\SYSTEM', 'FullControl', 'Allow')
+                'NT AUTHORITY\SYSTEM', 'FullControl', 'Allow'),
+            [System.Security.AccessControl.FileSystemAccessRule]::new(
+                $currentUser, 'Read', 'Allow')
         )
         foreach ($r in $rules) { $acl.AddAccessRule($r) }
         Set-Acl $ENV_FILE $acl
@@ -543,17 +548,26 @@ function Unregister-FileBridgeService {
 function Write-UpgradeHelper {
     $helperPath = "$APP_DIR\upgrade-helper.ps1"
 
-    @'
-# FileBridge in-app upgrade helper — runs as SYSTEM via scheduled task.
-# Reads the tarball URL from the trigger file, validates it, then upgrades.
-$ErrorActionPreference = 'Stop'
+    # The scheduled task runs as NT AUTHORITY\SYSTEM which does not inherit the
+    # FileBridge service environment variables. Embed the actual paths at install
+    # time using a double-quoted here-string so $APP_DIR / $DATA_DIR / $SERVICE_NAME
+    # are expanded now. All other $ references are backtick-escaped so they remain
+    # as literals in the generated script.
+    $header = @"
+# FileBridge in-app upgrade helper -- runs as SYSTEM via scheduled task.
+# Reads the zip URL from the trigger file, validates it, then upgrades.
+`$ErrorActionPreference = 'Stop'
 
-$TriggerFile = "$env:FILEBRIDGE_DATA_DIR\.update-trigger"
-$AppDir      = $env:FILEBRIDGE_INSTALL_DIR
-$DataDir     = $env:FILEBRIDGE_DATA_DIR
-$BackupDir   = "$DataDir\backups"
-$ServiceName = $env:FILEBRIDGE_SERVICE_NAME
+# Paths hardcoded at install time (SYSTEM account has no FILEBRIDGE_* env vars)
+`$TriggerFile = "$DATA_DIR\.update-trigger"
+`$AppDir      = "$APP_DIR"
+`$DataDir     = "$DATA_DIR"
+`$BackupDir   = "`$DataDir\backups"
+`$ServiceName = "$SERVICE_NAME"
 
+"@
+
+    $body = @'
 if (-not (Test-Path $TriggerFile)) {
     Write-EventLog -LogName Application -Source 'FileBridge' -EventId 1 `
         -EntryType Error -Message 'upgrade-helper: trigger file not found' -ErrorAction SilentlyContinue
@@ -602,7 +616,9 @@ if (Test-Path $NssmExe) {
 } else {
     Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
 }
-'@ | Set-Content $helperPath -Encoding UTF8
+'@
+
+    ($header + $body) | Set-Content $helperPath -Encoding UTF8
 }
 
 function Register-UpgradeTask {
