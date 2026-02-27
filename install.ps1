@@ -4,10 +4,10 @@
 #  One-liner (fresh install):
 #    irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 #
-#  With mode flags (scriptblock pattern):
-#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
-#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Uninstall
-#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Reinstall
+#  Upgrade / Uninstall / Reinstall — set FILEBRIDGE_MODE first:
+#    $env:FILEBRIDGE_MODE = 'upgrade';   irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+#    $env:FILEBRIDGE_MODE = 'uninstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+#    $env:FILEBRIDGE_MODE = 'reinstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 #
 #  Environment variable overrides (non-interactive / CI):
 #    $env:FILEBRIDGE_URL          = 'https://files.example.com'
@@ -15,13 +15,6 @@
 #    $env:FILEBRIDGE_AUTH_SECRET  = '<existing secret>'
 #    $env:FILEBRIDGE_MODE         = 'install' | 'upgrade' | 'uninstall' | 'reinstall'
 # ============================================================
-
-[CmdletBinding()]
-param(
-    [switch]$Upgrade,
-    [switch]$Uninstall,
-    [switch]$Reinstall
-)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'   # Suppress Invoke-WebRequest progress bar
@@ -46,12 +39,9 @@ $ENV_FILE   = 'C:\ProgramData\FileBridge\filebridge.env'
 $NSSM_EXE   = "$APP_DIR\nssm.exe"
 
 # ── Mode Resolution ────────────────────────────────────────────────────────
-# Param switches take priority, then $env:FILEBRIDGE_MODE, then default
+# Set $env:FILEBRIDGE_MODE before running to select a mode other than install.
 $script:MODE = 'install'
-if     ($Reinstall)                                   { $script:MODE = 'reinstall' }
-elseif ($Upgrade)                                     { $script:MODE = 'upgrade'   }
-elseif ($Uninstall)                                   { $script:MODE = 'uninstall' }
-elseif ($env:FILEBRIDGE_MODE -match '^(upgrade|uninstall|reinstall|install)$') {
+if ($env:FILEBRIDGE_MODE -match '^(upgrade|uninstall|reinstall|install)$') {
     $script:MODE = $env:FILEBRIDGE_MODE.ToLower()
 }
 
