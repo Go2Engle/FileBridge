@@ -19,6 +19,9 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'   # Suppress Invoke-WebRequest progress bar
 
+# Force TLS 1.2 — PowerShell 5.1 defaults to TLS 1.0 which many sites now reject
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # ── Constants ──────────────────────────────────────────────────────────────
 $REPO                = 'go2engle/filebridge'
 $APP_NAME            = 'FileBridge'
