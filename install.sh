@@ -405,6 +405,26 @@ EOF
   chmod 600 "$ENV_FILE"
 }
 
+patch_env_file() {
+  # Backfill any env keys absent from an older installation.
+  # Existing values are never modified — only missing keys are appended.
+  [ -f "$ENV_FILE" ] || return 0
+  local added=0
+  _add_if_missing() {
+    if ! grep -q "^${1}=" "$ENV_FILE" 2>/dev/null; then
+      printf '\n%s=%s' "$1" "$2" >> "$ENV_FILE"
+      added=$((added + 1))
+    fi
+  }
+  _add_if_missing "FILEBRIDGE_INSTALL_TYPE" "native"
+  _add_if_missing "FILEBRIDGE_OS"           "${OS}"
+  _add_if_missing "FILEBRIDGE_ARCH"         "${OS}-${ARCH}"
+  _add_if_missing "FILEBRIDGE_INSTALL_DIR"  "${APP_DIR}"
+  _add_if_missing "FILEBRIDGE_DATA_DIR"     "${DATA_DIR}"
+  _add_if_missing "FILEBRIDGE_SERVICE_NAME" "filebridge"
+  [ "$added" -gt 0 ] && info "Backfilled ${added} missing env var(s)"
+}
+
 # -- System user (Linux only)
 ensure_system_user() {
   [ "$OS" = "linux" ] || return 0
@@ -1018,6 +1038,7 @@ run_upgrade() {
   # Step 5 — Install new version
   print_step "Installing update"
   install_app "$latest"
+  patch_env_file
   # Re-write upgrade helper in case it changed in this release
   write_upgrade_helper
   # Re-register service in case the service unit changed

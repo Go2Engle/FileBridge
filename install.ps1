@@ -425,6 +425,31 @@ FILEBRIDGE_SERVICE_NAME=$SERVICE_NAME
     }
 }
 
+function Patch-EnvFile {
+    # Backfill any env keys absent from an older installation.
+    # Existing values are never modified — only missing keys are appended.
+    if (-not (Test-Path $ENV_FILE)) { return }
+    $content = Get-Content $ENV_FILE -Raw -Encoding UTF8
+    $added   = 0
+
+    function Add-IfMissing {
+        param([string]$Key, [string]$Value)
+        if ($content -notmatch "(?m)^$Key=") {
+            Add-Content -Path $ENV_FILE -Value "$Key=$Value" -Encoding UTF8
+            $script:added++
+        }
+    }
+
+    Add-IfMissing 'FILEBRIDGE_INSTALL_TYPE' 'native'
+    Add-IfMissing 'FILEBRIDGE_OS'           'windows'
+    Add-IfMissing 'FILEBRIDGE_ARCH'         "windows-$ARCH"
+    Add-IfMissing 'FILEBRIDGE_INSTALL_DIR'  $APP_DIR
+    Add-IfMissing 'FILEBRIDGE_DATA_DIR'     $DATA_DIR
+    Add-IfMissing 'FILEBRIDGE_SERVICE_NAME' $SERVICE_NAME
+
+    if ($added -gt 0) { Write-Ok "Backfilled $added missing env var(s)" }
+}
+
 # -- Read Value from Existing .env
 function Get-EnvValue {
     param([string]$Key, [string]$Default = '')
@@ -912,6 +937,7 @@ function Invoke-Upgrade {
     Write-Step "Installing update"
     Install-App $latest
     Write-Ok "Updated to $latest"
+    Patch-EnvFile
 
     # Refresh upgrade helper in case it changed in this release
     Write-UpgradeHelper
