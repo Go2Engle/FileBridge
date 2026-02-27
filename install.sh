@@ -281,8 +281,9 @@ check_node() {
 get_latest_version() {
   # Honour the PIN_VERSION override (--version flag or FILEBRIDGE_VERSION env)
   if [ -n "$PIN_VERSION" ]; then
-    # Normalise: add leading 'v' if absent
-    case "$PIN_VERSION" in v*) echo "$PIN_VERSION" ;; *) echo "v${PIN_VERSION}" ;; esac
+    # Normalise: add leading 'v' only for plain semver numbers (e.g. "0.6.0" → "v0.6.0")
+    # Leave non-semver tags like "test-branch-abc1234" untouched.
+    case "$PIN_VERSION" in v*) echo "$PIN_VERSION" ;; [0-9]*) echo "v${PIN_VERSION}" ;; *) echo "$PIN_VERSION" ;; esac
     return
   fi
   local v
@@ -539,7 +540,7 @@ if [ -z "$TARBALL_URL" ]; then
 fi
 
 # Validate URL matches expected GitHub release pattern
-if ! echo "$TARBALL_URL" | grep -qE '^https://github\.com/Go2Engle/FileBridge/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/filebridge-v[0-9]+\.[0-9]+\.[0-9]+-[a-z]+-[a-z0-9]+\.tar\.gz$'; then
+if ! echo "$TARBALL_URL" | grep -qE '^https://github\.com/Go2Engle/FileBridge/releases/download/[A-Za-z0-9._-]+/filebridge-[A-Za-z0-9._-]+-[a-z]+-[a-z0-9]+\.tar\.gz$'; then
   echo "upgrade-helper: URL failed validation: $TARBALL_URL" >&2
   exit 1
 fi

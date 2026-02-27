@@ -225,6 +225,14 @@ function Assert-Node {
 
 # -- GitHub Release Helpers
 function Get-LatestVersion {
+    # Honour the FILEBRIDGE_VERSION pin (used for branch test builds)
+    if ($env:FILEBRIDGE_VERSION) {
+        $pin = $env:FILEBRIDGE_VERSION
+        # Add leading 'v' only for plain semver numbers (e.g. "0.6.0" -> "v0.6.0")
+        # Leave non-semver tags like "test-branch-abc1234" untouched.
+        if ($pin -match '^\d') { return "v$pin" }
+        return $pin
+    }
     try {
         $release = Invoke-RestMethod "https://api.github.com/repos/$REPO/releases/latest" -UseBasicParsing
         return $release.tag_name
@@ -556,7 +564,7 @@ $ZipUrl = (Get-Content $TriggerFile -Raw).Trim()
 Remove-Item $TriggerFile -Force -ErrorAction SilentlyContinue
 
 # Validate URL
-if ($ZipUrl -notmatch '^https://github\.com/Go2Engle/FileBridge/releases/download/v[\d.]+/filebridge-v[\d.]+-windows-[a-z0-9]+\.zip$') {
+if ($ZipUrl -notmatch '^https://github\.com/Go2Engle/FileBridge/releases/download/[A-Za-z0-9._-]+/filebridge-[A-Za-z0-9._-]+-windows-[a-z0-9]+\.zip$') {
     exit 1
 }
 
