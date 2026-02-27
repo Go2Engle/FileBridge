@@ -15,69 +15,29 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
-[![License](https://img.shields.io/badge/License-Private-critical)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 </div>
 
 A self-hosted web application for automated file transfer scheduling and monitoring. FileBridge connects your SFTP, SMB/CIFS, and Azure Blob Storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging — all packaged as a single lightweight container.
 
----
-
-## Features
-
-- **Multi-protocol transfers** — SFTP, SMB/CIFS (NTLMv2), and Azure Blob Storage, with a pluggable interface for future protocols
-- **Cron scheduling** — Full cron expression support with preset shortcuts; manual Run Now trigger
-- **Timezone-aware scheduling** — Configurable system timezone applied to all cron jobs; next run time displayed per job
-- **File browser** — Browse, create directories, rename, and delete files on any configured connection directly from the UI
-- **Glob file filtering** — `*.csv`, `report_*.xlsx`, comma-separated multi-pattern support
-- **Delta sync** — Skip files that are already up to date at the destination
-- **Archive extraction** — Auto-extract ZIP, TAR, TAR.GZ, and TGZ at the destination
-- **Post-transfer actions** — Retain, delete, or move source files after transfer
-- **Job dry run** — Preview exactly what a job would do before running it for real
-- **Job logs panel** — Per-job transfer log viewer with real-time search and status filtering, embedded in the job detail sheet
-- **Audit logging** — Complete security trail: who did what, when, from where, with field-level diffs
-- **Structured logging** — pino JSON output to stdout; natively ingestable by Datadog, Grafana Loki, CloudWatch, Azure Monitor
-- **Automated backups** — Scheduled SQLite snapshots with integrity verification and in-app restore
-- **Health check endpoint** — `GET /api/health` for Kubernetes liveness/readiness probes
-- **Local & SSO authentication** — Built-in username/password auth with optional Azure AD and GitHub SSO, configurable via admin UI
-- **Dashboard** — KPI cards, 7-day transfer chart, job status list, activity feed
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| Authentication | NextAuth v5 (Auth.js) — local credentials + SSO (Azure AD, GitHub) |
-| Database | SQLite via better-sqlite3 + Drizzle ORM |
-| UI Components | shadcn/ui (new-york style) |
-| Styling | Tailwind CSS v4 |
-| State Management | TanStack Query v5 |
-| Forms | React Hook Form + Zod |
-| Charts | Recharts |
-| SFTP | ssh2-sftp-client |
-| SMB/CIFS | v9u-smb2 (NTLMv2-capable) |
-| Azure Blob Storage | @azure/storage-blob |
-| Scheduler | node-cron |
-| Logging | pino |
+**[Full documentation at go2engle.com/FileBridge](https://go2engle.com/FileBridge)**
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/filebridge.git
-cd filebridge
+git clone https://github.com/Go2Engle/FileBridge.git
+cd FileBridge
 npm install
-cp .env.example .env.local   # fill in your values
+cp .env.example .env   # fill in your values
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). The SQLite database is created automatically on first boot and a setup wizard guides you through creating the initial admin account.
 
-### Minimum .env for local development (no Azure AD)
+**Minimum `.env` for local development:**
 
 ```env
 AUTH_BYPASS_DEV=true
@@ -86,20 +46,18 @@ AUTH_SECRET=any-random-string-for-dev
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-### Minimum .env for production
+**Minimum `.env` for production:**
 
 ```env
 AUTH_SECRET=<openssl rand -base64 32>
 NEXTAUTH_URL=https://your-domain.com
 ```
 
-The SQLite database is created automatically at `data/filebridge.db` on first startup. No migration step required. On first launch, a setup wizard guides you through creating the initial administrator account. SSO providers (Azure AD, GitHub) can be configured via the admin UI after setup.
-
 ---
 
 ## Native Install (Linux / macOS / Windows)
 
-The one-liner installer handles Node.js, downloads the latest release, and registers FileBridge as a system service (systemd, launchd, or Windows Service).
+The one-liner installer handles Node.js, downloads the latest release, and registers FileBridge as a system service.
 
 **Linux / macOS:**
 
@@ -120,50 +78,34 @@ $env:FILEBRIDGE_MODE = 'upgrade';   irm https://raw.githubusercontent.com/go2eng
 $env:FILEBRIDGE_MODE = 'uninstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
-→ See the [Server Install](../../wiki/Server-Install) guide for service management and non-interactive/CI options.
-
 ---
 
 ## Docker
 
 ```bash
-docker build -t filebridge .
 docker run -d \
   -p 3000:3000 \
   -v filebridge-data:/app/data \
-  --env-file .env.production \
-  filebridge
+  --env-file .env \
+  ghcr.io/go2engle/filebridge:latest
 ```
 
-> `NODE_OPTIONS=--openssl-legacy-provider` must be set in the container for SMB/CIFS support. The Dockerfile sets this automatically.
+> `NODE_OPTIONS=--openssl-legacy-provider` is required for SMB/CIFS support. The published image sets this automatically.
 
 ---
 
 ## Documentation
 
-Full documentation is available in the [project wiki](../../wiki):
+Full documentation, configuration reference, and guides are available at **[go2engle.com/FileBridge](https://go2engle.com/FileBridge)**.
 
-| Page | Description |
-|---|---|
-| [Getting Started](../../wiki/Getting-Started) | Installation, prerequisites, first run |
-| [Configuration](../../wiki/Configuration) | All environment variables and app settings |
-| [Authentication](../../wiki/Authentication) | Local auth, SSO setup, user management, RBAC |
-| [Connections](../../wiki/Connections) | SFTP, SMB/CIFS, and Azure Blob Storage |
-| [Jobs](../../wiki/Jobs) | Scheduling, filtering, delta sync, dry run |
-| [Transfer Engine](../../wiki/Transfer-Engine) | How transfers work under the hood |
-| [API Reference](../../wiki/API-Reference) | All REST API endpoints |
-| [Audit Logging](../../wiki/Audit-Logging) | Security audit trail |
-| [Structured Logging](../../wiki/Structured-Logging) | pino logging and monitoring integration |
-| [Database Backups](../../wiki/Database-Backups) | Automated backups and restore |
-| [Health Check](../../wiki/Health-Check) | Kubernetes liveness/readiness probes |
-| [Architecture](../../wiki/Architecture) | System design and database schema |
-| [Docker Deployment](../../wiki/Docker-Deployment) | Container deployment guide |
-| [Extending FileBridge](../../wiki/Extending-FileBridge) | Adding new storage providers and features |
-| [Security](../../wiki/Security) | Security model and hardening checklist |
-| [Roadmap](../../wiki/Roadmap) | Planned features and known gaps |
+---
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code conventions, and the pull request process.
 
 ---
 
 ## License
 
-Private — internal use only.
+[MIT](LICENSE)

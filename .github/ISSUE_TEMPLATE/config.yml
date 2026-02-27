@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FileBridge Wiki
+    url: https://github.com/go2engle/FileBridge/wiki
+    about: Check the wiki for setup guides, configuration, and usage documentation.

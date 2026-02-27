@@ -271,6 +271,7 @@ jobs:
             "$STAGE/images"             \
             "$STAGE/prd.md"             \
             "$STAGE/README.md"          \
+            "$STAGE/CONTRIBUTING.md"    \
             "$STAGE/LICENSE"            \
             "$STAGE/index.html"         \
             "$STAGE/install.sh"         \
@@ -313,7 +314,8 @@ jobs:
 
           @(
             'docs', 'website', 'images',
-            'prd.md', 'README.md', 'LICENSE', 'index.html',
+            'prd.md', 'README.md', 'CONTRIBUTING.md',
+            'LICENSE', 'index.html',
             'install.sh', 'install.ps1', 'Dockerfile',
             'next.config.ts', 'tsconfig.json', 'eslint.config.mjs',
             'postcss.config.mjs', 'drizzle.config.ts',
