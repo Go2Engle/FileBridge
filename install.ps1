@@ -563,7 +563,7 @@ function Write-UpgradeHelper {
 `$TriggerFile = "$DATA_DIR\.update-trigger"
 `$AppDir      = "$APP_DIR"
 `$DataDir     = "$DATA_DIR"
-`$BackupDir   = "`$DataDir\backups"
+`$BackupDir   = "$BACKUP_DIR"
 `$LogDir      = "$LOG_DIR"
 `$LogFile     = "`$LogDir\upgrade-helper.log"
 `$ServiceName = "$SERVICE_NAME"
@@ -607,10 +607,15 @@ $Db = "$DataDir\filebridge.db"
 if (Test-Path $Db) {
     $Ts = Get-Date -Format 'yyyyMMdd_HHmmss'
     $BackupFile = "$BackupDir\filebridge_pre_upgrade_$Ts.db"
-    Copy-Item $Db $BackupFile -ErrorAction SilentlyContinue
-    Write-Log "Database backed up to: $BackupFile"
+    try {
+        if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+        Copy-Item $Db $BackupFile
+        Write-Log "Database backed up to: $BackupFile"
+    } catch {
+        Write-Log "Database backup failed (non-fatal): $($_.Exception.Message)" 'WARN'
+    }
 } else {
-    Write-Log "No database found at $Db — skipping backup"
+    Write-Log "No database found at $Db -- skipping backup"
 }
 
 # Stop service
