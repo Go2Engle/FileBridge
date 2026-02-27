@@ -385,6 +385,14 @@ BACKUP_PATH=$BACKUP_DIR
 
 # ── Logging ──────────────────────────────────────────────────
 LOG_LEVEL=info
+
+# ── Install metadata (used by the built-in updater) ──────
+FILEBRIDGE_INSTALL_TYPE=native
+FILEBRIDGE_OS=windows
+FILEBRIDGE_ARCH=windows-$ARCH
+FILEBRIDGE_INSTALL_DIR=$APP_DIR
+FILEBRIDGE_DATA_DIR=$DATA_DIR
+FILEBRIDGE_SERVICE_NAME=$SERVICE_NAME
 "@ | Set-Content $ENV_FILE -Encoding UTF8
 
     # Restrict read access — Administrators + SYSTEM only
@@ -519,6 +527,96 @@ function Unregister-FileBridgeService {
         & sc.exe delete $SERVICE_NAME | Out-Null
     }
     Start-Sleep -Seconds 2
+}
+
+# ── Upgrade Helper Script ───────────────────────────────────────────────────
+# Writes upgrade-helper.ps1 to the install dir and creates a scheduled task
+# that runs as SYSTEM so the app can trigger an upgrade without admin prompts.
+function Write-UpgradeHelper {
+    $helperPath = "$APP_DIR\upgrade-helper.ps1"
+
+    @'
+# FileBridge in-app upgrade helper — runs as SYSTEM via scheduled task.
+# Reads the tarball URL from the trigger file, validates it, then upgrades.
+$ErrorActionPreference = 'Stop'
+
+$TriggerFile = "$env:FILEBRIDGE_DATA_DIR\.update-trigger"
+$AppDir      = $env:FILEBRIDGE_INSTALL_DIR
+$DataDir     = $env:FILEBRIDGE_DATA_DIR
+$BackupDir   = "$DataDir\backups"
+$ServiceName = $env:FILEBRIDGE_SERVICE_NAME
+
+if (-not (Test-Path $TriggerFile)) {
+    Write-EventLog -LogName Application -Source 'FileBridge' -EventId 1 `
+        -EntryType Error -Message 'upgrade-helper: trigger file not found' -ErrorAction SilentlyContinue
+    exit 1
+}
+
+$ZipUrl = (Get-Content $TriggerFile -Raw).Trim()
+Remove-Item $TriggerFile -Force -ErrorAction SilentlyContinue
+
+# Validate URL
+if ($ZipUrl -notmatch '^https://github\.com/Go2Engle/FileBridge/releases/download/v[\d.]+/filebridge-v[\d.]+-windows-[a-z0-9]+\.zip$') {
+    exit 1
+}
+
+# Backup database
+$Db = "$DataDir\filebridge.db"
+if (Test-Path $Db) {
+    $Ts   = Get-Date -Format 'yyyyMMdd_HHmmss'
+    Copy-Item $Db "$BackupDir\filebridge_pre_upgrade_$Ts.db" -ErrorAction SilentlyContinue
+}
+
+# Stop service
+$NssmExe = "$AppDir\nssm.exe"
+if (Test-Path $NssmExe) {
+    & $NssmExe stop $ServiceName 2>$null | Out-Null
+} else {
+    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+}
+Start-Sleep -Seconds 3
+
+# Download and extract
+$Tmp = [System.IO.Path]::GetTempPath() + [System.IO.Path]::GetRandomFileName()
+New-Item -ItemType Directory -Path $Tmp | Out-Null
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $ZipUrl -OutFile "$Tmp\update.zip" -UseBasicParsing
+    Remove-Item "$AppDir\*" -Recurse -Force -Exclude 'nssm.exe' -ErrorAction SilentlyContinue
+    Expand-Archive -Path "$Tmp\update.zip" -DestinationPath $AppDir -Force
+} finally {
+    Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# Restart service
+if (Test-Path $NssmExe) {
+    & $NssmExe start $ServiceName 2>&1 | Out-Null
+} else {
+    Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+}
+'@ | Set-Content $helperPath -Encoding UTF8
+}
+
+function Register-UpgradeTask {
+    # Remove any old task first
+    Unregister-ScheduledTask -TaskName 'FileBridgeUpdater' -Confirm:$false -ErrorAction SilentlyContinue
+
+    $action  = New-ScheduledTaskAction `
+        -Execute 'powershell.exe' `
+        -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$APP_DIR\upgrade-helper.ps1`""
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddYears(10)   # on-demand only
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName 'FileBridgeUpdater' `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Principal $principal `
+        -Description 'FileBridge in-app upgrade helper — triggered by the web UI' | Out-Null
+
+    Write-Ok "Registered FileBridgeUpdater scheduled task"
 }
 
 # ── Health Check ───────────────────────────────────────────────────────────
@@ -682,6 +780,11 @@ function Invoke-Install {
     Write-EnvFile $fbSecret $fbUrl $fbPort
     Write-Ok "Config written to $ENV_FILE"
 
+    # Write upgrade helper and register the scheduled task
+    Write-Info "Installing upgrade helper..."
+    Write-UpgradeHelper
+    Register-UpgradeTask
+
     # Step 7 — Register & start service
     Write-Step "Starting service"
     Register-FileBridgeService
@@ -736,6 +839,10 @@ function Invoke-Upgrade {
     Install-App $latest
     Write-Ok "Updated to $latest"
 
+    # Refresh upgrade helper in case it changed in this release
+    Write-UpgradeHelper
+    Register-UpgradeTask
+
     # Step 6 — Re-register & start service
     Write-Step "Starting service"
     Register-FileBridgeService
@@ -768,6 +875,7 @@ function Invoke-Uninstall {
 
     Write-Info "Stopping and removing service..."
     Unregister-FileBridgeService
+    Unregister-ScheduledTask -TaskName 'FileBridgeUpdater' -Confirm:$false -ErrorAction SilentlyContinue
     Write-Ok "Service removed"
 
     Write-Info "Removing application files..."

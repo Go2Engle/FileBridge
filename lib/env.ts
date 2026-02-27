@@ -19,6 +19,14 @@ const envSchema = z.object({
   DATABASE_PATH: z.string().optional(),
   NEXTAUTH_URL: z.string().url("NEXTAUTH_URL must be a valid URL").optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).optional(),
+
+  // Install metadata (written by install.sh / install.ps1 / Dockerfile)
+  FILEBRIDGE_INSTALL_TYPE: z.enum(["native", "docker", "manual"]).optional(),
+  FILEBRIDGE_OS: z.string().optional(),
+  FILEBRIDGE_ARCH: z.string().optional(),
+  FILEBRIDGE_INSTALL_DIR: z.string().optional(),
+  FILEBRIDGE_DATA_DIR: z.string().optional(),
+  FILEBRIDGE_SERVICE_NAME: z.string().optional(),
 });
 
 export function validateEnv(): void {
