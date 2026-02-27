@@ -361,14 +361,6 @@ BACKUP_PATH=${BACKUP_DIR}
 
 # ── Logging ──────────────────────────────────────────────────
 LOG_LEVEL=info
-
-# ── Install metadata (used by the built-in updater) ──────
-FILEBRIDGE_INSTALL_TYPE=native
-FILEBRIDGE_OS=${OS}
-FILEBRIDGE_ARCH=${OS}-${ARCH}
-FILEBRIDGE_INSTALL_DIR=${APP_DIR}
-FILEBRIDGE_DATA_DIR=${DATA_DIR}
-FILEBRIDGE_SERVICE_NAME=filebridge
 EOF
 
   chmod 600 "$ENV_FILE"
@@ -473,150 +465,6 @@ EOF
   chmod 644 "$SERVICE_FILE"
 }
 
-# ── Upgrade helper script ────────────────────────────────
-# Writes a privileged upgrade helper to APP_DIR and configures the
-# OS-appropriate privilege escalation mechanism so the running app
-# can trigger an upgrade without requiring interactive sudo.
-write_upgrade_helper() {
-  local node_bin
-  node_bin=$(node_binary)
-
-  # ── Common upgrade helper (Linux & macOS) ────────────────
-  cat > "${APP_DIR}/upgrade-helper.sh" <<'UPGRADE_EOF'
-#!/usr/bin/env bash
-# FileBridge in-app upgrade helper
-# Called by the app API via the systemd path unit (Linux) or sudo (macOS).
-# Runs as root; validates the tarball URL before downloading.
-set -euo pipefail
-
-TRIGGER_FILE="${1:-}"
-TARBALL_URL="${2:-}"
-
-# ── Linux: read URL from trigger file ────────────────────
-if [ -z "$TARBALL_URL" ] && [ -n "$TRIGGER_FILE" ] && [ -f "$TRIGGER_FILE" ]; then
-  TARBALL_URL=$(cat "$TRIGGER_FILE")
-  rm -f "$TRIGGER_FILE"
-fi
-
-# ── macOS: URL passed directly as $1 ─────────────────────
-if [ -z "$TARBALL_URL" ] && [ -n "${1:-}" ]; then
-  TARBALL_URL="$1"
-fi
-
-if [ -z "$TARBALL_URL" ]; then
-  echo "upgrade-helper: no tarball URL provided" >&2
-  exit 1
-fi
-
-# Validate URL matches expected GitHub release pattern
-if ! echo "$TARBALL_URL" | grep -qE '^https://github\.com/Go2Engle/FileBridge/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/filebridge-v[0-9]+\.[0-9]+\.[0-9]+-[a-z]+-[a-z0-9]+\.tar\.gz$'; then
-  echo "upgrade-helper: URL failed validation: $TARBALL_URL" >&2
-  exit 1
-fi
-
-# Detect install dirs from env file (covers both Linux and macOS)
-APP_DIR="${FILEBRIDGE_INSTALL_DIR:-/opt/filebridge}"
-DATA_DIR="${FILEBRIDGE_DATA_DIR:-/var/lib/filebridge}"
-BACKUP_DIR="${DATA_DIR}/backups"
-
-SERVICE_NAME="${FILEBRIDGE_SERVICE_NAME:-filebridge}"
-OS_TYPE="$(uname -s | tr '[:upper:]' '[:lower:]')"
-
-# Backup database
-DB="${DATA_DIR}/filebridge.db"
-if [ -f "$DB" ]; then
-  TS="$(date +"%Y%m%d_%H%M%S")"
-  cp "$DB" "${BACKUP_DIR}/filebridge_pre_upgrade_${TS}.db" 2>/dev/null || true
-fi
-
-# Stop service
-if [ "$OS_TYPE" = "linux" ]; then
-  systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-else
-  launchctl stop com.filebridge.app 2>/dev/null || true
-fi
-
-# Download and extract
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-
-curl -fsSL -o "${TMP}/update.tar.gz" "$TARBALL_URL"
-find "$APP_DIR" -mindepth 1 -delete 2>/dev/null || rm -rf "${APP_DIR:?}"/* 2>/dev/null || true
-tar -xzf "${TMP}/update.tar.gz" -C "$APP_DIR"
-
-# Re-apply permissions (Linux only)
-if [ "$OS_TYPE" = "linux" ]; then
-  chown -R root:filebridge "$APP_DIR"
-  chmod 750 "$APP_DIR"
-  find "$APP_DIR" -mindepth 1 -type d -exec chmod 755 {} +
-  find "$APP_DIR" -mindepth 1 -type f -exec chmod 644 {} +
-  chmod 755 "${APP_DIR}/server.js" 2>/dev/null || true
-fi
-
-# Restart service
-if [ "$OS_TYPE" = "linux" ]; then
-  systemctl daemon-reload
-  systemctl start "$SERVICE_NAME"
-else
-  launchctl start com.filebridge.app 2>/dev/null || true
-fi
-
-echo "upgrade-helper: upgrade complete"
-UPGRADE_EOF
-
-  chmod 700 "${APP_DIR}/upgrade-helper.sh"
-  chown root "${APP_DIR}/upgrade-helper.sh" 2>/dev/null || true
-}
-
-# ── Linux: systemd path + updater units ──────────────────
-write_linux_updater_units() {
-  # Path unit: watches for /var/lib/filebridge/.update-trigger
-  cat > /etc/systemd/system/filebridge-update.path <<EOF
-[Unit]
-Description=Watch for FileBridge in-app update trigger
-PartOf=filebridge.service
-
-[Path]
-PathExists=${DATA_DIR}/.update-trigger
-Unit=filebridge-updater.service
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # One-shot updater service (runs as root)
-  cat > /etc/systemd/system/filebridge-updater.service <<EOF
-[Unit]
-Description=FileBridge one-shot in-app updater
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=${APP_DIR}/upgrade-helper.sh ${DATA_DIR}/.update-trigger
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=filebridge-updater
-EOF
-
-  chmod 644 /etc/systemd/system/filebridge-update.path
-  chmod 644 /etc/systemd/system/filebridge-updater.service
-  systemctl daemon-reload
-  systemctl enable filebridge-update.path >/dev/null 2>&1
-  systemctl start filebridge-update.path 2>/dev/null || true
-}
-
-# ── macOS: sudoers entry ──────────────────────────────────
-write_macos_sudoers() {
-  local current_user="${SUDO_USER:-$(whoami)}"
-  local sudoers_file="/etc/sudoers.d/filebridge"
-  # Allow the user running launchd (the install user) to call the upgrade
-  # helper without a password prompt — limited to this single script only.
-  echo "${current_user} ALL=(ALL) NOPASSWD: ${APP_DIR}/upgrade-helper.sh" \
-    > "$sudoers_file"
-  chmod 440 "$sudoers_file"
-}
-
 # ── launchd service (macOS) ──────────────────────────────────
 write_launchd_service() {
   local node_bin
@@ -705,17 +553,12 @@ stop_service() {
 unregister_service() {
   if [ "$OS" = "linux" ]; then
     systemctl disable --now filebridge 2>/dev/null || true
-    systemctl disable --now filebridge-update.path 2>/dev/null || true
     rm -f "$SERVICE_FILE"
-    rm -f /etc/systemd/system/filebridge-update.path
-    rm -f /etc/systemd/system/filebridge-updater.service
-    rm -f /etc/sudoers.d/filebridge 2>/dev/null || true
     systemctl daemon-reload
   else
     launchctl unload "$SERVICE_FILE" 2>/dev/null || true
     rm -f "$SERVICE_FILE"
     rm -f "$LAUNCH_WRAPPER"
-    rm -f /etc/sudoers.d/filebridge 2>/dev/null || true
   fi
 }
 
@@ -923,16 +766,6 @@ run_install() {
   stop_spinner "ok"
   ok "Config written to ${ENV_FILE}"
 
-  # Write upgrade helper + privilege setup (after config so APP_DIR/DATA_DIR are set)
-  start_spinner "Installing upgrade helper"
-  write_upgrade_helper
-  if [ "$OS" = "linux" ]; then
-    write_linux_updater_units
-  else
-    write_macos_sudoers
-  fi
-  stop_spinner "ok"
-
   # Step 7 — Start service
   print_step "Starting service"
   register_and_start_service
@@ -987,17 +820,13 @@ run_upgrade() {
   # Step 5 — Install new version
   print_step "Installing update"
   install_app "$latest"
-  # Re-write upgrade helper in case it changed in this release
-  write_upgrade_helper
   # Re-register service in case the service unit changed
   if [ "$OS" = "linux" ]; then
     write_systemd_service
-    write_linux_updater_units
     systemctl daemon-reload
     systemctl enable filebridge >/dev/null 2>&1
   else
     write_launchd_service
-    write_macos_sudoers
     launchctl unload "$SERVICE_FILE" 2>/dev/null || true
     launchctl load "$SERVICE_FILE"
   fi
