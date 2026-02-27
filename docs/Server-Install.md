@@ -2,6 +2,12 @@
 
 The quickest way to deploy FileBridge on a Linux server, macOS machine, or Windows host is the one-liner install script. It handles everything: checking prerequisites, installing Node.js if needed, downloading the latest release, creating OS-standard directories, generating a secure `AUTH_SECRET`, and registering FileBridge as a system service that starts automatically on boot.
 
+:::tip Recommended deployment
+**Ubuntu** (or any Debian-based Linux VM) with the one-liner install below is the recommended production setup. You get systemd service management, structured log output via journald, and the built-in **one-click in-app updater** (see [In-App Updater](#in-app-updater) below).
+
+All other install options — Docker, macOS, and Windows — are fully supported and production-viable. Use whatever fits your infrastructure.
+:::
+
 ---
 
 ## One-Liner Install
@@ -64,6 +70,12 @@ Writes the environment file with all required variables (paths vary by OS — se
 
 The script then waits for the `/api/health` endpoint to confirm the service is up.
 
+### 8 — Register in-app updater
+Sets up the privileged update helper so the web UI can apply future updates without terminal access:
+- **Linux**: installs `filebridge-update.path` + `filebridge-updater.service` systemd units (runs as root, triggered by a file written by the app)
+- **macOS**: adds a `/etc/sudoers.d/filebridge` entry granting passwordless `sudo` for the specific upgrade script
+- **Windows**: registers a `FileBridgeUpdater` scheduled task that runs as `SYSTEM` (triggered on demand by the app)
+
 ---
 
 ## Directory Layout
@@ -112,7 +124,50 @@ The full value is displayed at the end of a fresh install. On upgrades, the exis
 
 ---
 
+## In-App Updater
+
+Native installs include a built-in one-click updater. No terminal access is required once FileBridge is installed.
+
+### How it works
+
+When a new release is published, the **"Update available"** badge appears in the sidebar next to the version number. Clicking it takes you to **Settings → About**, where an admin can review the version information and apply the update.
+
+The updater:
+1. Fetches the latest release tag from the GitHub API
+2. Downloads the pre-built package for your platform directly from GitHub Releases
+3. Backs up `filebridge.db` with a timestamp
+4. Stops the service, extracts the new release, and restarts
+5. The browser polls `/api/health` and automatically reloads once the service is back up (~30 seconds)
+
+> **Admin only** — the "Update Now" button is only visible to users with the Administrator role.
+
+> **Active transfers** — the UI warns if transfers are currently running. It is recommended to wait until they complete before updating.
+
+### Platform details
+
+| Platform | Mechanism |
+|---|---|
+| Linux | A privileged `filebridge-updater.service` (one-shot, runs as root) is triggered by a `filebridge-update.path` watcher when the app writes a trigger file to the data directory. This avoids any `sudo` requirement from the app process itself (`NoNewPrivileges=yes` is preserved). |
+| macOS | A `/etc/sudoers.d/filebridge` entry grants passwordless `sudo` for the specific upgrade script path. The app spawns it as a detached subprocess. |
+| Windows | A `FileBridgeUpdater` scheduled task runs as `NT AUTHORITY\SYSTEM`. The app triggers it via `schtasks.exe /run` (no elevation needed to trigger a SYSTEM task). |
+
+### Docker
+
+Docker containers cannot replace their own image at runtime — the in-app updater is **not available** for Docker installs. The Settings → About page still shows the current and latest versions, and provides the `docker pull` command to update manually.
+
+See [Docker Deployment — Updating](Docker-Deployment#updating) for details.
+
+---
+
 ## Upgrading
+
+Native installs can be upgraded two ways:
+
+### Option 1 — In-app (recommended)
+
+Click **"Update available"** in the sidebar → **Settings → About** → **Update Now**. No terminal access required. See [In-App Updater](#in-app-updater) above.
+
+### Option 2 — Command line
 
 ### Linux / macOS
 
@@ -131,7 +186,9 @@ The upgrade process:
 2. Backs up `filebridge.db` to the backups directory with a timestamp
 3. Stops the service
 4. Extracts the new release over the app directory (config and data directories are untouched)
-5. Restarts the service and waits for the health check
+5. Adds any new configuration keys to the existing env file (existing values are never overwritten)
+6. Refreshes the in-app updater helper in case it changed in the new release
+7. Restarts the service and waits for the health check
 
 If FileBridge is already at the latest version, the script exits with a confirmation message.
 

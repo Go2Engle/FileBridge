@@ -8,10 +8,12 @@ This guide walks you through installing FileBridge, running the setup wizard, an
 
 | Method | Best for |
 |---|---|
-| [**Server Install**](Server-Install) | Production servers — Linux or macOS. One-liner script, automatic updates, runs as a system service. |
+| [**Server Install**](Server-Install) ⭐ | Production servers — Linux, macOS, or Windows. One-liner script, runs as a system service, includes one-click in-app updater. |
 | [**Docker**](Docker-Deployment) | Container-based environments, Compose stacks, Kubernetes. |
 | **From source** *(this guide)* | Local development and contributions. |
 
+> **Recommended**: The **Server Install on Ubuntu** (or any Debian-based Linux) is the smoothest production path — systemd service management, structured logging, and no-SSH one-click updates from the web UI. Docker, macOS, and Windows are all fully supported and production-viable; choose whatever suits your environment best.
+>
 > For a production server, start with the [Server Install](Server-Install) guide — it handles everything in one command.
 
 ---

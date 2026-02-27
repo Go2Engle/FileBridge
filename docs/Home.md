@@ -8,6 +8,10 @@ Welcome to the FileBridge documentation. FileBridge is a self-hosted web applica
 
 Get FileBridge running in one command. The script installs Node.js if needed, downloads the latest release, creates OS-standard directories, generates a secure `AUTH_SECRET`, and registers FileBridge as a system service that starts automatically on boot.
 
+:::tip Recommended deployment
+An **Ubuntu VM** with the one-liner install below gives you the smoothest experience — systemd service management, structured log output, and the built-in one-click updater. All other options (Docker, macOS, Windows) are fully supported and production-viable; choose whatever fits your environment.
+:::
+
 **Linux / macOS:**
 
 ```bash
@@ -26,15 +30,19 @@ Pull the pre-built image instead: `docker pull ghcr.io/go2engle/filebridge:lates
 
 **Upgrading an existing install:**
 
+Native installs support **one-click in-app updates** — when a new release is available, a notification appears in the sidebar. Admins can apply it from **Settings → About** with no terminal access required.
+
+You can also upgrade manually from the command line:
+
 ```bash
 # Linux / macOS
 curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh | sudo bash -s -- --upgrade
 
 # Windows (PowerShell — run as Administrator)
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
+$env:FILEBRIDGE_MODE = 'upgrade'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
 
-→ [Full Server Install guide](Server-Install) — options, directory layout, service management, non-interactive installs
+→ [Full Server Install guide](Server-Install) — options, directory layout, in-app updater, service management, non-interactive installs
 
 ---
 

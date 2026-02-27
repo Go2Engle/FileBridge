@@ -36,6 +36,19 @@ FileBridge is configured through a small set of environment variables. SSO provi
 | `NODE_OPTIONS` | Auto | — | Set to `--openssl-legacy-provider` for SMB NTLMv2 support. The npm scripts handle this automatically. |
 | `NODE_ENV` | Auto | — | Set by Next.js. Values: `development`, `production`, `test`. |
 
+### Install Metadata
+
+These variables are written automatically by the install scripts and are used by the built-in updater and the Settings → About page. You do not need to set them manually.
+
+| Variable | Set by | Description |
+|---|---|---|
+| `FILEBRIDGE_INSTALL_TYPE` | Installer / Dockerfile | `native` (install script), `docker` (container), or `manual` (from source). Controls whether the in-app updater is shown. |
+| `FILEBRIDGE_OS` | Installer | Operating system: `linux`, `darwin`, or `windows`. |
+| `FILEBRIDGE_ARCH` | Installer | Platform + architecture string used to select the correct release artifact (e.g. `linux-amd64`, `darwin-arm64`, `windows-amd64`). |
+| `FILEBRIDGE_INSTALL_DIR` | Installer | Absolute path to the application directory (e.g. `/opt/filebridge`). Used by the updater to locate the app files. |
+| `FILEBRIDGE_DATA_DIR` | Installer | Absolute path to the data directory (e.g. `/var/lib/filebridge`). Used by the updater to write the update trigger file. |
+| `FILEBRIDGE_SERVICE_NAME` | Installer | Service name registered with the OS service manager (e.g. `filebridge`, `FileBridge`). |
+
 ---
 
 ## Startup Validation
@@ -127,6 +140,17 @@ Configured at **Settings → Timezone**:
 | Timezone | IANA timezone identifier used for all cron job scheduling (e.g. `America/New_York`, `Europe/London`, `UTC`) |
 
 Defaults to `UTC` if not configured. Changing the timezone immediately reschedules all active jobs. Invalid IANA identifiers are rejected with a validation error.
+
+### About & Updates
+
+Configured at **Settings → About**:
+
+| Setting | Description |
+|---|---|
+| Current / latest version | Displays the running version and checks GitHub for the latest release |
+| Install type | Shows whether FileBridge is running as a native install, Docker container, or manual/dev install |
+| Update Now | Admin-only button (native installs only) — downloads and applies the latest release with ~30 seconds of downtime |
+| Manual upgrade commands | Copy-ready upgrade commands shown for native (Linux/macOS/Windows) and Docker installs |
 
 ### Backup Settings
 

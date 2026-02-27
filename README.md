@@ -59,6 +59,8 @@ NEXTAUTH_URL=https://your-domain.com
 
 The one-liner installer handles Node.js, downloads the latest release, and registers FileBridge as a system service.
 
+> **Recommended deployment**: An **Ubuntu VM** with the one-liner install below gives you the smoothest experience — systemd service management, structured log output, and the built-in one-click updater. All other install options (Docker, macOS, Windows) are fully supported and production-viable; choose whatever fits your environment.
+
 **Linux / macOS:**
 
 ```bash
@@ -77,6 +79,8 @@ $env:FILEBRIDGE_MODE = 'upgrade';   irm https://raw.githubusercontent.com/go2eng
 # Uninstall
 $env:FILEBRIDGE_MODE = 'uninstall'; irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
 ```
+
+Native installs include a **built-in updater**: when a new version is available, a notification appears in the sidebar. Admins can apply the update with one click from **Settings → About** — the service restarts automatically in ~30 seconds with no manual SSH required.
 
 ---
 
