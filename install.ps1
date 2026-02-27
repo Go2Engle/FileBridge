@@ -556,6 +556,7 @@ function Write-UpgradeHelper {
     $header = @"
 # FileBridge in-app upgrade helper -- runs as SYSTEM via scheduled task.
 # Reads the zip URL from the trigger file, validates it, then upgrades.
+# Log: $LOG_DIR\upgrade-helper.log
 `$ErrorActionPreference = 'Stop'
 
 # Paths hardcoded at install time (SYSTEM account has no FILEBRIDGE_* env vars)
@@ -563,58 +564,102 @@ function Write-UpgradeHelper {
 `$AppDir      = "$APP_DIR"
 `$DataDir     = "$DATA_DIR"
 `$BackupDir   = "`$DataDir\backups"
+`$LogDir      = "$LOG_DIR"
+`$LogFile     = "`$LogDir\upgrade-helper.log"
 `$ServiceName = "$SERVICE_NAME"
 
 "@
 
     $body = @'
+function Write-Log {
+    param([string]$Message, [string]$Level = 'INFO')
+    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $line = "[$ts] [$Level] $Message"
+    try {
+        if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
+        Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    } catch { <# best-effort #> }
+    Write-Output $line
+}
+
+Write-Log "--- upgrade-helper started ---"
+
+try {
+
 if (-not (Test-Path $TriggerFile)) {
-    Write-EventLog -LogName Application -Source 'FileBridge' -EventId 1 `
-        -EntryType Error -Message 'upgrade-helper: trigger file not found' -ErrorAction SilentlyContinue
+    Write-Log "Trigger file not found: $TriggerFile" 'ERROR'
     exit 1
 }
 
 $ZipUrl = (Get-Content $TriggerFile -Raw).Trim()
 Remove-Item $TriggerFile -Force -ErrorAction SilentlyContinue
+Write-Log "Trigger file read. URL: $ZipUrl"
 
 # Validate URL
 if ($ZipUrl -notmatch '^https://github\.com/Go2Engle/FileBridge/releases/download/[A-Za-z0-9._-]+/filebridge-[A-Za-z0-9._-]+-windows-[a-z0-9]+\.zip$') {
+    Write-Log "URL failed validation: $ZipUrl" 'ERROR'
     exit 1
 }
+Write-Log "URL validated OK"
 
 # Backup database
 $Db = "$DataDir\filebridge.db"
 if (Test-Path $Db) {
-    $Ts   = Get-Date -Format 'yyyyMMdd_HHmmss'
-    Copy-Item $Db "$BackupDir\filebridge_pre_upgrade_$Ts.db" -ErrorAction SilentlyContinue
+    $Ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $BackupFile = "$BackupDir\filebridge_pre_upgrade_$Ts.db"
+    Copy-Item $Db $BackupFile -ErrorAction SilentlyContinue
+    Write-Log "Database backed up to: $BackupFile"
+} else {
+    Write-Log "No database found at $Db — skipping backup"
 }
 
 # Stop service
 $NssmExe = "$AppDir\nssm.exe"
+Write-Log "Stopping service: $ServiceName"
 if (Test-Path $NssmExe) {
-    & $NssmExe stop $ServiceName 2>$null | Out-Null
+    $nssmOut = & $NssmExe stop $ServiceName 2>&1
+    Write-Log "nssm stop output: $nssmOut"
 } else {
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
 }
 Start-Sleep -Seconds 3
+Write-Log "Service stopped"
 
-# Download and extract
+# Download
 $Tmp = [System.IO.Path]::GetTempPath() + [System.IO.Path]::GetRandomFileName()
 New-Item -ItemType Directory -Path $Tmp | Out-Null
+$ZipPath = "$Tmp\update.zip"
+Write-Log "Downloading $ZipUrl"
 try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $ZipUrl -OutFile "$Tmp\update.zip" -UseBasicParsing
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
+    $sizeMB = [math]::Round((Get-Item $ZipPath).Length / 1MB, 1)
+    Write-Log "Download complete ($sizeMB MB)"
+
+    # Extract
+    Write-Log "Removing old app files from: $AppDir"
     Remove-Item "$AppDir\*" -Recurse -Force -Exclude 'nssm.exe' -ErrorAction SilentlyContinue
-    Expand-Archive -Path "$Tmp\update.zip" -DestinationPath $AppDir -Force
+    Write-Log "Extracting archive to: $AppDir"
+    Expand-Archive -Path $ZipPath -DestinationPath $AppDir -Force
+    Write-Log "Extraction complete"
 } finally {
     Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # Restart service
+Write-Log "Starting service: $ServiceName"
 if (Test-Path $NssmExe) {
-    & $NssmExe start $ServiceName 2>&1 | Out-Null
+    $nssmOut = & $NssmExe start $ServiceName 2>&1
+    Write-Log "nssm start output: $nssmOut"
 } else {
     Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+}
+Write-Log "--- upgrade-helper finished successfully ---"
+
+} catch {
+    Write-Log "UNHANDLED ERROR: $($_.Exception.Message)" 'ERROR'
+    Write-Log "Stack trace: $($_.ScriptStackTrace)" 'ERROR'
+    exit 1
 }
 '@
 
