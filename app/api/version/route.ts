@@ -36,15 +36,10 @@ export async function GET() {
     // Version check is non-critical; silently fail
   }
 
-  const installType = process.env.FILEBRIDGE_INSTALL_TYPE ?? "manual";
-  const installOS = process.env.FILEBRIDGE_OS ?? process.platform;
-
   return NextResponse.json({
     currentVersion,
     latestVersion,
     updateAvailable,
     releasesUrl: RELEASES_PAGE,
-    installType,
-    installOS,
   });
 }
