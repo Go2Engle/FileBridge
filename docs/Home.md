@@ -1,4 +1,4 @@
-# FileBridge Wiki
+# FileBridge
 
 Welcome to the FileBridge documentation. FileBridge is a self-hosted web application for automated file transfer scheduling and monitoring. It connects SFTP, SMB/CIFS, and Azure Blob Storage systems through a modern dashboard, letting you define transfer jobs with cron scheduling, glob filtering, archive extraction, and comprehensive audit logging.
 
