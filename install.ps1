@@ -1,0 +1,759 @@
+# ============================================================
+#  FileBridge Install / Upgrade Script for Windows
+#
+#  One-liner (fresh install):
+#    irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex
+#
+#  With mode flags (scriptblock pattern):
+#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Upgrade
+#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Uninstall
+#    & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1'))) -Reinstall
+#
+#  Environment variable overrides (non-interactive / CI):
+#    $env:FILEBRIDGE_URL          = 'https://files.example.com'
+#    $env:FILEBRIDGE_PORT         = '3000'
+#    $env:FILEBRIDGE_AUTH_SECRET  = '<existing secret>'
+#    $env:FILEBRIDGE_MODE         = 'install' | 'upgrade' | 'uninstall' | 'reinstall'
+# ============================================================
+
+[CmdletBinding()]
+param(
+    [switch]$Upgrade,
+    [switch]$Uninstall,
+    [switch]$Reinstall
+)
+
+$ErrorActionPreference = 'Stop'
+$ProgressPreference    = 'SilentlyContinue'   # Suppress Invoke-WebRequest progress bar
+
+# ── Constants ──────────────────────────────────────────────────────────────
+$REPO                = 'go2engle/filebridge'
+$APP_NAME            = 'FileBridge'
+$REQUIRED_NODE_MAJOR = 20
+$DEFAULT_PORT        = 3000
+$HEALTH_TIMEOUT      = 60
+$HEALTH_INTERVAL     = 2
+$SERVICE_NAME        = 'FileBridge'
+$NSSM_VERSION        = '2.24'
+
+# ── Paths ──────────────────────────────────────────────────────────────────
+$APP_DIR    = 'C:\Program Files\FileBridge'
+$CONFIG_DIR = 'C:\ProgramData\FileBridge'
+$DATA_DIR   = 'C:\ProgramData\FileBridge\data'
+$BACKUP_DIR = 'C:\ProgramData\FileBridge\backups'
+$LOG_DIR    = 'C:\ProgramData\FileBridge\logs'
+$ENV_FILE   = 'C:\ProgramData\FileBridge\filebridge.env'
+$NSSM_EXE   = "$APP_DIR\nssm.exe"
+
+# ── Mode Resolution ────────────────────────────────────────────────────────
+# Param switches take priority, then $env:FILEBRIDGE_MODE, then default
+$script:MODE = 'install'
+if     ($Reinstall)                                   { $script:MODE = 'reinstall' }
+elseif ($Upgrade)                                     { $script:MODE = 'upgrade'   }
+elseif ($Uninstall)                                   { $script:MODE = 'uninstall' }
+elseif ($env:FILEBRIDGE_MODE -match '^(upgrade|uninstall|reinstall|install)$') {
+    $script:MODE = $env:FILEBRIDGE_MODE.ToLower()
+}
+
+$FORCE_REINSTALL = $script:MODE -eq 'reinstall'
+if ($FORCE_REINSTALL) { $script:MODE = 'install' }
+
+# ── Architecture ───────────────────────────────────────────────────────────
+$ARCH = switch ($env:PROCESSOR_ARCHITECTURE) {
+    'AMD64' { 'amd64' }
+    'ARM64' { 'arm64' }
+    default {
+        Write-Host "  Error: Unsupported architecture: $($env:PROCESSOR_ARCHITECTURE)" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# ── Step Counter ───────────────────────────────────────────────────────────
+$script:_step_num    = 0
+$script:_total_steps = 7
+
+# ── Print Helpers ──────────────────────────────────────────────────────────
+function Write-Banner {
+    Write-Host ""
+    Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "  |                                          |" -ForegroundColor Cyan
+    Write-Host "  |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "FileBridge" -NoNewline -ForegroundColor White
+    Write-Host "                               |" -ForegroundColor Cyan
+    Write-Host "  |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "Automated File Transfer Scheduler" -NoNewline -ForegroundColor DarkGray
+    Write-Host "       |" -ForegroundColor Cyan
+    Write-Host "  |  " -NoNewline -ForegroundColor Cyan
+    Write-Host "https://github.com/$REPO" -NoNewline -ForegroundColor DarkGray
+    Write-Host "  |" -ForegroundColor Cyan
+    Write-Host "  |                                          |" -ForegroundColor Cyan
+    Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Write-Step {
+    param([string]$Message)
+    $script:_step_num++
+    Write-Host ""
+    Write-Host "  " -NoNewline
+    Write-Host "[$($script:_step_num)/$($script:_total_steps)]" -ForegroundColor Cyan -NoNewline
+    Write-Host " $Message" -ForegroundColor White
+}
+
+function Write-Ok {
+    param([string]$Message)
+    Write-Host "  " -NoNewline
+    Write-Host "+" -ForegroundColor Green -NoNewline
+    Write-Host "  $Message"
+}
+
+function Write-Warn {
+    param([string]$Message)
+    Write-Host "  " -NoNewline
+    Write-Host "!" -ForegroundColor Yellow -NoNewline
+    Write-Host "  $Message"
+}
+
+function Write-Info {
+    param([string]$Message)
+    Write-Host "  " -NoNewline
+    Write-Host "->" -ForegroundColor DarkGray -NoNewline
+    Write-Host "  $Message"
+}
+
+function Write-Die {
+    param([string]$Message)
+    Write-Host ""
+    Write-Host "  Error: $Message" -ForegroundColor Red
+    Write-Host ""
+    exit 1
+}
+
+# ── Administrator Check ────────────────────────────────────────────────────
+function Test-IsAdministrator {
+    $id        = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]$id
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# ── Node.js Helpers ────────────────────────────────────────────────────────
+function Get-NodeMajor {
+    try {
+        $ver = & node --version 2>$null
+        if ($ver -match 'v(\d+)') { return [int]$Matches[1] }
+    } catch {}
+    return 0
+}
+
+function Invoke-RefreshPath {
+    $machinePath = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine')
+    $userPath    = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+    $env:PATH    = "$machinePath;$userPath"
+}
+
+function Install-Node {
+    Write-Warn "Node.js $REQUIRED_NODE_MAJOR+ is required but not found."
+    $ans = Read-Host "  Install it automatically? [Y/n]"
+    if ($ans -match '^[Nn]') {
+        Write-Die "Node.js $REQUIRED_NODE_MAJOR+ is required. Install from: https://nodejs.org"
+    }
+
+    # Try winget first (available on Windows 10 1709+ / Windows 11)
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        Write-Info "Installing Node.js $REQUIRED_NODE_MAJOR LTS via winget..."
+        & winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+        Invoke-RefreshPath
+        if ((Get-NodeMajor) -ge $REQUIRED_NODE_MAJOR) {
+            Write-Ok "Node.js installed via winget"
+            return
+        }
+        Write-Warn "winget install did not succeed; falling back to direct download."
+    }
+
+    # Fallback: direct .msi download from nodejs.org
+    Write-Info "Fetching Node.js $REQUIRED_NODE_MAJOR LTS release info..."
+    try {
+        $distIndex = Invoke-RestMethod 'https://nodejs.org/dist/index.json' -UseBasicParsing
+    } catch {
+        Write-Die "Could not reach nodejs.org. Check your internet connection."
+    }
+
+    $lts = $distIndex |
+        Where-Object { $_.lts -and ($_.version -match "^v$REQUIRED_NODE_MAJOR\.") } |
+        Select-Object -First 1
+
+    if (-not $lts) {
+        Write-Die "Could not find a Node.js $REQUIRED_NODE_MAJOR LTS release."
+    }
+
+    $nodeVer  = $lts.version
+    $msiArch  = if ($ARCH -eq 'arm64') { 'arm64' } else { 'x64' }
+    $msiUrl   = "https://nodejs.org/dist/$nodeVer/node-$nodeVer-$msiArch.msi"
+    $msiPath  = "$env:TEMP\node-installer.msi"
+
+    Write-Info "Downloading Node.js $nodeVer ($msiArch)..."
+    try {
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+    } catch {
+        Write-Die "Failed to download Node.js installer from: $msiUrl"
+    }
+
+    Write-Info "Running Node.js installer (silent, this may take a moment)..."
+    $proc = Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /qn /norestart" -Wait -PassThru -NoNewWindow
+    Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+
+    if ($proc.ExitCode -ne 0) {
+        Write-Die "Node.js MSI installer exited with code $($proc.ExitCode)."
+    }
+
+    Invoke-RefreshPath
+}
+
+function Assert-Node {
+    if ((Get-NodeMajor) -ge $REQUIRED_NODE_MAJOR) { return }
+    Install-Node
+    if ((Get-NodeMajor) -lt $REQUIRED_NODE_MAJOR) {
+        Write-Die "Node.js installation failed. Install Node.js $REQUIRED_NODE_MAJOR+ manually: https://nodejs.org"
+    }
+}
+
+# ── GitHub Release Helpers ─────────────────────────────────────────────────
+function Get-LatestVersion {
+    try {
+        $release = Invoke-RestMethod "https://api.github.com/repos/$REPO/releases/latest" -UseBasicParsing
+        return $release.tag_name
+    } catch {
+        Write-Die "Could not fetch latest version from GitHub. Check your internet connection."
+    }
+}
+
+function Get-InstalledVersion {
+    $vf = "$APP_DIR\FILEBRIDGE_VERSION"
+    if (Test-Path $vf) { return (Get-Content $vf -Raw).Trim() }
+    return 'unknown'
+}
+
+# ── NSSM Helpers ───────────────────────────────────────────────────────────
+function Install-NSSM {
+    if (Test-Path $NSSM_EXE) { return }
+
+    Write-Info "Downloading NSSM $NSSM_VERSION (Windows service manager)..."
+    $nssmUrl  = "https://nssm.cc/release/nssm-$NSSM_VERSION.zip"
+    $tmpDir   = "$env:TEMP\nssm-dl"
+    $zipPath  = "$tmpDir\nssm.zip"
+
+    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+    try {
+        Invoke-WebRequest -Uri $nssmUrl -OutFile $zipPath -UseBasicParsing
+    } catch {
+        Write-Die "Failed to download NSSM from: $nssmUrl`nCheck your internet connection."
+    }
+
+    Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+
+    # NSSM zip contains win32/ and win64/ subdirectories
+    $nssmBin = "$tmpDir\nssm-$NSSM_VERSION\win64\nssm.exe"
+    if (-not (Test-Path $nssmBin)) {
+        $nssmBin = "$tmpDir\nssm-$NSSM_VERSION\win32\nssm.exe"
+    }
+    if (-not (Test-Path $nssmBin)) {
+        Write-Die "Could not find nssm.exe in the downloaded archive."
+    }
+
+    New-Item -ItemType Directory -Force -Path $APP_DIR | Out-Null
+    Copy-Item $nssmBin $NSSM_EXE -Force
+    Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── Download & Extract App ─────────────────────────────────────────────────
+function Install-App {
+    param([string]$Version)
+
+    $zipName = "filebridge-$Version-windows-$ARCH.zip"
+    $url     = "https://github.com/$REPO/releases/download/$Version/$zipName"
+    $tmpDir  = "$env:TEMP\filebridge-install"
+    $zipPath = "$tmpDir\filebridge.zip"
+
+    New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+    Write-Info "Downloading FileBridge $Version for windows/$ARCH..."
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+    } catch {
+        Write-Die "Download failed.`nURL: $url`n`nVerify that a release exists for windows/$ARCH at:`nhttps://github.com/$REPO/releases"
+    }
+
+    if (-not (Test-Path $zipPath) -or (Get-Item $zipPath).Length -eq 0) {
+        Write-Die "Downloaded file is empty or missing. URL: $url"
+    }
+
+    Write-Info "Extracting application files..."
+    # Clear existing app files while preserving the directory and NSSM
+    if (Test-Path $APP_DIR) {
+        Get-ChildItem $APP_DIR -Exclude 'nssm.exe', 'FILEBRIDGE_VERSION' |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType Directory -Force -Path $APP_DIR | Out-Null
+
+    Expand-Archive -Path $zipPath -DestinationPath $APP_DIR -Force
+
+    # Write version marker
+    $Version | Set-Content "$APP_DIR\FILEBRIDGE_VERSION" -NoNewline -Encoding UTF8
+
+    Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ── Generate AUTH_SECRET ───────────────────────────────────────────────────
+function New-AuthSecret {
+    $rng   = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $bytes = [byte[]]::new(48)
+    $rng.GetBytes($bytes)
+    $b64   = [Convert]::ToBase64String($bytes) -replace '[/+=]', ''
+    return $b64.Substring(0, [Math]::Min(64, $b64.Length))
+}
+
+# ── Prompt Helper ──────────────────────────────────────────────────────────
+function Get-PromptOrEnv {
+    param([string]$VarName, [string]$PromptText, [string]$Default)
+    $current = [System.Environment]::GetEnvironmentVariable($VarName)
+    if ($current) { return $current }
+    if ($Default) {
+        $input = Read-Host "  $PromptText [$Default]"
+        return if ($input) { $input } else { $Default }
+    }
+    return Read-Host "  $PromptText"
+}
+
+# ── Write .env File ────────────────────────────────────────────────────────
+function Write-EnvFile {
+    param([string]$Secret, [string]$Url, [string]$Port)
+
+    New-Item -ItemType Directory -Force -Path $CONFIG_DIR | Out-Null
+
+    $timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' UTC'
+
+    @"
+# FileBridge Configuration
+# Generated by install.ps1 on $timestamp
+#
+# !!  IMPORTANT  !!
+# This file contains your AUTH_SECRET.  Back it up alongside
+# your database.  Without it you cannot recover encrypted
+# connection credentials after a server rebuild.
+# ─────────────────────────────────────────────────────────────
+
+NODE_ENV=production
+NODE_OPTIONS=--openssl-legacy-provider
+
+# ── Authentication ────────────────────────────────────────────
+# Used to sign sessions and encrypt stored SSO credentials.
+AUTH_SECRET=$Secret
+
+# ── Network ──────────────────────────────────────────────────
+NEXTAUTH_URL=$Url
+PORT=$Port
+HOSTNAME=0.0.0.0
+
+# ── Storage ──────────────────────────────────────────────────
+DATABASE_PATH=$DATA_DIR\filebridge.db
+BACKUP_PATH=$BACKUP_DIR
+
+# ── Logging ──────────────────────────────────────────────────
+LOG_LEVEL=info
+"@ | Set-Content $ENV_FILE -Encoding UTF8
+
+    # Restrict read access — Administrators + SYSTEM only
+    try {
+        $acl = Get-Acl $ENV_FILE
+        $acl.SetAccessRuleProtection($true, $false)
+        $rules = @(
+            [System.Security.AccessControl.FileSystemAccessRule]::new(
+                'BUILTIN\Administrators', 'FullControl', 'Allow'),
+            [System.Security.AccessControl.FileSystemAccessRule]::new(
+                'NT AUTHORITY\SYSTEM', 'FullControl', 'Allow')
+        )
+        foreach ($r in $rules) { $acl.AddAccessRule($r) }
+        Set-Acl $ENV_FILE $acl
+    } catch {
+        Write-Warn "Could not restrict permissions on env file (non-fatal)."
+    }
+}
+
+# ── Read Value from Existing .env ──────────────────────────────────────────
+function Get-EnvValue {
+    param([string]$Key, [string]$Default = '')
+    if (Test-Path $ENV_FILE) {
+        $line = Get-Content $ENV_FILE |
+            Where-Object { $_ -match "^${Key}=" } |
+            Select-Object -First 1
+        if ($line) {
+            return ($line -split '=', 2)[1].Trim('"').Trim("'")
+        }
+    }
+    return $Default
+}
+
+# ── Directories ────────────────────────────────────────────────────────────
+function New-AppDirectories {
+    foreach ($dir in @($APP_DIR, $CONFIG_DIR, $DATA_DIR, $BACKUP_DIR, $LOG_DIR)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+}
+
+# ── Windows Service (NSSM) ─────────────────────────────────────────────────
+function Register-FileBridgeService {
+    Install-NSSM
+
+    $nodePath = (Get-Command node -ErrorAction Stop).Source
+
+    # Remove any pre-existing service cleanly
+    $existing = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Info "Removing existing service registration..."
+        if ($existing.Status -eq 'Running') {
+            & $NSSM_EXE stop $SERVICE_NAME 2>$null | Out-Null
+            Start-Sleep -Seconds 3
+        }
+        & $NSSM_EXE remove $SERVICE_NAME confirm 2>$null | Out-Null
+        Start-Sleep -Seconds 1
+    }
+
+    # Install the service
+    & $NSSM_EXE install    $SERVICE_NAME $nodePath "$APP_DIR\server.js" | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppDirectory    $APP_DIR         | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME DisplayName     "$APP_NAME File Transfer Service" | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME Description     "Automated File Transfer Scheduler - https://github.com/$REPO" | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME Start           SERVICE_AUTO_START | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppStdout        "$LOG_DIR\filebridge.log"       | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppStderr        "$LOG_DIR\filebridge.error.log" | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppRotateFiles   1         | Out-Null
+    & $NSSM_EXE set        $SERVICE_NAME AppRotateBytes   10485760  | Out-Null  # 10 MB
+    & $NSSM_EXE set        $SERVICE_NAME AppRestartDelay  10000     | Out-Null  # 10s
+
+    # Inject environment from the .env file via NSSM's registry key (REG_MULTI_SZ)
+    # This is more reliable than passing each var on the command line
+    $envVars = Get-Content $ENV_FILE |
+        Where-Object { $_ -match '^[A-Z_][A-Z0-9_]*=.+' } |
+        ForEach-Object { $_.Trim() }
+
+    if ($envVars.Count -gt 0) {
+        $nssmParamsKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$SERVICE_NAME\Parameters"
+        # Wait for NSSM to create the key
+        $waited = 0
+        while (-not (Test-Path $nssmParamsKey) -and $waited -lt 10) {
+            Start-Sleep -Seconds 1; $waited++
+        }
+        if (Test-Path $nssmParamsKey) {
+            Set-ItemProperty -Path $nssmParamsKey -Name 'AppEnvironmentExtra' -Value $envVars -Type MultiString
+        }
+    }
+
+    # Start the service
+    & $NSSM_EXE start $SERVICE_NAME | Out-Null
+}
+
+function Stop-FileBridgeService {
+    if (Test-Path $NSSM_EXE) {
+        & $NSSM_EXE stop $SERVICE_NAME 2>$null | Out-Null
+    } else {
+        Stop-Service -Name $SERVICE_NAME -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Unregister-FileBridgeService {
+    $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+    if (-not $svc) { return }
+
+    if (Test-Path $NSSM_EXE) {
+        & $NSSM_EXE stop   $SERVICE_NAME          2>$null | Out-Null
+        & $NSSM_EXE remove $SERVICE_NAME confirm   2>$null | Out-Null
+    } else {
+        Stop-Service -Name $SERVICE_NAME -Force -ErrorAction SilentlyContinue
+        & sc.exe delete $SERVICE_NAME | Out-Null
+    }
+    Start-Sleep -Seconds 2
+}
+
+# ── Health Check ───────────────────────────────────────────────────────────
+function Wait-ForHealth {
+    param([string]$Port)
+    $url     = "http://localhost:$Port/api/health"
+    $elapsed = 0
+
+    Write-Info "Waiting for FileBridge to be ready..."
+    while ($elapsed -lt $HEALTH_TIMEOUT) {
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) {
+                Write-Ok "FileBridge is ready"
+                return
+            }
+        } catch {}
+        Start-Sleep -Seconds $HEALTH_INTERVAL
+        $elapsed += $HEALTH_INTERVAL
+    }
+    Write-Warn "Health check timed out after ${HEALTH_TIMEOUT}s — service may still be starting."
+    Write-Info "Check logs at: $LOG_DIR"
+    Write-Info "Service status: Get-Service -Name $SERVICE_NAME"
+}
+
+# ── Pre-upgrade Database Backup ────────────────────────────────────────────
+function Backup-Database {
+    $db = "$DATA_DIR\filebridge.db"
+    if (-not (Test-Path $db)) { return }
+
+    $ts   = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $dest = "$BACKUP_DIR\filebridge_pre_upgrade_$ts.db"
+
+    Write-Info "Backing up database..."
+    Copy-Item $db $dest
+    Write-Ok "Database backed up to: $dest"
+}
+
+# ── Auto-detect Upgrade ────────────────────────────────────────────────────
+function Select-AutoMode {
+    if ($script:MODE -ne 'install') { return }
+    if ($FORCE_REINSTALL) { return }
+    if (-not (Test-Path $APP_DIR) -or -not (Test-Path $ENV_FILE)) { return }
+
+    Write-Warn "An existing FileBridge installation was detected."
+    $ans = Read-Host "  Upgrade to the latest version instead? [Y/n]"
+    if ($ans -notmatch '^[Nn]') { $script:MODE = 'upgrade' }
+}
+
+# ── Summary Box ────────────────────────────────────────────────────────────
+function Write-Summary {
+    param([string]$Version, [string]$Url, [string]$Port, [string]$Secret, [bool]$IsUpgrade)
+
+    $action = if ($IsUpgrade) { 'Upgraded' } else { 'Installed' }
+    $w      = 62   # inner width
+
+    $line = { param($t) Write-Host ("  |  {0,-$($w - 4)}  |" -f $t) -ForegroundColor Green }
+    $kv   = { param($k, $v) Write-Host ("  |  {0,-18} {1,-$($w - 22)}  |" -f $k, $v) -ForegroundColor Green }
+    $sep  = { Write-Host ("  +" + ("-" * $w) + "+") -ForegroundColor Green }
+
+    Write-Host ""
+    & $sep
+    & $line ""
+    & $line "  FileBridge $action Successfully!"
+    & $line ""
+    & $sep
+    & $kv "Version:"  $Version
+    & $kv "URL:"      $Url
+    & $kv "Port:"     $Port
+    & $kv "App:"      $APP_DIR
+    & $kv "Config:"   $ENV_FILE
+    & $kv "Data:"     $DATA_DIR
+    & $kv "Backups:"  $BACKUP_DIR
+    & $kv "Service:"  "Get-Service -Name $SERVICE_NAME"
+    & $kv "Logs:"     $LOG_DIR
+    & $sep
+    & $line ""
+    & $line "  WARNING: AUTH_SECRET - BACK THIS UP!"
+    & $line ""
+    & $line "  Saved to:"
+    & $line "  $ENV_FILE"
+    & $line ""
+    & $line "  Back up this file alongside your database."
+    & $line "  Without it you cannot restore encrypted credentials"
+    & $line "  after a server rebuild."
+    & $line ""
+    & $sep
+    Write-Host ""
+
+    if (-not $IsUpgrade -and $Secret) {
+        Write-Host "  AUTH_SECRET value " -NoNewline -ForegroundColor Yellow
+        Write-Host "(copy this to a password manager):" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  $Secret" -ForegroundColor White
+        Write-Host ""
+    }
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+#  FRESH INSTALL
+# ════════════════════════════════════════════════════════════════════════════
+function Invoke-Install {
+    $script:_total_steps = 7
+
+    # Step 1 — System check
+    Write-Step "Checking system"
+    Write-Info "OS: Windows | Arch: $ARCH"
+    Assert-Node
+    Write-Ok "Node.js $(& node --version)"
+
+    # Step 2 — Fetch latest version
+    Write-Step "Fetching latest release"
+    $version = Get-LatestVersion
+    Write-Ok "Latest version: $version"
+
+    # Step 3 — Configuration
+    Write-Step "Configuration"
+
+    $defaultUrl  = "http://localhost:$DEFAULT_PORT"
+    $defaultPort = "$DEFAULT_PORT"
+
+    if ($FORCE_REINSTALL -and (Test-Path $ENV_FILE)) {
+        $defaultUrl  = Get-EnvValue 'NEXTAUTH_URL' "http://localhost:$DEFAULT_PORT"
+        $defaultPort = Get-EnvValue 'PORT'         "$DEFAULT_PORT"
+    }
+
+    $fbUrl  = Get-PromptOrEnv 'FILEBRIDGE_URL'  'External URL' $defaultUrl
+    $fbPort = Get-PromptOrEnv 'FILEBRIDGE_PORT' 'Port'         $defaultPort
+    Write-Host ""
+
+    if ($env:FILEBRIDGE_AUTH_SECRET) {
+        $fbSecret = $env:FILEBRIDGE_AUTH_SECRET
+        Write-Ok "Using provided AUTH_SECRET"
+    } elseif ($FORCE_REINSTALL -and (Test-Path $ENV_FILE)) {
+        $existing = Get-EnvValue 'AUTH_SECRET'
+        if ($existing) {
+            $fbSecret = $existing
+            Write-Ok "Preserving existing AUTH_SECRET (required to decrypt stored connection credentials)"
+        } else {
+            $fbSecret = New-AuthSecret
+            Write-Ok "Generated new AUTH_SECRET"
+        }
+    } else {
+        $fbSecret = New-AuthSecret
+        Write-Ok "Generated AUTH_SECRET"
+    }
+    Write-Ok "Configuration ready"
+
+    # Step 4 — Prepare system
+    Write-Step "Preparing system"
+    New-AppDirectories
+    Write-Ok "Directories created"
+
+    # Step 5 — Download & install
+    Write-Step "Installing application"
+    Install-App $version
+    Write-Ok "Application installed to $APP_DIR"
+
+    # Step 6 — Write config
+    Write-Step "Writing configuration"
+    Write-EnvFile $fbSecret $fbUrl $fbPort
+    Write-Ok "Config written to $ENV_FILE"
+
+    # Step 7 — Register & start service
+    Write-Step "Starting service"
+    Register-FileBridgeService
+    Write-Ok "Service registered and started"
+    Wait-ForHealth $fbPort
+
+    Write-Summary $version $fbUrl $fbPort $fbSecret $false
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+#  UPGRADE
+# ════════════════════════════════════════════════════════════════════════════
+function Invoke-Upgrade {
+    $script:_total_steps = 6
+
+    # Step 1 — Detect existing install
+    Write-Step "Detecting existing installation"
+    if (-not (Test-Path $APP_DIR) -or -not (Test-Path $ENV_FILE)) {
+        Write-Warn "No existing installation found at $APP_DIR."
+        $ans = Read-Host "  Run a fresh install instead? [Y/n]"
+        if ($ans -match '^[Nn]') { Write-Die "Upgrade aborted." }
+        Invoke-Install
+        return
+    }
+    $installed = Get-InstalledVersion
+    Write-Ok "Currently installed: $installed"
+
+    # Step 2 — Check latest
+    Write-Step "Checking for updates"
+    $latest = Get-LatestVersion
+
+    if ($installed -eq $latest -and -not $FORCE_REINSTALL) {
+        Write-Ok "Already up to date ($latest)"
+        Write-Host ""
+        Write-Host "  FileBridge is running the latest version."
+        Write-Host ""
+        exit 0
+    }
+    Write-Ok "Upgrading: $installed -> $latest"
+
+    # Step 3 — Backup
+    Write-Step "Backing up data"
+    Backup-Database
+
+    # Step 4 — Stop service
+    Write-Step "Stopping service"
+    Stop-FileBridgeService
+    Write-Ok "Service stopped"
+
+    # Step 5 — Install new version
+    Write-Step "Installing update"
+    Install-App $latest
+    Write-Ok "Updated to $latest"
+
+    # Step 6 — Re-register & start service
+    Write-Step "Starting service"
+    Register-FileBridgeService
+    Write-Ok "Service re-registered and started"
+
+    $fbPort = Get-EnvValue 'PORT'         "$DEFAULT_PORT"
+    $fbUrl  = Get-EnvValue 'NEXTAUTH_URL' "http://localhost:$fbPort"
+    Wait-ForHealth $fbPort
+
+    Write-Summary $latest $fbUrl $fbPort '' $true
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+#  UNINSTALL
+# ════════════════════════════════════════════════════════════════════════════
+function Invoke-Uninstall {
+    Write-Host ""
+    Write-Host "  Uninstall FileBridge" -ForegroundColor Red
+    Write-Host ""
+    Write-Warn "This will remove the application and Windows service."
+    Write-Info "Your data at $DATA_DIR will be kept."
+    Write-Host ""
+    $ans = Read-Host "  Continue? [y/N]"
+    if ($ans -notmatch '^[Yy]') {
+        Write-Host ""
+        Write-Host "  Uninstall cancelled."
+        Write-Host ""
+        exit 0
+    }
+
+    Write-Info "Stopping and removing service..."
+    Unregister-FileBridgeService
+    Write-Ok "Service removed"
+
+    Write-Info "Removing application files..."
+    if (Test-Path $APP_DIR) {
+        Remove-Item $APP_DIR -Recurse -Force
+    }
+    Write-Ok "Application files removed"
+
+    Write-Host ""
+    Write-Ok "FileBridge has been uninstalled."
+    Write-Info "Data preserved at:   $DATA_DIR"
+    Write-Info "Config preserved at: $ENV_FILE"
+    Write-Host ""
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MAIN
+# ════════════════════════════════════════════════════════════════════════════
+Write-Banner
+Write-Host "  Platform: Windows/$ARCH" -ForegroundColor DarkGray
+Write-Host ""
+
+if (-not (Test-IsAdministrator)) {
+    Write-Die "This script must be run as Administrator.`n  Right-click PowerShell and select 'Run as Administrator', then re-run:`n`n  irm https://raw.githubusercontent.com/go2engle/filebridge/main/install.ps1 | iex"
+}
+
+Select-AutoMode
+
+switch ($script:MODE) {
+    'install'   { Invoke-Install   }
+    'upgrade'   { Invoke-Upgrade   }
+    'uninstall' { Invoke-Uninstall }
+    default     { Write-Die "Unknown mode: $($script:MODE)" }
+}

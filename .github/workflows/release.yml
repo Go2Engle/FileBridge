@@ -3,9 +3,11 @@ name: Release
 # Flow:
 #   create-release  ──┬──► docker-build (linux/amd64 natively) ───► docker-merge (GHCR)
 #                     ├──► docker-build (linux/arm64 natively) ───┘
-#                     ├──► tarball (linux/amd64 natively)
-#                     ├──► tarball (linux/arm64 natively)
-#                     └──► tarball (darwin/arm64 natively)
+#                     ├──► standalone (linux/amd64)   → .tar.gz
+#                     ├──► standalone (linux/arm64)   → .tar.gz
+#                     ├──► standalone (darwin/arm64)  → .tar.gz
+#                     ├──► standalone (windows/amd64) → .zip
+#                     └──► standalone (windows/arm64) → .zip
 
 on:
   push:
@@ -196,9 +198,9 @@ jobs:
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
-  # ── Step 2c: Build native standalone tarballs ────────────────────────────────
-  tarball:
-    name: Tarball ${{ matrix.os-label }}/${{ matrix.arch }}
+  # ── Step 2c: Build native standalone bundles (tarballs + zips) ───────────────
+  standalone:
+    name: Standalone ${{ matrix.os-label }}/${{ matrix.arch }}
     needs: create-release
     if: needs.create-release.outputs.exists == 'false'
 
@@ -214,6 +216,12 @@ jobs:
             arch: arm64
           - runner: macos-latest
             os-label: darwin
+            arch: arm64
+          - runner: windows-latest
+            os-label: windows
+            arch: amd64
+          - runner: windows-11-arm
+            os-label: windows
             arch: arm64
 
     runs-on: ${{ matrix.runner }}
@@ -239,11 +247,13 @@ jobs:
           NODE_OPTIONS: "--openssl-legacy-provider"
         run: npm run build
 
-      - name: Package standalone tarball
+      # ── Unix: package as .tar.gz ─────────────────────────────────────────────
+      - name: Package standalone tarball (Unix)
+        if: runner.os != 'Windows'
         run: |
           TAG="${{ needs.create-release.outputs.tag }}"
           SLUG="${{ matrix.os-label }}-${{ matrix.arch }}"
-          TARBALL="filebridge-${TAG}-${SLUG}.tar.gz"
+          ARTIFACT="filebridge-${TAG}-${SLUG}.tar.gz"
 
           STANDALONE=".next/standalone"
 
@@ -256,32 +266,75 @@ jobs:
           cp -r "$STANDALONE/." "$STAGE/"
 
           rm -rf \
-            "$STAGE/docs"             \
-            "$STAGE/website"          \
-            "$STAGE/images"           \
-            "$STAGE/prd.md"           \
-            "$STAGE/README.md"        \
-            "$STAGE/LICENSE"          \
-            "$STAGE/index.html"       \
-            "$STAGE/install.sh"       \
-            "$STAGE/Dockerfile"       \
-            "$STAGE/next.config.ts"   \
-            "$STAGE/tsconfig.json"    \
-            "$STAGE/eslint.config.mjs" \
+            "$STAGE/docs"               \
+            "$STAGE/website"            \
+            "$STAGE/images"             \
+            "$STAGE/prd.md"             \
+            "$STAGE/README.md"          \
+            "$STAGE/LICENSE"            \
+            "$STAGE/index.html"         \
+            "$STAGE/install.sh"         \
+            "$STAGE/install.ps1"        \
+            "$STAGE/Dockerfile"         \
+            "$STAGE/next.config.ts"     \
+            "$STAGE/tsconfig.json"      \
+            "$STAGE/eslint.config.mjs"  \
             "$STAGE/postcss.config.mjs" \
-            "$STAGE/drizzle.config.ts" \
-            "$STAGE/components.json"  \
+            "$STAGE/drizzle.config.ts"  \
+            "$STAGE/components.json"    \
             "$STAGE/package-lock.json"
 
-          tar -czf "$TARBALL" -C "$STAGE" .
+          tar -czf "$ARTIFACT" -C "$STAGE" .
           rm -rf "$STAGE"
 
-          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
-          echo "Built: $TARBALL ($(du -sh "$TARBALL" | cut -f1))"
+          echo "ARTIFACT=$ARTIFACT" >> "$GITHUB_ENV"
+          echo "Built: $ARTIFACT ($(du -sh "$ARTIFACT" | cut -f1))"
 
-      - name: Upload tarball to GitHub Release
+      # ── Windows: package as .zip ─────────────────────────────────────────────
+      - name: Package standalone zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tag      = "${{ needs.create-release.outputs.tag }}"
+          $slug     = "windows-${{ matrix.arch }}"
+          $artifact = "filebridge-$tag-$slug.zip"
+
+          $standalone = ".next\standalone"
+
+          Copy-Item -Path ".next\static" -Destination "$standalone\.next\static" -Recurse -Force
+          if (Test-Path "public") {
+            Copy-Item -Path "public" -Destination "$standalone\public" -Recurse -Force
+          }
+
+          $tag | Set-Content "$standalone\FILEBRIDGE_VERSION" -NoNewline -Encoding UTF8
+
+          $stage = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+          Copy-Item -Path "$standalone\*" -Destination $stage -Recurse -Force
+
+          @(
+            'docs', 'website', 'images',
+            'prd.md', 'README.md', 'LICENSE', 'index.html',
+            'install.sh', 'install.ps1', 'Dockerfile',
+            'next.config.ts', 'tsconfig.json', 'eslint.config.mjs',
+            'postcss.config.mjs', 'drizzle.config.ts',
+            'components.json', 'package-lock.json'
+          ) | ForEach-Object {
+            $p = Join-Path $stage $_
+            if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+          }
+
+          Compress-Archive -Path "$stage\*" -DestinationPath $artifact
+          Remove-Item $stage -Recurse -Force
+
+          "ARTIFACT=$artifact" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $mb = [math]::Round((Get-Item $artifact).Length / 1MB, 1)
+          Write-Host "Built: $artifact ($mb MB)"
+
+      # ── Upload (all platforms via Git Bash / bash) ───────────────────────────
+      - name: Upload to GitHub Release
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ needs.create-release.outputs.tag }}" \
-            "$TARBALL" --clobber
+            "$ARTIFACT" --clobber
