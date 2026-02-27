@@ -58,11 +58,6 @@ export default function AuthenticationPage() {
   const [editProvider, setEditProvider] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  if (!isAdmin) {
-    router.replace("/dashboard");
-    return null;
-  }
-
   const { data: configs = [], isLoading } = useQuery<SsoConfig[]>({
     queryKey: ["admin-sso"],
     queryFn: () => fetch("/api/admin/sso").then((r) => r.json()),
@@ -82,6 +77,11 @@ export default function AuthenticationPage() {
     },
     onError: () => toast.error("Failed to remove provider"),
   });
+
+  if (!isAdmin) {
+    router.replace("/dashboard");
+    return null;
+  }
 
   const configuredProviders = new Set(configs.map((c) => c.provider));
 

@@ -11,6 +11,7 @@ import {
   getUserBySsoId,
   verifyPassword,
   updateLastLogin,
+  updateUser,
 } from "@/lib/db/users";
 import { getAllEnabledSsoConfigs } from "@/lib/db/sso-config";
 
@@ -116,7 +117,6 @@ function initAuth(): NextAuthResult {
             dbUser = getUserByEmail(user.email);
             if (dbUser && !dbUser.ssoProvider) {
               // Link SSO identity to existing user
-              const { updateUser } = require("@/lib/db/users");
               updateUser(dbUser.id, {
                 ssoProvider: account.provider,
                 ssoId: account.providerAccountId,

@@ -289,7 +289,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
     // Check destination for existing files when overwrite is disabled or delta sync is on.
     // For delta sync we also need modifiedAt to compare timestamps.
     let existingDestFiles: Set<string> = new Set();
-    let destFileTimes: Map<string, Date> = new Map();
+    const destFileTimes: Map<string, Date> = new Map();
     if (!job.overwriteExisting || job.deltaSync) {
       const dest = createStorageProvider(dstConn);
       try {
@@ -489,7 +489,7 @@ export async function runJob(jobId: number): Promise<void> {
       // without downloading first (avoids unnecessary network I/O).
       // For delta sync we also track modifiedAt to compare timestamps.
       let existingDestFiles: Set<string> | null = null;
-      let destFileTimes: Map<string, Date> = new Map();
+      const destFileTimes: Map<string, Date> = new Map();
       if (!job.overwriteExisting || job.deltaSync) {
         try {
           const destListing = await dest.listFiles(job.destinationPath);

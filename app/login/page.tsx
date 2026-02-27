@@ -64,16 +64,16 @@ export default function LoginPage() {
     },
   });
 
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema) as Resolver<LoginFormValues>,
+    defaultValues: { username: "", password: "" },
+  });
+
   // Redirect to setup if needed
   if (setupStatus?.needsSetup) {
     router.replace("/setup");
     return null;
   }
-
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema) as Resolver<LoginFormValues>,
-    defaultValues: { username: "", password: "" },
-  });
 
   async function onSubmit(values: LoginFormValues) {
     setError(null);

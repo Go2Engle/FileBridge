@@ -49,11 +49,6 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
 
-  if (!isAdmin) {
-    router.replace("/dashboard");
-    return null;
-  }
-
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["admin-users"],
     queryFn: () => fetch("/api/admin/users").then((r) => r.json()),
@@ -76,6 +71,11 @@ export default function UsersPage() {
       toast.error(err.message);
     },
   });
+
+  if (!isAdmin) {
+    router.replace("/dashboard");
+    return null;
+  }
 
   return (
     <div className="space-y-6">
