@@ -145,20 +145,21 @@ function Invoke-RefreshPath {
 }
 
 function Install-Node {
-    Write-Warn "Node.js $REQUIRED_NODE_MAJOR+ is required but not found."
+    Write-Warn "Node.js $REQUIRED_NODE_MAJOR LTS is required but not found."
     $ans = Read-Host "  Install it automatically? [Y/n]"
     if ($ans -match '^[Nn]') {
-        Write-Die "Node.js $REQUIRED_NODE_MAJOR+ is required. Install from: https://nodejs.org"
+        Write-Die "Node.js $REQUIRED_NODE_MAJOR LTS is required. Install from: https://nodejs.org/en/download"
     }
 
-    # Try winget first (available on Windows 10 1709+ / Windows 11)
+    # Try winget first — install the specific major version, not generic LTS,
+    # because the pre-built native modules must match the compiled Node version.
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
         Write-Info "Installing Node.js $REQUIRED_NODE_MAJOR LTS via winget..."
-        & winget install --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+        & winget install --id "OpenJS.NodeJS.$REQUIRED_NODE_MAJOR" --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
         Invoke-RefreshPath
-        if ((Get-NodeMajor) -ge $REQUIRED_NODE_MAJOR) {
-            Write-Ok "Node.js installed via winget"
+        if ((Get-NodeMajor) -eq $REQUIRED_NODE_MAJOR) {
+            Write-Ok "Node.js $REQUIRED_NODE_MAJOR installed via winget"
             return
         }
         Write-Warn "winget install did not succeed; falling back to direct download."
@@ -204,10 +205,21 @@ function Install-Node {
 }
 
 function Assert-Node {
-    if ((Get-NodeMajor) -ge $REQUIRED_NODE_MAJOR) { return }
+    $major = Get-NodeMajor
+    if ($major -eq $REQUIRED_NODE_MAJOR) { return }
+
+    if ($major -gt $REQUIRED_NODE_MAJOR) {
+        Write-Die ("Node.js $major is installed, but the pre-built FileBridge release requires " +
+            "Node.js $REQUIRED_NODE_MAJOR LTS exactly.`n" +
+            "  Native modules (better-sqlite3) are compiled for Node $REQUIRED_NODE_MAJOR and " +
+            "will not load under a different major version.`n`n" +
+            "  Install Node.js $REQUIRED_NODE_MAJOR LTS from https://nodejs.org/en/download `n" +
+            "  or via winget:  winget install OpenJS.NodeJS.$REQUIRED_NODE_MAJOR")
+    }
+
     Install-Node
-    if ((Get-NodeMajor) -lt $REQUIRED_NODE_MAJOR) {
-        Write-Die "Node.js installation failed. Install Node.js $REQUIRED_NODE_MAJOR+ manually: https://nodejs.org"
+    if ((Get-NodeMajor) -ne $REQUIRED_NODE_MAJOR) {
+        Write-Die "Node.js $REQUIRED_NODE_MAJOR installation failed. Install manually: https://nodejs.org/en/download"
     }
 }
 
@@ -417,7 +429,14 @@ function New-AppDirectories {
 function Register-FileBridgeService {
     Install-NSSM
 
+    # Resolve node.exe — prefer the exact required major version so the service
+    # uses the same Node.js that the native modules were compiled against.
     $nodePath = (Get-Command node -ErrorAction Stop).Source
+    $nodeActualMajor = Get-NodeMajor
+    if ($nodeActualMajor -ne $REQUIRED_NODE_MAJOR) {
+        Write-Die ("node in PATH is version $nodeActualMajor but FileBridge requires Node.js $REQUIRED_NODE_MAJOR.`n" +
+            "  Run Assert-Node / install Node.js $REQUIRED_NODE_MAJOR before registering the service.")
+    }
 
     # Remove any pre-existing service cleanly
     $existing = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
