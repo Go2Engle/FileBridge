@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRole } from "@/hooks/use-role";
+import type { TimeFormat } from "@/hooks/use-time-format";
 
 const TIMEZONES: { group: string; zones: { value: string; label: string }[] }[] = [
   {
@@ -130,44 +131,60 @@ const TIMEZONES: { group: string; zones: { value: string; label: string }[] }[] 
 
 const schema = z.object({
   timezone: z.string().min(1, "Please select a timezone"),
+  timeFormat: z.enum(["12h", "24h"]),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-export function TimezoneSettings() {
+export function GeneralSettings() {
   const queryClient = useQueryClient();
   const { isAdmin } = useRole();
 
-  const { data } = useQuery<{ timezone: string }>({
+  const { data: tzData } = useQuery<{ timezone: string }>({
     queryKey: ["settings", "timezone"],
     queryFn: () => axios.get("/api/settings/timezone").then((r) => r.data),
     staleTime: 30_000,
   });
 
-  // Extract the primitive so the effect only fires when the value actually changes,
-  // not every time TanStack Query returns a new object reference on a background refetch.
-  const savedTimezone = data?.timezone;
+  const { data: displayData } = useQuery<{ timeFormat: TimeFormat }>({
+    queryKey: ["settings", "display"],
+    queryFn: () => axios.get("/api/settings/display").then((r) => r.data),
+    staleTime: 60_000,
+  });
+
+  const savedTimezone = tzData?.timezone;
+  const savedTimeFormat = displayData?.timeFormat;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
-    // Initialise from cache immediately on re-visits so the Select has the
-    // correct value on the very first render with no flash or reset needed.
-    defaultValues: { timezone: savedTimezone ?? "UTC" },
+    defaultValues: {
+      timezone: savedTimezone ?? "UTC",
+      timeFormat: savedTimeFormat ?? "24h",
+    },
   });
 
   useEffect(() => {
-    if (savedTimezone) {
-      form.reset({ timezone: savedTimezone });
+    if (savedTimezone || savedTimeFormat) {
+      form.reset({
+        timezone: savedTimezone ?? form.getValues("timezone"),
+        timeFormat: savedTimeFormat ?? form.getValues("timeFormat"),
+      });
     }
-  }, [savedTimezone, form]);
+  }, [savedTimezone, savedTimeFormat, form]);
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) => axios.post("/api/settings/timezone", values),
+    mutationFn: async (values: FormValues) => {
+      await Promise.all([
+        axios.post("/api/settings/timezone", { timezone: values.timezone }),
+        axios.post("/api/settings/display", { timeFormat: values.timeFormat }),
+      ]);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings", "timezone"] });
-      toast.success("Timezone saved — all active jobs rescheduled");
+      queryClient.invalidateQueries({ queryKey: ["settings", "display"] });
+      toast.success("General settings saved");
     },
-    onError: () => toast.error("Failed to save timezone"),
+    onError: () => toast.error("Failed to save settings"),
   });
 
   return (
@@ -181,7 +198,7 @@ export function TimezoneSettings() {
               immediately reschedule all active jobs.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <FormField
               control={form.control}
               name="timezone"
@@ -221,9 +238,48 @@ export function TimezoneSettings() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Display</CardTitle>
+            <CardDescription>
+              Customize how dates and times are displayed across the application.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="timeFormat"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Time Format</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    disabled={!isAdmin}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a time format" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="24h">24-hour (14:30)</SelectItem>
+                      <SelectItem value="12h">12-hour (2:30 PM)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Controls how timestamps appear in logs and job history
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
         <div className="flex justify-end">
           <Button type="submit" disabled={mutation.isPending || !isAdmin}>
-            {mutation.isPending ? "Saving..." : "Save Timezone"}
+            {mutation.isPending ? "Saving..." : "Save"}
           </Button>
         </div>
       </form>

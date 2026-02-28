@@ -19,6 +19,7 @@ import axios from "axios";
 import { parseDBDate } from "@/lib/utils";
 import { format } from "date-fns";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { useTimeFormat, TIME_FORMATS } from "@/hooks/use-time-format";
 import type { AuditLog } from "@/lib/db/schema";
 
 interface AuditLogResponse {
@@ -58,6 +59,7 @@ const RESOURCE_LABELS: Record<AuditLog["resource"], string> = {
 };
 
 export function AuditLogTable() {
+  const timeFormat = useTimeFormat();
   const [page, setPage] = useState(0);
   const [userSearch, setUserSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
@@ -173,7 +175,7 @@ export function AuditLogTable() {
               logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(parseDBDate(log.timestamp), "yyyy-MM-dd HH:mm:ss")}
+                    {format(parseDBDate(log.timestamp), `yyyy-MM-dd ${TIME_FORMATS[timeFormat].withSec}`)}
                   </TableCell>
                   <TableCell className="text-sm font-medium max-w-[180px] truncate">
                     {log.userId}

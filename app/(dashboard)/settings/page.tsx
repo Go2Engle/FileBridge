@@ -1,8 +1,8 @@
 import { NotificationSettings } from "@/components/settings/notification-settings";
 import { PurgeLogsSettings } from "@/components/settings/purge-logs-settings";
 import { BackupSettings } from "@/components/settings/backup-settings";
-import { TimezoneSettings } from "@/components/settings/timezone-settings";
-import { Separator } from "@/components/ui/separator";
+import { GeneralSettings } from "@/components/settings/general-settings";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const metadata = { title: "Settings — FileBridge" };
 
@@ -15,13 +15,26 @@ export default function SettingsPage() {
           Configure notifications, alerting rules, and data management
         </p>
       </div>
-      <TimezoneSettings />
-      <Separator />
-      <NotificationSettings />
-      <Separator />
-      <BackupSettings />
-      <Separator />
-      <PurgeLogsSettings />
+      <Tabs defaultValue="general">
+        <TabsList className="mb-4">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="data">Data Management</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general">
+          <GeneralSettings />
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <NotificationSettings />
+        </TabsContent>
+
+        <TabsContent value="data" className="space-y-6">
+          <BackupSettings />
+          <PurgeLogsSettings />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

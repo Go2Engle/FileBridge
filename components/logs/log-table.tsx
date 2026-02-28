@@ -19,6 +19,7 @@ import axios from "axios";
 import { formatBytes, parseDBDate } from "@/lib/utils";
 import { format } from "date-fns";
 import { CircleAlert, Search } from "lucide-react";
+import { useTimeFormat, TIME_FORMATS } from "@/hooks/use-time-format";
 import type { TransferLog } from "@/lib/db/schema";
 import type { Job } from "@/lib/db/schema";
 
@@ -29,6 +30,7 @@ interface LogEntry extends TransferLog {
 const PAGE_SIZE = 25;
 
 export function LogTable() {
+  const timeFormat = useTimeFormat();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failure">("all");
@@ -203,7 +205,7 @@ export function LogTable() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {format(parseDBDate(log.transferredAt), "MMM d, HH:mm:ss")}
+                    {format(parseDBDate(log.transferredAt), `MMM d, ${TIME_FORMATS[timeFormat].withSec}`)}
                   </TableCell>
                 </TableRow>
               ))}

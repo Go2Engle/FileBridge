@@ -32,6 +32,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import type { Job, JobRun, TransferLog, Connection } from "@/lib/db/schema";
 import { formatBytes, formatDuration, parseDBDate } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
+import { useTimeFormat, TIME_FORMATS } from "@/hooks/use-time-format";
 
 const statusVariant: Record<
   Job["status"],
@@ -478,6 +479,7 @@ function LastRunSummary({ run }: { run: JobRun }) {
 // --- Run History Panel ---
 
 function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
+  const timeFormat = useTimeFormat();
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
 
   const { data: runLogs, isLoading: logsLoading } = useQuery<TransferLog[]>({
@@ -556,7 +558,7 @@ function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
                 onClick={() => setSelectedRunId(run.id)}
               >
                 <TableCell className="text-sm">
-                  {format(parseDBDate(run.startedAt), "MMM d, HH:mm")}
+                  {format(parseDBDate(run.startedAt), `MMM d, ${TIME_FORMATS[timeFormat].short}`)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
@@ -605,6 +607,7 @@ interface JobLogEntry {
 }
 
 function JobLogsPanel({ job }: { job: Job }) {
+  const timeFormat = useTimeFormat();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failure">("all");
@@ -733,7 +736,7 @@ function JobLogsPanel({ job }: { job: Job }) {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(parseDBDate(log.transferredAt), "MMM d, HH:mm:ss")}
+                    {format(parseDBDate(log.transferredAt), `MMM d, ${TIME_FORMATS[timeFormat].withSec}`)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -775,6 +778,7 @@ function JobLogsPanel({ job }: { job: Job }) {
 // --- Transfer Log Table ---
 
 function TransferLogTable({ logs, compact }: { logs: TransferLog[]; compact?: boolean }) {
+  const timeFormat = useTimeFormat();
   return (
     <Table>
       <TableHeader>
@@ -821,7 +825,7 @@ function TransferLogTable({ logs, compact }: { logs: TransferLog[]; compact?: bo
             </TableCell>
             {!compact && (
               <TableCell className="text-sm text-muted-foreground">
-                {format(parseDBDate(log.transferredAt), "HH:mm:ss")}
+                {format(parseDBDate(log.transferredAt), TIME_FORMATS[timeFormat].withSec)}
               </TableCell>
             )}
           </TableRow>

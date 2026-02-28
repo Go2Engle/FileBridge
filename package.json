@@ -1,12 +1,13 @@
 {
   "name": "filebridge",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS='--openssl-legacy-provider' next dev",
     "dev:pretty": "NODE_OPTIONS='--openssl-legacy-provider' next dev | pino-pretty",
     "build": "next build",
     "start": "NODE_OPTIONS='--openssl-legacy-provider' next start",
+    "test": "npm install && npm run lint && npm run build",
     "lint": "eslint .",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
