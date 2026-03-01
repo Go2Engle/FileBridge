@@ -389,9 +389,9 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                       <FormItem>
                         <FormLabel>Command</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="bash /opt/scripts/notify.sh"
-                            className="font-mono text-sm"
+                          <Textarea
+                            placeholder={"bash /opt/scripts/notify.sh\n# or multi-line:\nexport FOO=bar\nbash /opt/scripts/notify.sh"}
+                            className="font-mono text-sm min-h-24 resize-y"
                             {...field}
                             value={field.value as string ?? ""}
                           />
