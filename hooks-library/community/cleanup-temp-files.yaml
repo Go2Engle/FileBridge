@@ -1,0 +1,15 @@
+name: Cleanup Temp Files
+description: >
+  Removes temporary files older than 1 day matching the pattern /tmp/filebridge-*.
+  Useful as a post-job hook to keep temp storage tidy.
+type: shell
+tags:
+  - cleanup
+  - maintenance
+  - temp
+author: FileBridge Community
+config:
+  command: |
+    find /tmp -name 'filebridge-*' -mtime +1 -delete
+    echo "Temp cleanup complete for job: $FILEBRIDGE_JOB_NAME"
+  timeoutMs: 30000

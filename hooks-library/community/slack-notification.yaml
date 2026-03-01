@@ -1,0 +1,17 @@
+name: Slack Notification
+description: >
+  Posts a message to a Slack channel when a job completes.
+  Requires a Slack Incoming Webhook URL set via the SLACK_WEBHOOK_URL environment variable.
+type: webhook
+tags:
+  - slack
+  - notification
+  - messaging
+author: FileBridge Community
+config:
+  url: "{{SLACK_WEBHOOK_URL}}"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: '{"text": "*FileBridge* · Job *{{job_name}}* completed\n• Files transferred: {{files_transferred}}\n• Trigger: {{trigger}}"}'
+  timeoutMs: 5000

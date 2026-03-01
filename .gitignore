@@ -55,6 +55,10 @@ drizzle/
 # Sample code (local reference only)
 samplecode/
 
+# Local hooks library (private / dev templates — not for public PRs)
+hooks-library/local/*.json
+hooks-library/local/*.yaml
+
 # Local planning docs
 ENTERPRISE_ROADMAP.md
 data/backups
