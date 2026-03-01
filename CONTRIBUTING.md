@@ -13,6 +13,7 @@ Thank you for your interest in contributing to FileBridge! This guide covers eve
 - [Important Conventions](#important-conventions)
 - [Database Changes](#database-changes)
 - [Adding a Storage Provider](#adding-a-storage-provider)
+- [Contributing Hook Templates](#contributing-hook-templates)
 - [Branching & Commit Messages](#branching--commit-messages)
 - [Pull Request Process](#pull-request-process)
 - [Reporting Bugs & Requesting Features](#reporting-bugs--requesting-features)
@@ -203,6 +204,31 @@ Storage providers are pluggable. To add a new protocol:
 3. **Declare as external** — add the provider's native package to `serverExternalPackages` in [next.config.ts](next.config.ts) so Next.js doesn't try to bundle it
 
 4. **Add connection form fields** — update the connection UI in `components/connections/` to expose the new protocol's credentials
+
+---
+
+## Contributing Hook Templates
+
+Hook templates are the easiest way to contribute to FileBridge — no TypeScript required. A template is a single YAML file placed in `hooks-library/community/`.
+
+**Full authoring guide:** [docs/Hook-Template-Authoring.md](docs/Hook-Template-Authoring.md)
+
+### Quick steps
+
+1. Create `hooks-library/community/my-hook.yaml` following the [template format](docs/Hook-Template-Authoring.md)
+2. Validate the YAML:
+   ```bash
+   python3 -c "import yaml,sys; yaml.safe_load(sys.stdin)" < hooks-library/community/my-hook.yaml
+   ```
+3. Test it against a real FileBridge job run
+4. Open a pull request using the **Hook Submission** PR template
+
+### Key rules
+
+- All user-specific values (URLs, passwords, API keys) must use `inputs` — never hardcode credentials
+- Use `type: secret` for passwords and tokens so the UI masks them
+- Runtime variables (`{{job_name}}`, `{{status}}`, etc.) must **not** appear in `inputs` — they are substituted at execution time, not import time
+- Filename must be `kebab-case.yaml`
 
 ---
 

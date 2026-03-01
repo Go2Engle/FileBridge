@@ -49,6 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 | [Authentication](Authentication) | Azure AD SSO setup, access control, dev bypass |
 | [Connections](Connections) | SFTP, SMB/CIFS, and Azure Blob Storage setup |
 | [Jobs](Jobs) | Creating and managing transfer jobs |
+| [Hooks](Hooks) | Pre/post-job webhooks, email alerts, and shell commands |
+| [Hook Library](Hook-Library) | Browse, import, and manage hook templates |
+| [Hook Template Authoring](Hook-Template-Authoring) | Write and submit community hook templates |
 | [Transfer Engine](Transfer-Engine) | How transfers work under the hood |
 | [API Reference](API-Reference) | All REST API endpoints |
 | [Audit Logging](Audit-Logging) | Security audit trail |

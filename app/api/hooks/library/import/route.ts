@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     const hook = createHook({
       name: String(parsed.name),
       description: parsed.description != null ? String(parsed.description) : null,
-      type: parsed.type as "webhook" | "shell",
+      type: parsed.type as "webhook" | "email" | "shell",
       config: JSON.stringify(resolvedConfig),
       enabled: true,
     });
