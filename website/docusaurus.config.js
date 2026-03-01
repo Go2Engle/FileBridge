@@ -10,7 +10,26 @@ const config = {
   baseUrl: '/FileBridge/docs/',
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
+  },
+
+  plugins: [
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        language: ['en'],
+        docsRouteBasePath: '/',
+        indexDocs: true,
+        indexPages: false,
+        highlightSearchTermsOnTargetPage: true,
+      },
+    ],
+  ],
 
   i18n: {
     defaultLocale: 'en',

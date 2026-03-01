@@ -27,6 +27,15 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: 'Hooks',
+      items: [
+        'Hooks',
+        'Hook-Library',
+        'Hook-Template-Authoring',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Operations',
       items: [
         'Database-Backups',
