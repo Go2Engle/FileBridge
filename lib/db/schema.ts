@@ -141,6 +141,69 @@ export const auditLogs = sqliteTable("audit_logs", {
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
 });
 
+export const hooks = sqliteTable("hooks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  type: text("type", { enum: ["webhook", "shell"] }).notNull(),
+  config: text("config").notNull(), // JSON stored as plain text
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+});
+
+export const jobHooks = sqliteTable("job_hooks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobs.id, { onDelete: "cascade" }),
+  hookId: integer("hook_id")
+    .notNull()
+    .references(() => hooks.id, { onDelete: "cascade" }),
+  trigger: text("trigger", { enum: ["pre_job", "post_job"] }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const hookRuns = sqliteTable("hook_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobs.id),
+  jobRunId: integer("job_run_id")
+    .notNull()
+    .references(() => jobRuns.id),
+  hookId: integer("hook_id"), // nullable — hook may be deleted later
+  hookName: text("hook_name").notNull(),
+  hookType: text("hook_type").notNull(),
+  trigger: text("trigger", { enum: ["pre_job", "post_job"] }).notNull(),
+  status: text("status", { enum: ["success", "failure"] }).notNull(),
+  durationMs: integer("duration_ms"),
+  output: text("output"), // response body / stdout (truncated to 4KB)
+  errorMessage: text("error_message"),
+  executedAt: text("executed_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+});
+
+// Hook config type interfaces
+export interface WebhookConfig {
+  url: string;
+  method: "GET" | "POST" | "PUT" | "PATCH";
+  headers?: Record<string, string>;
+  body?: string; // template with {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, etc.
+  timeoutMs?: number; // default 10000
+}
+
+export interface ShellConfig {
+  command: string;
+  timeoutMs?: number; // default 30000
+  workingDir?: string;
+}
+
 export type Connection = typeof connections.$inferSelect;
 export type NewConnection = typeof connections.$inferInsert;
 export type Job = typeof jobs.$inferSelect;
@@ -153,3 +216,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type Hook = typeof hooks.$inferSelect;
+export type NewHook = typeof hooks.$inferInsert;
+export type JobHook = typeof jobHooks.$inferSelect;
+export type HookRun = typeof hookRuns.$inferSelect;

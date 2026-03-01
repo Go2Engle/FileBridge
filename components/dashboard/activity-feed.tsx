@@ -10,21 +10,21 @@ import { formatDistanceToNow } from "date-fns";
 
 interface LogEntry {
   id: number;
-  fileName: string;
-  sourcePath: string;
-  destinationPath: string;
-  fileSize: number;
-  transferredAt: string;
+  file_name: string;
+  source_path: string;
+  destination_path: string;
+  file_size: number;
+  timestamp: string;
   status: "success" | "failure";
-  errorMessage?: string | null;
-  jobName?: string;
+  error_message?: string | null;
+  job_name?: string;
 }
 
 export function ActivityFeed() {
   const { data, isLoading } = useQuery<LogEntry[]>({
     queryKey: ["activity-feed"],
     queryFn: () =>
-      axios.get("/api/logs?limit=20").then((r) => r.data.logs),
+      axios.get("/api/logs?limit=20&type=transfer").then((r) => r.data.logs),
     refetchInterval: 15_000,
   });
 
@@ -67,13 +67,13 @@ export function ActivityFeed() {
                     }`}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{log.fileName}</p>
+                    <p className="text-sm font-semibold truncate">{log.file_name}</p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {log.sourcePath} → {log.destinationPath}
+                      {log.source_path} → {log.destination_path}
                     </p>
-                    {log.errorMessage && (
+                    {log.error_message && (
                       <p className="text-xs text-destructive truncate mt-0.5">
-                        {log.errorMessage}
+                        {log.error_message}
                       </p>
                     )}
                   </div>
@@ -85,10 +85,10 @@ export function ActivityFeed() {
                       {log.status}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {formatBytes(log.fileSize)}
+                      {formatBytes(log.file_size)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(parseDBDate(log.transferredAt), {
+                      {formatDistanceToNow(parseDBDate(log.timestamp), {
                         addSuffix: true,
                       })}
                     </span>

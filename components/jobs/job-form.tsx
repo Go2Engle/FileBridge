@@ -21,9 +21,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FolderSearch } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { FolderSearch, Terminal, Webhook } from "lucide-react";
 import { FolderBrowser } from "@/components/ui/folder-browser";
-import type { Connection, Job } from "@/lib/db/schema";
+import type { Connection, Job, Hook } from "@/lib/db/schema";
 
 const jobSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -125,6 +127,14 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     queryFn: () => axios.get("/api/connections").then((r) => r.data),
   });
 
+  const { data: availableHooks } = useQuery<Hook[]>({
+    queryKey: ["hooks"],
+    queryFn: () => axios.get("/api/hooks").then((r) => r.data),
+  });
+
+  const [preHookIds, setPreHookIds] = useState<number[]>([]);
+  const [postHookIds, setPostHookIds] = useState<number[]>([]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(jobSchema) as Resolver<FormValues>,
     defaultValues: {
@@ -162,6 +172,12 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         extractArchives: editJob.extractArchives ?? false,
         deltaSync: editJob.deltaSync ?? false,
       });
+      // Load existing hook associations
+      axios.get(`/api/jobs/${editJob.id}/hooks`).then((r) => {
+        const data = r.data as { pre: Hook[]; post: Hook[] };
+        setPreHookIds(data.pre.map((h) => h.id));
+        setPostHookIds(data.post.map((h) => h.id));
+      }).catch(() => {});
     } else {
       form.reset({
         name: "",
@@ -178,6 +194,8 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         extractArchives: false,
         deltaSync: false,
       });
+      setPreHookIds([]);
+      setPostHookIds([]);
     }
   }, [open, editJob, form]);
 
@@ -191,10 +209,14 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     connections?.find((c) => c.id === id)?.name ?? "Connection";
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      isEditing
-        ? axios.put(`/api/jobs/${editJob!.id}`, values)
-        : axios.post("/api/jobs", values),
+    mutationFn: async (values: FormValues) => {
+      const res = isEditing
+        ? await axios.put(`/api/jobs/${editJob!.id}`, values)
+        : await axios.post("/api/jobs", values);
+      const jobId: number = isEditing ? editJob!.id : (res.data as { id: number }).id;
+      await axios.put(`/api/jobs/${jobId}/hooks`, { pre: preHookIds, post: postHookIds });
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       toast.success(isEditing ? "Job updated" : "Job created");
@@ -566,6 +588,90 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                     Delta sync does not apply to archive files. When both options are enabled,
                     archives are always downloaded and extracted on every run.
                   </p>
+                )}
+
+                {/* Hooks */}
+                {availableHooks && availableHooks.length > 0 && (
+                  <>
+                    <Separator />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Hooks</p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium mb-2">Pre-job</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Run before any files are transferred. A failure aborts the job.
+                        </p>
+                        <div className="space-y-2">
+                          {availableHooks.map((hook) => (
+                            <label
+                              key={hook.id}
+                              className="flex items-center gap-2.5 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={preHookIds.includes(hook.id)}
+                                onCheckedChange={(checked: boolean | "indeterminate") =>
+                                  setPreHookIds((ids) =>
+                                    checked === true
+                                      ? [...ids, hook.id]
+                                      : ids.filter((id) => id !== hook.id)
+                                  )
+                                }
+                              />
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                {hook.type === "webhook" ? (
+                                  <Webhook className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                )}
+                                <span className="text-sm font-medium truncate">{hook.name}</span>
+                                {!hook.enabled && (
+                                  <Badge variant="outline" className="text-xs shrink-0">Disabled</Badge>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium mb-2">Post-job</p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Run after all files complete. Receives job status and transfer counts.
+                        </p>
+                        <div className="space-y-2">
+                          {availableHooks.map((hook) => (
+                            <label
+                              key={hook.id}
+                              className="flex items-center gap-2.5 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={postHookIds.includes(hook.id)}
+                                onCheckedChange={(checked: boolean | "indeterminate") =>
+                                  setPostHookIds((ids) =>
+                                    checked === true
+                                      ? [...ids, hook.id]
+                                      : ids.filter((id) => id !== hook.id)
+                                  )
+                                }
+                              />
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                {hook.type === "webhook" ? (
+                                  <Webhook className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                )}
+                                <span className="text-sm font-medium truncate">{hook.name}</span>
+                                {!hook.enabled && (
+                                  <Badge variant="outline" className="text-xs shrink-0">Disabled</Badge>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </form>
             </Form>

@@ -119,6 +119,40 @@ sqlite.exec(`
     timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
+  CREATE TABLE IF NOT EXISTS hooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    type TEXT NOT NULL CHECK(type IN ('webhook', 'shell')),
+    config TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS job_hooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    hook_id INTEGER NOT NULL REFERENCES hooks(id) ON DELETE CASCADE,
+    trigger TEXT NOT NULL CHECK(trigger IN ('pre_job', 'post_job')),
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS hook_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    job_run_id INTEGER NOT NULL REFERENCES job_runs(id),
+    hook_id INTEGER,
+    hook_name TEXT NOT NULL,
+    hook_type TEXT NOT NULL,
+    trigger TEXT NOT NULL CHECK(trigger IN ('pre_job', 'post_job')),
+    status TEXT NOT NULL CHECK(status IN ('success', 'failure')),
+    duration_ms INTEGER,
+    output TEXT,
+    error_message TEXT,
+    executed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+
   -- Performance indexes
   CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
   CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id);
@@ -132,6 +166,8 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource);
+  CREATE INDEX IF NOT EXISTS idx_job_hooks_job_id ON job_hooks(job_id);
+  CREATE INDEX IF NOT EXISTS idx_hook_runs_job_run_id ON hook_runs(job_run_id);
 `);
 
 // Lightweight migrations for columns added after initial release.
