@@ -1,8 +1,9 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import nodemailer from "nodemailer";
 import { db } from "@/lib/db";
 import { hookRuns } from "@/lib/db/schema";
-import type { Hook, WebhookConfig, ShellConfig } from "@/lib/db/schema";
+import type { Hook, WebhookConfig, ShellConfig, EmailConfig } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
 
 const execAsync = promisify(exec);
@@ -118,6 +119,57 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   }
 }
 
+async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResult> {
+  const start = Date.now();
+  const timeoutMs = config.timeoutMs ?? 10_000;
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: Number(config.port) || 587,
+    secure: config.secure ?? false,
+    ...(config.username
+      ? { auth: { user: config.username, pass: config.password ?? "" } }
+      : {}),
+  });
+
+  const subject = config.subject
+    ? interpolate(config.subject, ctx)
+    : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
+  const body = config.body
+    ? interpolate(config.body, ctx)
+    : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}`;
+
+  try {
+    await Promise.race([
+      transporter.sendMail({
+        from: config.from,
+        to: config.to,
+        subject,
+        ...(config.html ? { html: body } : { text: body }),
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Email timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        )
+      ),
+    ]);
+    return {
+      success: true,
+      output: `Sent to ${config.to}`,
+      errorMessage: null,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      output: null,
+      errorMessage: String(err),
+      durationMs: Date.now() - start,
+    };
+  }
+}
+
 async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResult> {
   const start = Date.now();
   const timeoutMs = config.timeoutMs ?? 30_000;
@@ -181,9 +233,9 @@ export async function executeHooks(
 
     log.info("Executing hook", { hookId: hook.id, hookName: hook.name, type: hook.type, trigger: ctx.trigger });
 
-    let config: WebhookConfig | ShellConfig;
+    let config: WebhookConfig | EmailConfig | ShellConfig;
     try {
-      config = JSON.parse(hook.config) as WebhookConfig | ShellConfig;
+      config = JSON.parse(hook.config) as WebhookConfig | EmailConfig | ShellConfig;
     } catch {
       const errorMessage = "Invalid hook config JSON";
       log.error("Hook config parse failed", { hookId: hook.id, error: errorMessage });
@@ -205,6 +257,8 @@ export async function executeHooks(
     const result =
       hook.type === "webhook"
         ? await runWebhook(config as WebhookConfig, ctx)
+        : hook.type === "email"
+        ? await runEmail(config as EmailConfig, ctx)
         : await runShell(config as ShellConfig, ctx);
 
     const runStatus = result.success ? "success" : "failure";

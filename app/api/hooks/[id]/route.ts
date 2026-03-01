@@ -42,8 +42,8 @@ export async function PUT(
     if (name !== undefined && (!name || typeof name !== "string" || !name.trim())) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
-    if (type !== undefined && type !== "webhook" && type !== "shell") {
-      return NextResponse.json({ error: "Type must be 'webhook' or 'shell'" }, { status: 400 });
+    if (type !== undefined && type !== "webhook" && type !== "shell" && type !== "email") {
+      return NextResponse.json({ error: "Type must be 'webhook', 'shell', or 'email'" }, { status: 400 });
     }
     if (config !== undefined) {
       if (typeof config !== "object") {
@@ -52,6 +52,14 @@ export async function PUT(
       const resolvedType = type ?? hook.type;
       if (resolvedType === "webhook" && (!config.url || typeof config.url !== "string")) {
         return NextResponse.json({ error: "Webhook URL is required" }, { status: 400 });
+      }
+      if (resolvedType === "email") {
+        if (!config.host || typeof config.host !== "string")
+          return NextResponse.json({ error: "SMTP host is required" }, { status: 400 });
+        if (!config.from || typeof config.from !== "string")
+          return NextResponse.json({ error: "From address is required" }, { status: 400 });
+        if (!config.to || typeof config.to !== "string")
+          return NextResponse.json({ error: "Recipient is required" }, { status: 400 });
       }
       if (resolvedType === "shell" && (!config.command || typeof config.command !== "string" || !config.command.trim())) {
         return NextResponse.json({ error: "Shell command is required" }, { status: 400 });

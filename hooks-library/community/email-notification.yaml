@@ -1,0 +1,55 @@
+name: Email Notification
+description: >
+  Sends an SMTP email when a job completes.
+  Configure your mail server settings during import.
+type: email
+tags:
+  - email
+  - smtp
+  - notification
+author: FileBridge Community
+inputs:
+  - id: SMTP_HOST
+    label: SMTP Host
+    type: text
+    required: true
+    placeholder: "smtp.gmail.com"
+    description: "Your SMTP server hostname"
+  - id: SMTP_PORT
+    label: SMTP Port
+    type: number
+    required: false
+    default: "587"
+    placeholder: "587"
+  - id: SMTP_USERNAME
+    label: SMTP Username
+    type: text
+    required: false
+    placeholder: "you@example.com"
+  - id: SMTP_PASSWORD
+    label: SMTP Password
+    type: secret
+    required: false
+    placeholder: "your-app-password"
+    description: "Use an app-specific password for Gmail or Outlook"
+  - id: FROM_ADDRESS
+    label: From Address
+    type: text
+    required: true
+    placeholder: "FileBridge <noreply@example.com>"
+  - id: TO_ADDRESS
+    label: Recipient(s)
+    type: text
+    required: true
+    placeholder: "admin@example.com"
+    description: "Comma-separated list of email addresses"
+config:
+  host: "{{SMTP_HOST}}"
+  port: "{{SMTP_PORT}}"
+  username: "{{SMTP_USERNAME}}"
+  password: "{{SMTP_PASSWORD}}"
+  from: "{{FROM_ADDRESS}}"
+  to: "{{TO_ADDRESS}}"
+  subject: "FileBridge: {{job_name}} {{status}}"
+  body: "Job {{job_name}} completed.\nFiles transferred: {{files_transferred}}\nTrigger: {{trigger}}\nStatus: {{status}}"
+  timeoutMs: 10000

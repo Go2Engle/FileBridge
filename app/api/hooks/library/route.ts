@@ -27,7 +27,7 @@ export interface LibraryHookEntry {
   source: "community" | "local";
   name: string;
   description?: string;
-  type: "webhook" | "shell";
+  type: "webhook" | "email" | "shell";
   tags?: string[];
   author?: string;
   config: Record<string, unknown>;
@@ -42,14 +42,14 @@ function parseHookYaml(raw: string, filename: string, source: "community" | "loc
   try {
     const parsed = parseYaml(raw) as Record<string, unknown>;
     if (!parsed.name || !parsed.type || !parsed.config) return null;
-    if (parsed.type !== "webhook" && parsed.type !== "shell") return null;
+    if (parsed.type !== "webhook" && parsed.type !== "email" && parsed.type !== "shell") return null;
 
     return {
       id: filename.replace(/\.ya?ml$/, ""),
       source,
       name: parsed.name as string,
       description: parsed.description != null ? String(parsed.description) : undefined,
-      type: parsed.type as "webhook" | "shell",
+      type: parsed.type as "webhook" | "email" | "shell",
       tags: Array.isArray(parsed.tags) ? (parsed.tags as string[]) : undefined,
       author: parsed.author != null ? String(parsed.author) : undefined,
       config: parsed.config as Record<string, unknown>,

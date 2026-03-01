@@ -145,7 +145,7 @@ export const hooks = sqliteTable("hooks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
-  type: text("type", { enum: ["webhook", "shell"] }).notNull(),
+  type: text("type", { enum: ["webhook", "shell", "email"] }).notNull(),
   config: text("config").notNull(), // JSON stored as plain text
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at")
@@ -202,6 +202,20 @@ export interface ShellConfig {
   command: string;
   timeoutMs?: number; // default 30000
   workingDir?: string;
+}
+
+export interface EmailConfig {
+  host: string;
+  port?: number;      // default 587
+  secure?: boolean;   // true = TLS (port 465), false = STARTTLS
+  username?: string;
+  password?: string;
+  from: string;
+  to: string;         // comma-separated recipients
+  subject?: string;   // template vars: {{job_name}}, {{status}}, etc.
+  body?: string;      // template vars supported; defaults to plain text summary
+  html?: boolean;     // default false
+  timeoutMs?: number; // default 10000
 }
 
 export type Connection = typeof connections.$inferSelect;

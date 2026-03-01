@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
-    if (type !== "webhook" && type !== "shell") {
-      return NextResponse.json({ error: "Type must be 'webhook' or 'shell'" }, { status: 400 });
+    if (type !== "webhook" && type !== "shell" && type !== "email") {
+      return NextResponse.json({ error: "Type must be 'webhook', 'shell', or 'email'" }, { status: 400 });
     }
     if (!config || typeof config !== "object") {
       return NextResponse.json({ error: "Config is required" }, { status: 400 });
@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
     if (type === "webhook") {
       if (!config.url || typeof config.url !== "string") {
         return NextResponse.json({ error: "Webhook URL is required" }, { status: 400 });
+      }
+    } else if (type === "email") {
+      if (!config.host || typeof config.host !== "string") {
+        return NextResponse.json({ error: "SMTP host is required" }, { status: 400 });
+      }
+      if (!config.from || typeof config.from !== "string") {
+        return NextResponse.json({ error: "From address is required" }, { status: 400 });
+      }
+      if (!config.to || typeof config.to !== "string") {
+        return NextResponse.json({ error: "Recipient is required" }, { status: 400 });
       }
     } else {
       if (!config.command || typeof config.command !== "string" || !config.command.trim()) {

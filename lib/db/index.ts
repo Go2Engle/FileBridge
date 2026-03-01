@@ -302,6 +302,30 @@ if (!isBuildPhase) {
   }
 }
 
+// Migrate: update hooks table CHECK constraint to include 'email' type.
+const hooksDef = sqlite
+  .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='hooks'")
+  .get() as { sql: string } | undefined;
+if (hooksDef && !hooksDef.sql.includes("'email'")) {
+  sqlite.pragma("foreign_keys = OFF");
+  sqlite.exec(`
+    CREATE TABLE hooks_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      type TEXT NOT NULL CHECK(type IN ('webhook', 'shell', 'email')),
+      config TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT INTO hooks_new SELECT * FROM hooks;
+    DROP TABLE hooks;
+    ALTER TABLE hooks_new RENAME TO hooks;
+  `);
+  sqlite.pragma("foreign_keys = ON");
+}
+
 // Migrate: encrypt hook configs at rest.
 // Handles legacy plaintext JSON and the old per-field __secret: format.
 if (!isBuildPhase) {

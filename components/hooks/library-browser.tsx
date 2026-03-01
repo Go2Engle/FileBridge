@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Search, Webhook, Terminal, Download, Users, FolderOpen, ArrowLeft, KeyRound } from "lucide-react";
+import { Search, Webhook, Terminal, Mail, Download, Users, FolderOpen, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import type { LibraryHookEntry, LibraryHookInput } from "@/app/api/hooks/library/route";
 import type { Hook } from "@/lib/db/schema";
 
@@ -27,23 +27,25 @@ interface Props {
 export function LibraryBrowser({ open, onClose }: Props) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "webhook" | "shell">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "webhook" | "email" | "shell">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "community" | "local">("all");
 
   // Two-step state: null = list view, entry = configure view
   const [configuring, setConfiguring] = useState<LibraryHookEntry | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [showFields, setShowFields] = useState<Record<string, boolean>>({});
 
   // Reset config state when dialog opens/closes
   useEffect(() => {
     if (!open) {
       setConfiguring(null);
       setFieldValues({});
+      setShowFields({});
       setSearch("");
     }
   }, [open]);
 
-  // Reset field values when switching to a different hook
+  // Reset field values and show-states when switching to a different hook
   useEffect(() => {
     if (configuring) {
       const defaults: Record<string, string> = {};
@@ -51,6 +53,7 @@ export function LibraryBrowser({ open, onClose }: Props) {
         if (inp.default) defaults[inp.id] = inp.default;
       });
       setFieldValues(defaults);
+      setShowFields({});
     }
   }, [configuring]);
 
@@ -138,6 +141,24 @@ export function LibraryBrowser({ open, onClose }: Props) {
     configImportMutation.mutate({ entry: configuring, values: fieldValues });
   }
 
+  function TypeBadge({ type }: { type: string }) {
+    if (type === "email") return (
+      <Badge variant="outline" className="text-xs gap-1 py-0">
+        <Mail className="h-3 w-3" />Email
+      </Badge>
+    );
+    if (type === "webhook") return (
+      <Badge variant="outline" className="text-xs gap-1 py-0">
+        <Webhook className="h-3 w-3" />Webhook
+      </Badge>
+    );
+    return (
+      <Badge variant="outline" className="text-xs gap-1 py-0">
+        <Terminal className="h-3 w-3" />Shell
+      </Badge>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col gap-0 p-0">
@@ -171,20 +192,46 @@ export function LibraryBrowser({ open, onClose }: Props) {
                     <Label htmlFor={inp.id} className="flex items-center gap-1.5">
                       {inp.label}
                       {inp.required && <span className="text-destructive">*</span>}
-                      {inp.type === "secret" && (
-                        <KeyRound className="h-3 w-3 text-muted-foreground" />
-                      )}
                     </Label>
-                    <Input
-                      id={inp.id}
-                      type={inp.type === "secret" ? "password" : inp.type === "number" ? "number" : "text"}
-                      placeholder={inp.placeholder}
-                      value={fieldValues[inp.id] ?? ""}
-                      onChange={(e) =>
-                        setFieldValues((prev) => ({ ...prev, [inp.id]: e.target.value }))
-                      }
-                      autoComplete={inp.type === "secret" ? "off" : undefined}
-                    />
+                    {inp.type === "secret" ? (
+                      <div className="relative">
+                        <Input
+                          id={inp.id}
+                          type={showFields[inp.id] ? "text" : "password"}
+                          placeholder={inp.placeholder}
+                          value={fieldValues[inp.id] ?? ""}
+                          onChange={(e) =>
+                            setFieldValues((prev) => ({ ...prev, [inp.id]: e.target.value }))
+                          }
+                          autoComplete="off"
+                          className="pr-8"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1 h-7 w-7 text-muted-foreground"
+                          onClick={() =>
+                            setShowFields((prev) => ({ ...prev, [inp.id]: !prev[inp.id] }))
+                          }
+                          tabIndex={-1}
+                        >
+                          {showFields[inp.id]
+                            ? <EyeOff className="h-3.5 w-3.5" />
+                            : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Input
+                        id={inp.id}
+                        type={inp.type === "number" ? "number" : "text"}
+                        placeholder={inp.placeholder}
+                        value={fieldValues[inp.id] ?? ""}
+                        onChange={(e) =>
+                          setFieldValues((prev) => ({ ...prev, [inp.id]: e.target.value }))
+                        }
+                      />
+                    )}
                     {inp.description && (
                       <p className="text-xs text-muted-foreground">{inp.description}</p>
                     )}
@@ -231,6 +278,7 @@ export function LibraryBrowser({ open, onClose }: Props) {
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="webhook">Webhook</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="shell">Shell</SelectItem>
                 </SelectContent>
               </Select>
@@ -278,12 +326,7 @@ export function LibraryBrowser({ open, onClose }: Props) {
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{entry.name}</span>
-                          <Badge variant="outline" className="text-xs gap-1 py-0">
-                            {entry.type === "webhook"
-                              ? <Webhook className="h-3 w-3" />
-                              : <Terminal className="h-3 w-3" />}
-                            {entry.type === "webhook" ? "Webhook" : "Shell"}
-                          </Badge>
+                          <TypeBadge type={entry.type} />
                           {entry.source === "local" && (
                             <Badge variant="secondary" className="text-xs gap-1 py-0">
                               <FolderOpen className="h-3 w-3" />

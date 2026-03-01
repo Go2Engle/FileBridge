@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff } from "lucide-react";
 import type { Hook } from "@/lib/db/schema";
 
 // ---------- Schema ----------
@@ -41,6 +41,26 @@ const webhookSchema = z.object({
   }),
 });
 
+const emailSchema = z.object({
+  type: z.literal("email"),
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  enabled: z.boolean().default(true),
+  config: z.object({
+    host: z.string().min(1, "SMTP host is required"),
+    port: z.coerce.number().int().min(1).max(65535).default(587),
+    secure: z.boolean().default(false),
+    username: z.string().optional(),
+    password: z.string().optional(),
+    from: z.string().min(1, "From address is required"),
+    to: z.string().min(1, "At least one recipient is required"),
+    subject: z.string().optional(),
+    body: z.string().optional(),
+    html: z.boolean().default(false),
+    timeoutMs: z.coerce.number().int().min(100).max(120_000).optional(),
+  }),
+});
+
 const shellSchema = z.object({
   type: z.literal("shell"),
   name: z.string().min(1, "Name is required"),
@@ -53,7 +73,7 @@ const shellSchema = z.object({
   }),
 });
 
-const hookFormSchema = z.discriminatedUnion("type", [webhookSchema, shellSchema]);
+const hookFormSchema = z.discriminatedUnion("type", [webhookSchema, emailSchema, shellSchema]);
 
 type FormValues = z.infer<typeof hookFormSchema>;
 
@@ -70,7 +90,8 @@ interface HookFormProps {
 export function HookForm({ open, onClose, editHook }: HookFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!editHook;
-  const [selectedType, setSelectedType] = useState<"webhook" | "shell">("webhook");
+  const [selectedType, setSelectedType] = useState<"webhook" | "email" | "shell">("webhook");
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(hookFormSchema) as Resolver<FormValues>,
@@ -83,6 +104,8 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
     },
   });
 
+  const watchedEmailPort = form.watch("config.port" as never) as unknown as number | undefined;
+
   const { fields: headerFields, append: appendHeader, remove: removeHeader } = useFieldArray({
     control: form.control,
     name: "config.headers" as never,
@@ -90,9 +113,10 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
 
   useEffect(() => {
     if (!open) return;
+    setShowPassword(false);
     if (editHook) {
       const config = JSON.parse(editHook.config) as Record<string, unknown>;
-      const type = editHook.type as "webhook" | "shell";
+      const type = editHook.type as "webhook" | "email" | "shell";
       setSelectedType(type);
       if (type === "webhook") {
         const headers = config.headers
@@ -108,6 +132,26 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
             method: (config.method as "GET" | "POST" | "PUT" | "PATCH") ?? "POST",
             headers,
             body: (config.body as string) ?? "",
+            timeoutMs: (config.timeoutMs as number | undefined),
+          },
+        });
+      } else if (type === "email") {
+        form.reset({
+          type: "email",
+          name: editHook.name,
+          description: editHook.description ?? "",
+          enabled: editHook.enabled,
+          config: {
+            host: (config.host as string) ?? "",
+            port: (config.port as number) ?? 587,
+            secure: (config.secure as boolean) ?? false,
+            username: (config.username as string) ?? "",
+            password: (config.password as string) ?? "",
+            from: (config.from as string) ?? "",
+            to: (config.to as string) ?? "",
+            subject: (config.subject as string) ?? "",
+            body: (config.body as string) ?? "",
+            html: (config.html as boolean) ?? false,
             timeoutMs: (config.timeoutMs as number | undefined),
           },
         });
@@ -160,8 +204,9 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
     onError: () => toast.error("Failed to save hook"),
   });
 
-  function handleTypeChange(t: "webhook" | "shell") {
+  function handleTypeChange(t: "webhook" | "email" | "shell") {
     setSelectedType(t);
+    setShowPassword(false);
     const name = form.getValues("name");
     const description = form.getValues("description");
     const enabled = form.getValues("enabled");
@@ -173,6 +218,17 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
         enabled,
         config: { url: "", method: "POST", headers: [], body: "", timeoutMs: undefined },
       });
+    } else if (t === "email") {
+      form.reset({
+        type: "email",
+        name,
+        description,
+        enabled,
+        config: {
+          host: "", port: 587, secure: false, username: "", password: "",
+          from: "", to: "", subject: "", body: "", html: false, timeoutMs: undefined,
+        },
+      });
     } else {
       form.reset({
         type: "shell",
@@ -183,6 +239,8 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
       });
     }
   }
+
+  const TEMPLATE_VARS_HINT = "Variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{error_message}}";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -205,7 +263,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Notify Slack on completion" {...field} />
+                      <Input placeholder="Notify on completion" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -230,7 +288,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
               {/* Type */}
               <Separator />
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   type="button"
                   variant={selectedType === "webhook" ? "default" : "outline"}
@@ -238,6 +296,14 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                   onClick={() => handleTypeChange("webhook")}
                 >
                   Webhook
+                </Button>
+                <Button
+                  type="button"
+                  variant={selectedType === "email" ? "default" : "outline"}
+                  className="w-full"
+                  onClick={() => handleTypeChange("email")}
+                >
+                  Email
                 </Button>
                 <Button
                   type="button"
@@ -343,7 +409,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                         <FormLabel>Body template <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder={`Leave blank to use the default JSON payload.\nAvailable variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{error_message}}`}
+                            placeholder={`Leave blank to use the default JSON payload.\n${TEMPLATE_VARS_HINT}`}
                             className="font-mono text-xs min-h-[80px]"
                             {...field}
                             value={field.value as string ?? ""}
@@ -368,6 +434,213 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                             {...field}
                             value={field.value as number ?? ""}
                           />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {/* Email fields */}
+              {selectedType === "email" && (
+                <>
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">SMTP Server</p>
+
+                  <div className="grid grid-cols-[1fr_96px] gap-3">
+                    <FormField
+                      control={form.control}
+                      name={"config.host" as "config.host" & string}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP Host</FormLabel>
+                          <FormControl>
+                            <Input placeholder="smtp.gmail.com" {...field} value={field.value as string ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={"config.port" as "config.port" & string}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Port</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="587" {...field} value={field.value as number ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name={"config.secure" as "config.secure" & string}
+                    render={({ field }) => {
+                      const securityValue = (field.value as boolean)
+                        ? "tls"
+                        : watchedEmailPort === 25
+                        ? "none25"
+                        : "starttls";
+                      return (
+                        <FormItem>
+                          <FormLabel>Security</FormLabel>
+                          <Select
+                            onValueChange={(v) => {
+                              field.onChange(v === "tls");
+                              if (v === "none25") form.setValue("config.port" as never, 25 as never);
+                              else if (v === "starttls") form.setValue("config.port" as never, 587 as never);
+                              else if (v === "tls") form.setValue("config.port" as never, 465 as never);
+                            }}
+                            value={securityValue}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none25">None (port 25)</SelectItem>
+                              <SelectItem value="starttls">STARTTLS (port 587)</SelectItem>
+                              <SelectItem value="tls">SSL / TLS (port 465)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name={"config.username" as "config.username" & string}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                          <FormControl>
+                            <Input placeholder="you@example.com" autoComplete="off" {...field} value={field.value as string ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={"config.password" as "config.password" & string}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                type={showPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                autoComplete="new-password"
+                                className="pr-8"
+                                {...field}
+                                value={field.value as string ?? ""}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground"
+                                onClick={() => setShowPassword((s) => !s)}
+                                tabIndex={-1}
+                              >
+                                {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <Separator />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Message</p>
+
+                  <FormField
+                    control={form.control}
+                    name={"config.from" as "config.from" & string}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>From</FormLabel>
+                        <FormControl>
+                          <Input placeholder="FileBridge <noreply@example.com>" {...field} value={field.value as string ?? ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={"config.to" as "config.to" & string}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>To</FormLabel>
+                        <FormControl>
+                          <Input placeholder="admin@example.com" {...field} value={field.value as string ?? ""} />
+                        </FormControl>
+                        <FormDescription className="text-xs">Comma-separated for multiple recipients.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={"config.subject" as "config.subject" & string}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Subject <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="FileBridge: {{job_name}} {{status}}"
+                            {...field}
+                            value={field.value as string ?? ""}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">{TEMPLATE_VARS_HINT}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={"config.body" as "config.body" & string}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Body <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder={`Leave blank for a default summary.\n${TEMPLATE_VARS_HINT}`}
+                            className="font-mono text-xs min-h-[80px]"
+                            {...field}
+                            value={field.value as string ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={"config.timeoutMs" as "config.timeoutMs" & string}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Timeout (ms) <span className="text-muted-foreground font-normal">(optional, default 10000)</span></FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="10000" {...field} value={field.value as number ?? ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
