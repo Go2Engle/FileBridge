@@ -1,0 +1,24 @@
+name: Discord Notification
+description: >
+  Posts an embed to a Discord channel when a job completes.
+  You will be prompted for your Discord Webhook URL during import.
+type: webhook
+tags:
+  - discord
+  - notification
+  - messaging
+author: FileBridge Community
+inputs:
+  - id: DISCORD_WEBHOOK_URL
+    label: Discord Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://discord.com/api/webhooks/..."
+    description: "Create one in Discord channel settings → Integrations → Webhooks"
+config:
+  url: "{{DISCORD_WEBHOOK_URL}}"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: '{"embeds": [{"title": "FileBridge Job Complete", "description": "**{{job_name}}** finished with {{files_transferred}} file(s) transferred.", "color": 3066993}]}'
+  timeoutMs: 5000

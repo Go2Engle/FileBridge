@@ -1,0 +1,25 @@
+name: Microsoft Teams Notification
+description: >
+  Sends a message card to a Microsoft Teams channel when a job completes.
+  You will be prompted for your Teams Incoming Webhook URL during import.
+type: webhook
+tags:
+  - teams
+  - microsoft
+  - notification
+  - messaging
+author: FileBridge Community
+inputs:
+  - id: TEAMS_WEBHOOK_URL
+    label: Teams Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://outlook.office.com/webhook/..."
+    description: "Create one in Teams channel settings → Connectors → Incoming Webhook"
+config:
+  url: "{{TEAMS_WEBHOOK_URL}}"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: '{"@type": "MessageCard", "@context": "http://schema.org/extensions", "summary": "FileBridge Job Complete", "sections": [{"activityTitle": "FileBridge · {{job_name}}", "activitySubtitle": "{{files_transferred}} file(s) transferred · trigger: {{trigger}}"}]}'
+  timeoutMs: 5000

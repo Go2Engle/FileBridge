@@ -2,6 +2,8 @@ import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getConnection } from "@/lib/db/connections";
+import { getJobHooksWithDetail } from "@/lib/db/hooks";
+import { executeHooks } from "@/lib/hooks/executor";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
@@ -443,6 +445,14 @@ export async function runJob(jobId: number): Promise<void> {
       await dest.connect();
       log.info("Destination connected");
 
+      // Run pre-job hooks before any files are transferred
+      const preHooks = getJobHooksWithDetail(jobId, "pre_job");
+      if (preHooks.length > 0) {
+        log.info("Running pre-job hooks", { count: preHooks.length });
+        await executeHooks(preHooks, { jobId, jobName: job.name, runId: run.id, trigger: "pre_job" }, run.id);
+        log.info("Pre-job hooks completed");
+      }
+
       log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
       let files = await source.listFiles(job.sourcePath, job.fileFilter);
       log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
@@ -836,6 +846,17 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
+      // Run post-job hooks after all files are transferred
+      const postHooks = getJobHooksWithDetail(jobId, "post_job");
+      if (postHooks.length > 0) {
+        log.info("Running post-job hooks", { count: postHooks.length });
+        await executeHooks(postHooks, {
+          jobId, jobName: job.name, runId: run.id, trigger: "post_job",
+          status: "success", filesTransferred, bytesTransferred,
+        }, run.id);
+        log.info("Post-job hooks completed");
+      }
+
       log.info("Disconnecting");
       await source.disconnect();
       await dest.disconnect();
@@ -873,6 +894,20 @@ export async function runJob(jobId: number): Promise<void> {
       } catch {}
 
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+      // Run post-job hooks even on failure (best-effort — failures are logged, not re-thrown)
+      const postHooksOnError = getJobHooksWithDetail(jobId, "post_job");
+      if (postHooksOnError.length > 0) {
+        log.info("Running post-job hooks (failure path)", { count: postHooksOnError.length });
+        try {
+          await executeHooks(postHooksOnError, {
+            jobId, jobName: job.name, runId: run.id, trigger: "post_job",
+            status: "failure", errorMessage,
+          }, run.id);
+        } catch {
+          // Already logged inside executeHooks — don't mask the original error
+        }
+      }
 
       await db
         .update(jobRuns)

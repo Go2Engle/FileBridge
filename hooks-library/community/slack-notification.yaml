@@ -1,0 +1,24 @@
+name: Slack Notification
+description: >
+  Posts a message to a Slack channel when a job completes.
+  You will be prompted for your Slack Incoming Webhook URL during import.
+type: webhook
+tags:
+  - slack
+  - notification
+  - messaging
+author: FileBridge Community
+inputs:
+  - id: SLACK_WEBHOOK_URL
+    label: Slack Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://hooks.slack.com/services/T.../B.../..."
+    description: "Create one at api.slack.com/apps → Your App → Incoming Webhooks"
+config:
+  url: "{{SLACK_WEBHOOK_URL}}"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: '{"text": "*FileBridge* · Job *{{job_name}}* completed\n• Files transferred: {{files_transferred}}\n• Trigger: {{trigger}}"}'
+  timeoutMs: 5000

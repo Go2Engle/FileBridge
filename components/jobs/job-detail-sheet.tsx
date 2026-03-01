@@ -24,15 +24,19 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Play, PenLine, CircleAlert, CircleCheckBig, CircleX, Clock, FileText,
-  ArrowLeft, Loader2, Search,
+  ArrowLeft, Loader2, Search, Webhook,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
-import type { Job, JobRun, TransferLog, Connection } from "@/lib/db/schema";
+import type { Job, JobRun, TransferLog, HookRun, Connection } from "@/lib/db/schema";
 import { formatBytes, formatDuration, parseDBDate } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { useTimeFormat, TIME_FORMATS } from "@/hooks/use-time-format";
+
+type RunLogEntry =
+  | (TransferLog & { logType: "transfer" })
+  | (HookRun & { logType: "hook" });
 
 const statusVariant: Record<
   Job["status"],
@@ -305,7 +309,7 @@ function LiveProgressPanel({ job, run }: { job: Job; run: JobRun }) {
     return formatDuration(Math.round(remaining / speed) * 1000);
   }, [speed, totalBytes, totalBytesInFlight]);
 
-  const { data: logs } = useQuery<TransferLog[]>({
+  const { data: logs } = useQuery<RunLogEntry[]>({
     queryKey: ["run-logs", job.id, run.id],
     queryFn: () =>
       axios.get(`/api/jobs/${job.id}/runs/${run.id}/logs`).then((r) => r.data),
@@ -482,7 +486,7 @@ function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
   const timeFormat = useTimeFormat();
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
 
-  const { data: runLogs, isLoading: logsLoading } = useQuery<TransferLog[]>({
+  const { data: runLogs, isLoading: logsLoading } = useQuery<RunLogEntry[]>({
     queryKey: ["run-logs", job.id, selectedRunId],
     queryFn: () =>
       axios.get(`/api/jobs/${job.id}/runs/${selectedRunId}/logs`).then((r) => r.data),
@@ -595,16 +599,33 @@ function RunHistoryPanel({ job, runs }: { job: Job; runs: JobRun[] }) {
 
 const JOB_LOG_PAGE_SIZE = 25;
 
-interface JobLogEntry {
+interface JobTransferLogEntry {
+  log_type: "transfer";
   id: number;
-  fileName: string;
-  sourcePath: string;
-  destinationPath: string;
-  fileSize: number;
-  transferredAt: string;
+  job_run_id: number;
+  file_name: string;
+  source_path: string;
+  destination_path: string;
+  file_size: number;
+  timestamp: string;
   status: "success" | "failure";
-  errorMessage: string | null;
+  error_message: string | null;
 }
+
+interface JobHookLogEntry {
+  log_type: "hook";
+  id: number;
+  job_run_id: number;
+  hook_name: string;
+  hook_type: string;
+  trigger: string;
+  duration_ms: number | null;
+  timestamp: string;
+  status: "success" | "failure";
+  error_message: string | null;
+}
+
+type JobLogEntry = JobTransferLogEntry | JobHookLogEntry;
 
 function JobLogsPanel({ job }: { job: Job }) {
   const timeFormat = useTimeFormat();
@@ -636,7 +657,7 @@ function JobLogsPanel({ job }: { job: Job }) {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8 h-8 text-sm"
-            placeholder="Search file name..."
+            placeholder="Search name..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           />
@@ -664,82 +685,99 @@ function JobLogsPanel({ job }: { job: Job }) {
         </div>
       ) : !data?.logs.length ? (
         <div className="text-center py-12 text-sm text-muted-foreground">
-          No transfer logs found.
+          No logs found.
         </div>
       ) : (
         <>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>File</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Destination</TableHead>
-                <TableHead>Size</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>Size / Duration</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Transferred</TableHead>
+                <TableHead>Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="max-w-[140px]">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="truncate block text-sm cursor-default">{log.fileName}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs break-all">
-                        <p className="text-xs">{log.fileName}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs max-w-[100px]">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="truncate block cursor-default text-muted-foreground">{log.sourcePath}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs break-all">
-                        <p className="text-xs font-mono">{log.sourcePath}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs max-w-[100px]">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="truncate block cursor-default text-muted-foreground">{log.destinationPath}</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs break-all">
-                        <p className="text-xs font-mono">{log.destinationPath}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell className="text-sm whitespace-nowrap">
-                    {formatBytes(log.fileSize)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <Badge
-                        variant={log.status === "success" ? "success" : "destructive"}
-                        className="capitalize text-xs"
-                      >
-                        {log.status}
-                      </Badge>
-                      {log.status === "failure" && log.errorMessage && (
+              {data.logs.map((log) => {
+                const isHook = log.log_type === "hook";
+                const hookLog = isHook ? (log as JobHookLogEntry) : null;
+                const transferLog = !isHook ? (log as JobTransferLogEntry) : null;
+
+                return (
+                  <TableRow key={`${log.log_type}-${log.id}`} className={isHook ? "bg-muted/30" : undefined}>
+                    <TableCell className="max-w-[140px]">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-1.5 max-w-[140px] cursor-default">
+                            {isHook && (
+                              hookLog!.hook_type === "webhook"
+                                ? <Webhook className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                : <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            )}
+                            <span className="truncate text-sm">
+                              {isHook ? hookLog!.hook_name : transferLog!.file_name}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs break-all">
+                          <p className="text-xs">
+                            {isHook ? hookLog!.hook_name : transferLog!.file_name}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs max-w-[120px] text-muted-foreground">
+                      {isHook ? (
+                        <span className="capitalize not-italic font-sans">
+                          {hookLog!.trigger?.replace("_", " ")} · {hookLog!.hook_type}
+                        </span>
+                      ) : (
                         <Tooltip>
-                          <TooltipTrigger>
-                            <CircleAlert className="h-3.5 w-3.5 text-destructive" />
+                          <TooltipTrigger asChild>
+                            <span className="truncate block cursor-default">
+                              {transferLog!.source_path}
+                            </span>
                           </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-xs">
-                            <p className="text-xs">{log.errorMessage}</p>
+                          <TooltipContent side="bottom" className="max-w-xs break-all">
+                            <p className="text-xs font-mono">{transferLog!.source_path}</p>
+                            <p className="text-xs font-mono mt-1">{transferLog!.destination_path}</p>
                           </TooltipContent>
                         </Tooltip>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(parseDBDate(log.transferredAt), `MMM d, ${TIME_FORMATS[timeFormat].withSec}`)}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {isHook
+                        ? (hookLog!.duration_ms != null ? `${hookLog!.duration_ms}ms` : "—")
+                        : formatBytes(transferLog!.file_size)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant={log.status === "success" ? "success" : "destructive"}
+                          className="capitalize text-xs"
+                        >
+                          {log.status}
+                        </Badge>
+                        {log.status === "failure" && log.error_message && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <CircleAlert className="h-3.5 w-3.5 text-destructive" />
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs">
+                              <p className="text-xs">{log.error_message}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(parseDBDate(log.timestamp), `MMM d, ${TIME_FORMATS[timeFormat].withSec}`)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
 
@@ -777,59 +815,105 @@ function JobLogsPanel({ job }: { job: Job }) {
 
 // --- Transfer Log Table ---
 
-function TransferLogTable({ logs, compact }: { logs: TransferLog[]; compact?: boolean }) {
+function TransferLogTable({ logs, compact }: { logs: RunLogEntry[]; compact?: boolean }) {
   const timeFormat = useTimeFormat();
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>File</TableHead>
+          <TableHead>Name</TableHead>
           <TableHead className="text-right">Size</TableHead>
           <TableHead>Status</TableHead>
           {!compact && <TableHead>Time</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {logs.map((log) => (
-          <TableRow key={log.id}>
-            <TableCell className="max-w-[200px]">
-              <div className="flex items-center gap-1.5">
-                {log.status === "success" ? (
-                  <CircleCheckBig className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                ) : (
-                  <CircleX className="h-3.5 w-3.5 text-destructive shrink-0" />
+        {logs.map((log) => {
+          if (log.logType === "hook") {
+            return (
+              <TableRow key={`hook-${log.id}`} className="bg-muted/30">
+                <TableCell className="max-w-[200px]">
+                  <div className="flex items-center gap-1.5">
+                    {log.status === "success" ? (
+                      <CircleCheckBig className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <CircleX className="h-3.5 w-3.5 text-destructive shrink-0" />
+                    )}
+                    <Webhook className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate text-sm">{log.hookName}</span>
+                    {log.errorMessage && (
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <CircleAlert className="h-3 w-3 text-destructive shrink-0" />
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
+                          {log.errorMessage}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right text-sm text-muted-foreground">
+                  {log.durationMs != null ? `${log.durationMs}ms` : "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={log.status === "success" ? "success" : "destructive"}
+                    className="capitalize text-xs"
+                  >
+                    {log.status}
+                  </Badge>
+                </TableCell>
+                {!compact && (
+                  <TableCell className="text-sm text-muted-foreground">
+                    {format(parseDBDate(log.executedAt), TIME_FORMATS[timeFormat].withSec)}
+                  </TableCell>
                 )}
-                <span className="truncate text-sm">{log.fileName}</span>
-                {log.errorMessage && (
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <CircleAlert className="h-3 w-3 text-destructive shrink-0" />
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
-                      {log.errorMessage}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-            </TableCell>
-            <TableCell className="text-right text-sm text-muted-foreground">
-              {formatBytes(log.fileSize)}
-            </TableCell>
-            <TableCell>
-              <Badge
-                variant={log.status === "success" ? "success" : "destructive"}
-                className="capitalize text-xs"
-              >
-                {log.status}
-              </Badge>
-            </TableCell>
-            {!compact && (
-              <TableCell className="text-sm text-muted-foreground">
-                {format(parseDBDate(log.transferredAt), TIME_FORMATS[timeFormat].withSec)}
+              </TableRow>
+            );
+          }
+
+          return (
+            <TableRow key={`transfer-${log.id}`}>
+              <TableCell className="max-w-[200px]">
+                <div className="flex items-center gap-1.5">
+                  {log.status === "success" ? (
+                    <CircleCheckBig className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  ) : (
+                    <CircleX className="h-3.5 w-3.5 text-destructive shrink-0" />
+                  )}
+                  <span className="truncate text-sm">{log.fileName}</span>
+                  {log.errorMessage && (
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <CircleAlert className="h-3 w-3 text-destructive shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs break-words">
+                        {log.errorMessage}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               </TableCell>
-            )}
-          </TableRow>
-        ))}
+              <TableCell className="text-right text-sm text-muted-foreground">
+                {formatBytes(log.fileSize)}
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant={log.status === "success" ? "success" : "destructive"}
+                  className="capitalize text-xs"
+                >
+                  {log.status}
+                </Badge>
+              </TableCell>
+              {!compact && (
+                <TableCell className="text-sm text-muted-foreground">
+                  {format(parseDBDate(log.transferredAt), TIME_FORMATS[timeFormat].withSec)}
+                </TableCell>
+              )}
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
