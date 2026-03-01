@@ -50,16 +50,21 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   const method = config.method ?? "POST";
   const timeoutMs = config.timeoutMs ?? 10_000;
 
+  const url = String(config.url);
+
+  const rawHeaders = config.headers ?? {};
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": "FileBridge-Hook/1.0",
-    ...config.headers,
   };
+  for (const [k, v] of Object.entries(rawHeaders)) {
+    headers[k] = String(v);
+  }
 
   let body: string | undefined;
   if (method !== "GET") {
     if (config.body) {
-      body = interpolate(config.body, ctx);
+      body = interpolate(String(config.body), ctx);
     } else {
       body = JSON.stringify({
         job_id: ctx.jobId,
@@ -78,7 +83,7 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(config.url, {
+    const res = await fetch(url, {
       method,
       headers,
       body,
@@ -130,9 +135,9 @@ async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResu
   };
 
   try {
-    const { stdout, stderr } = await execAsync(config.command, {
+    const { stdout, stderr } = await execAsync(String(config.command), {
       timeout: timeoutMs,
-      cwd: config.workingDir ?? undefined,
+      cwd: config.workingDir ? String(config.workingDir) : undefined,
       env,
     });
     const combined = [stdout, stderr].filter(Boolean).join("\n").trim();

@@ -12,6 +12,16 @@ const GITHUB_BRANCH = "main";
 const COMMUNITY_PATH = "hooks-library/community";
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+export interface LibraryHookInput {
+  id: string;
+  label: string;
+  type: "text" | "secret" | "number";
+  required?: boolean;
+  default?: string;
+  placeholder?: string;
+  description?: string;
+}
+
 export interface LibraryHookEntry {
   id: string;
   source: "community" | "local";
@@ -21,6 +31,7 @@ export interface LibraryHookEntry {
   tags?: string[];
   author?: string;
   config: Record<string, unknown>;
+  inputs?: LibraryHookInput[];
 }
 
 // ── In-memory cache for remote community hooks ────────────────────────────
@@ -42,6 +53,7 @@ function parseHookYaml(raw: string, filename: string, source: "community" | "loc
       tags: Array.isArray(parsed.tags) ? (parsed.tags as string[]) : undefined,
       author: parsed.author != null ? String(parsed.author) : undefined,
       config: parsed.config as Record<string, unknown>,
+      inputs: Array.isArray(parsed.inputs) ? (parsed.inputs as LibraryHookInput[]) : undefined,
     };
   } catch {
     return null;

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
 import fs from "fs";
-import { encrypt } from "../crypto";
+import { encrypt, decrypt } from "../crypto";
 
 const DB_PATH =
   process.env.DATABASE_PATH ||
@@ -297,6 +297,52 @@ if (!isBuildPhase) {
     // Likely AUTH_SECRET is not configured. Credentials stay plaintext until it is.
     console.warn(
       "[FileBridge] Could not encrypt connection credentials at startup:",
+      err instanceof Error ? err.message : err
+    );
+  }
+}
+
+// Migrate: encrypt hook configs at rest.
+// Handles legacy plaintext JSON and the old per-field __secret: format.
+if (!isBuildPhase) {
+  try {
+    const hookRows = sqlite
+      .prepare("SELECT id, config FROM hooks")
+      .all() as Array<{ id: number; config: string }>;
+    const updateHookConfig = sqlite.prepare(
+      "UPDATE hooks SET config = ? WHERE id = ?"
+    );
+
+    function stripSecretPrefixes(obj: unknown): unknown {
+      if (typeof obj === "string") {
+        if (obj.startsWith("__secret:")) {
+          try { return decrypt(obj.slice(9)); } catch { return obj; }
+        }
+        return obj;
+      }
+      if (Array.isArray(obj)) return obj.map(stripSecretPrefixes);
+      if (obj !== null && typeof obj === "object") {
+        const result: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+          result[k] = stripSecretPrefixes(v);
+        }
+        return result;
+      }
+      return obj;
+    }
+
+    for (const row of hookRows) {
+      if (!row.config.startsWith("enc:")) {
+        try {
+          const parsed = JSON.parse(row.config);
+          const stripped = stripSecretPrefixes(parsed);
+          updateHookConfig.run("enc:" + encrypt(JSON.stringify(stripped)), row.id);
+        } catch { /* skip malformed configs */ }
+      }
+    }
+  } catch (err) {
+    console.warn(
+      "[FileBridge] Could not encrypt hook configs at startup:",
       err instanceof Error ? err.message : err
     );
   }

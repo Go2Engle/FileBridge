@@ -1,7 +1,7 @@
 name: Microsoft Teams Notification
 description: >
   Sends a message card to a Microsoft Teams channel when a job completes.
-  Requires a Teams Incoming Webhook URL set via the TEAMS_WEBHOOK_URL environment variable.
+  You will be prompted for your Teams Incoming Webhook URL during import.
 type: webhook
 tags:
   - teams
@@ -9,6 +9,13 @@ tags:
   - notification
   - messaging
 author: FileBridge Community
+inputs:
+  - id: TEAMS_WEBHOOK_URL
+    label: Teams Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://outlook.office.com/webhook/..."
+    description: "Create one in Teams channel settings → Connectors → Incoming Webhook"
 config:
   url: "{{TEAMS_WEBHOOK_URL}}"
   method: POST

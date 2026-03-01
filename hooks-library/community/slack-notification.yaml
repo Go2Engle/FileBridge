@@ -1,13 +1,20 @@
 name: Slack Notification
 description: >
   Posts a message to a Slack channel when a job completes.
-  Requires a Slack Incoming Webhook URL set via the SLACK_WEBHOOK_URL environment variable.
+  You will be prompted for your Slack Incoming Webhook URL during import.
 type: webhook
 tags:
   - slack
   - notification
   - messaging
 author: FileBridge Community
+inputs:
+  - id: SLACK_WEBHOOK_URL
+    label: Slack Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://hooks.slack.com/services/T.../B.../..."
+    description: "Create one at api.slack.com/apps → Your App → Incoming Webhooks"
 config:
   url: "{{SLACK_WEBHOOK_URL}}"
   method: POST

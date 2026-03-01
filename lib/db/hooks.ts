@@ -2,28 +2,61 @@ import { db, sqlite } from "@/lib/db";
 import { hooks, jobHooks } from "@/lib/db/schema";
 import type { Hook, NewHook } from "@/lib/db/schema";
 import { eq, and, asc, desc } from "drizzle-orm";
+import { encrypt, decrypt } from "@/lib/crypto";
+
+// ── Config encryption helpers ─────────────────────────────────────────────
+
+const ENC_PREFIX = "enc:";
+
+function encryptConfig(configJson: string): string {
+  return ENC_PREFIX + encrypt(configJson);
+}
+
+function decryptConfig(stored: string): string {
+  if (stored.startsWith(ENC_PREFIX)) {
+    return decrypt(stored.slice(ENC_PREFIX.length));
+  }
+  // Legacy: plaintext JSON (migrated at startup, but guard here just in case)
+  return stored;
+}
+
+function decryptHook(hook: Hook): Hook {
+  return { ...hook, config: decryptConfig(hook.config) };
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────
 
 export function getAllHooks(): Hook[] {
-  return db.select().from(hooks).orderBy(desc(hooks.createdAt)).all();
+  return db.select().from(hooks).orderBy(desc(hooks.createdAt)).all().map(decryptHook);
 }
 
 export function getHook(id: number): Hook | undefined {
-  return db.select().from(hooks).where(eq(hooks.id, id)).get();
+  const row = db.select().from(hooks).where(eq(hooks.id, id)).get();
+  return row ? decryptHook(row) : undefined;
 }
 
 export function createHook(data: NewHook): Hook {
-  const [row] = db.insert(hooks).values(data).returning().all();
-  return row;
+  const [row] = db
+    .insert(hooks)
+    .values({ ...data, config: encryptConfig(data.config) })
+    .returning()
+    .all();
+  return decryptHook(row);
 }
 
 export function updateHook(id: number, data: Partial<NewHook>): Hook | undefined {
+  const update = {
+    ...data,
+    ...(data.config !== undefined ? { config: encryptConfig(data.config) } : {}),
+    updatedAt: new Date().toISOString(),
+  };
   const [row] = db
     .update(hooks)
-    .set({ ...data, updatedAt: new Date().toISOString() })
+    .set(update)
     .where(eq(hooks.id, id))
     .returning()
     .all();
-  return row;
+  return row ? decryptHook(row) : undefined;
 }
 
 export function deleteHook(id: number): void {
@@ -42,7 +75,7 @@ export function getJobHooksWithDetail(
     .where(and(eq(jobHooks.jobId, jobId), eq(jobHooks.trigger, trigger)))
     .orderBy(asc(jobHooks.sortOrder))
     .all();
-  return rows.map((r) => r.hook);
+  return rows.map((r) => decryptHook(r.hook));
 }
 
 /** Returns all hook IDs attached to a job by trigger. */

@@ -1,13 +1,20 @@
 name: Discord Notification
 description: >
   Posts an embed to a Discord channel when a job completes.
-  Requires a Discord Webhook URL set via the DISCORD_WEBHOOK_URL environment variable.
+  You will be prompted for your Discord Webhook URL during import.
 type: webhook
 tags:
   - discord
   - notification
   - messaging
 author: FileBridge Community
+inputs:
+  - id: DISCORD_WEBHOOK_URL
+    label: Discord Webhook URL
+    type: secret
+    required: true
+    placeholder: "https://discord.com/api/webhooks/..."
+    description: "Create one in Discord channel settings → Integrations → Webhooks"
 config:
   url: "{{DISCORD_WEBHOOK_URL}}"
   method: POST
