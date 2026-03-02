@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en" dir="ltr" class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-Testing" data-has-hydrated="false">
+<head>
+<meta charset="UTF-8">
+<meta name="generator" content="Docusaurus v3.9.2">
+<title data-rh="true">Testing | FileBridge</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://go2engle.com/FileBridge/docs/Testing"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Testing | FileBridge"><meta data-rh="true" name="description" content="FileBridge ships with a full automated test suite covering unit tests, API route tests, component tests, and React hook tests. All tests run with Vitest and are required to pass before any pull request can be merged."><meta data-rh="true" property="og:description" content="FileBridge ships with a full automated test suite covering unit tests, API route tests, component tests, and React hook tests. All tests run with Vitest and are required to pass before any pull request can be merged."><link data-rh="true" rel="icon" href="/FileBridge/docs/img/logo.png"><link data-rh="true" rel="canonical" href="https://go2engle.com/FileBridge/docs/Testing"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Testing" hreflang="en"><link data-rh="true" rel="alternate" href="https://go2engle.com/FileBridge/docs/Testing" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Testing","item":"https://go2engle.com/FileBridge/docs/Testing"}]}</script><link rel="stylesheet" href="/FileBridge/docs/assets/css/styles.6fd9662f.css">
+<script src="/FileBridge/docs/assets/js/runtime~main.8a252f73.js" defer="defer"></script>
+<script src="/FileBridge/docs/assets/js/main.8d26ca23.js" defer="defer"></script>
+</head>
+<body class="navigation-with-keyboard">
+<svg style="display: none;"><defs>
+<symbol id="theme-svg-external-link" viewBox="0 0 24 24"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{const c=new URLSearchParams(window.location.search).entries();for(var[t,e]of c)if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id="__docusaurus"><div role="region" aria-label="Skip to main content"><a class="skipToContent_fXgn" href="#__docusaurus_skipToContent_fallback">Skip to main content</a></div><nav aria-label="Main" class="theme-layout-navbar navbar navbar--fixed-top"><div class="navbar__inner"><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded="false" class="navbar__toggle clean-btn" type="button"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a href="https://go2engle.com/FileBridge" target="_self" rel="noopener noreferrer" class="navbar__brand"><div class="navbar__logo"><img src="/FileBridge/docs/img/logo.png" alt="FileBridge Logo" class="themedComponent_mlkZ themedComponent--light_NVdE"><img src="/FileBridge/docs/img/logo.png" alt="FileBridge Logo" class="themedComponent_mlkZ themedComponent--dark_xIcU"></div><b class="navbar__title text--truncate">FileBridge</b></a><a aria-current="page" class="navbar__item navbar__link navbar__link--active" href="/FileBridge/docs/Home">Documentation</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href="https://go2engle.com" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link">Home<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a><a href="https://github.com/go2engle/FileBridge" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type="button" disabled="" title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill="currentColor" d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"></path></svg><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill="currentColor" d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"></path></svg><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill="currentColor" d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"></path></svg></button></div><div class="navbarSearchContainer_Bca1"><div class="navbar__search searchBarContainer_NW3z" dir="ltr"><input placeholder="Search" aria-label="Search" class="navbar__search-input searchInput_YFbd" value=""><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role="presentation" class="navbar-sidebar__backdrop"></div></nav><div id="__docusaurus_skipToContent_fallback" class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class="docsWrapper_hBAB"><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type="button"></button><div class="docRoot_UBD9"><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class="sidebarViewport_aRkj"><div class="sidebar_njMd"><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class="menu__link" href="/FileBridge/docs/Home"><span title="FileBridge" class="linkLabel_WmDU">FileBridge</span></a></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="true" href="/FileBridge/docs/Getting-Started"><span title="Getting Started" class="categoryLinkLabel_W154">Getting Started</span></a></div><ul class="menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Getting-Started"><span title="Getting Started" class="linkLabel_WmDU">Getting Started</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Server-Install"><span title="Server Install" class="linkLabel_WmDU">Server Install</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Docker-Deployment"><span title="Docker Deployment" class="linkLabel_WmDU">Docker Deployment</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Configuration"><span title="Configuration" class="linkLabel_WmDU">Configuration</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Authentication"><span title="Authentication" class="linkLabel_WmDU">Authentication</span></a></li></ul></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/Connections"><span title="Core Concepts" class="categoryLinkLabel_W154">Core Concepts</span></a></div></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/Hooks"><span title="Hooks" class="categoryLinkLabel_W154">Hooks</span></a></div></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item menu__list-item--collapsed"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role="button" aria-expanded="false" href="/FileBridge/docs/Database-Backups"><span title="Operations" class="categoryLinkLabel_W154">Operations</span></a></div></li><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class="menu__list-item-collapsible"><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role="button" aria-expanded="true" href="/FileBridge/docs/API-Reference"><span title="Reference" class="categoryLinkLabel_W154">Reference</span></a></div><ul class="menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/API-Reference"><span title="API Reference" class="linkLabel_WmDU">API Reference</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Architecture"><span title="Architecture" class="linkLabel_WmDU">Architecture</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Security"><span title="Security" class="linkLabel_WmDU">Security</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link" tabindex="0" href="/FileBridge/docs/Extending-FileBridge"><span title="Extending FileBridge" class="linkLabel_WmDU">Extending FileBridge</span></a></li><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current="page" tabindex="0" href="/FileBridge/docs/Testing"><span title="Testing" class="linkLabel_WmDU">Testing</span></a></li></ul></li></ul></nav></div></div></aside><main class="docMainContainer_TBSr"><div class="container padding-top--md padding-bottom--lg"><div class="row"><div class="col docItemCol_VOVn"><div class="docItemContainer_Djhp"><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label="Breadcrumbs"><ul class="breadcrumbs"><li class="breadcrumbs__item"><a aria-label="Home page" class="breadcrumbs__link" href="/FileBridge/docs/"><svg viewBox="0 0 24 24" class="breadcrumbHomeIcon_YNFT"><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill="currentColor"></path></svg></a></li><li class="breadcrumbs__item"><span class="breadcrumbs__link">Reference</span></li><li class="breadcrumbs__item breadcrumbs__item--active"><span class="breadcrumbs__link">Testing</span></li></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type="button" class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Testing</h1></header>
+<p>FileBridge ships with a full automated test suite covering unit tests, API route tests, component tests, and React hook tests. All tests run with <a href="https://vitest.dev/" target="_blank" rel="noopener noreferrer" class="">Vitest</a> and are required to pass before any pull request can be merged.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="running-tests">Running Tests<a href="#running-tests" class="hash-link" aria-label="Direct link to Running Tests" title="Direct link to Running Tests" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="prerequisites">Prerequisites<a href="#prerequisites" class="hash-link" aria-label="Direct link to Prerequisites" title="Direct link to Prerequisites" translate="no">​</a></h3>
+<p>Tests require no running database or external service — all dependencies are mocked. The only environment variable needed is <code>AUTH_SECRET</code> (used by the crypto tests):</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style="--prism-background-color:hsl(220, 13%, 18%);--prism-color:hsl(220, 14%, 71%)"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style="background-color:hsl(220, 13%, 18%);color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token comment" style="color:hsl(220, 10%, 40%)"># One-time: set for the current shell session</span><span class="token plain"></span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain"></span><span class="token builtin class-name" style="color:hsl(29, 54%, 61%)">export</span><span class="token plain"> </span><span class="token assign-left variable" style="color:hsl(207, 82%, 66%)">AUTH_SECRET</span><span class="token operator" style="color:hsl(207, 82%, 66%)">=</span><span class="token string" style="color:hsl(95, 38%, 62%)">&quot;any-string-works-locally&quot;</span><span class="token plain">   </span><span class="token comment" style="color:hsl(220, 10%, 40%)"># Linux / macOS</span><span class="token plain"></span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain"></span><span class="token variable" style="color:hsl(207, 82%, 66%)">$env</span><span class="token plain">:AUTH_SECRET </span><span class="token operator" style="color:hsl(207, 82%, 66%)">=</span><span class="token plain"> </span><span class="token string" style="color:hsl(95, 38%, 62%)">&quot;any-string-works-locally&quot;</span><span class="token plain">   </span><span class="token comment" style="color:hsl(220, 10%, 40%)"># Windows PowerShell</span><br></span></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="commands">Commands<a href="#commands" class="hash-link" aria-label="Direct link to Commands" title="Direct link to Commands" translate="no">​</a></h3>
+<table><thead><tr><th>Command</th><th>Description</th></tr></thead><tbody><tr><td><code>npm test</code></td><td>Run the full suite once (exit 0 on pass — same as CI)</td></tr><tr><td><code>npm run test:watch</code></td><td>Watch mode — re-runs affected tests on file save</td></tr><tr><td><code>npm run test:coverage</code></td><td>Run suite and emit an HTML/LCOV coverage report</td></tr><tr><td><code>npm run test:ui</code></td><td>Open the Vitest browser UI for interactive debugging</td></tr><tr><td><code>npm run lint</code></td><td>ESLint only</td></tr><tr><td><code>npm run typecheck</code></td><td>TypeScript <code>tsc --noEmit</code> only</td></tr><tr><td><code>npm run ci</code></td><td>Lint + typecheck + full test suite (mirrors CI exactly)</td></tr></tbody></table>
+<p>Coverage reports are written to <code>coverage/</code> and are uploaded as an artifact on every CI run.</p>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="test-structure">Test Structure<a href="#test-structure" class="hash-link" aria-label="Direct link to Test Structure" title="Direct link to Test Structure" translate="no">​</a></h2>
+<p>All tests live in the <code>__tests__/</code> directory, mirroring the structure of the source tree:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style="--prism-background-color:hsl(220, 13%, 18%);--prism-color:hsl(220, 14%, 71%)"><div class="codeBlockContent_QJqH"><pre tabindex="0" class="prism-code language-text codeBlock_bY9V thin-scrollbar" style="background-color:hsl(220, 13%, 18%);color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">__tests__/</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">├── api/                         # API route handler tests</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── audit-logs.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── connections.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── connections-test.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── health.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── hooks.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── jobs.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── jobs-dry-run.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── jobs-run.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── setup.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── setup-status.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   └── version.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">├── components/                  # React component tests</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   └── theme-toggle.test.tsx</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">├── hooks/                       # React hook tests</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   ├── use-role.test.tsx</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">│   └── use-time-format.test.tsx</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">└── lib/                         # Pure library / utility tests</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    ├── audit.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    ├── crypto.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    ├── storage/</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    │   └── interface.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    ├── utils.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    ├── db/</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    │   └── connections.test.ts</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">    └── hooks/</span><br></span><span class="token-line" style="color:hsl(220, 14%, 71%);text-shadow:0 1px rgba(0, 0, 0, 0.3)"><span class="token plain">        └── executor.test.ts</span><br></span></code></pre></div></div>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="coverage-by-area">Coverage by Area<a href="#coverage-by-area" class="hash-link" aria-label="Direct link to Coverage by Area" title="Direct link to Coverage by Area" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="library--pure-logic">Library / Pure Logic<a href="#library--pure-logic" class="hash-link" aria-label="Direct link to Library / Pure Logic" title="Direct link to Library / Pure Logic" translate="no">​</a></h3>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libutilsts"><code>lib/utils.ts</code><a href="#libutilsts" class="hash-link" aria-label="Direct link to libutilsts" title="Direct link to libutilsts" translate="no">​</a></h4>
+<p>Tests for all four exported helpers:</p>
+<ul>
+<li class=""><strong><code>cn()</code></strong> — Tailwind class merging, conditional classes, conflict resolution</li>
+<li class=""><strong><code>formatBytes()</code></strong> — SI unit formatting across B / KB / MB / GB / TB, decimal precision</li>
+<li class=""><strong><code>formatDuration()</code></strong> — ms / seconds / minutes formatting thresholds</li>
+<li class=""><strong><code>parseDBDate()</code></strong> — SQLite UTC timestamp parsing, timezone offset handling</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libcryptots"><code>lib/crypto.ts</code><a href="#libcryptots" class="hash-link" aria-label="Direct link to libcryptots" title="Direct link to libcryptots" translate="no">​</a></h4>
+<p>Tests for AES-256-GCM field-level encryption:</p>
+<ul>
+<li class="">Round-trip encrypt → decrypt for simple strings, unicode, special characters, and 4 KB payloads</li>
+<li class="">Random IV: same input produces different ciphertext on every call</li>
+<li class="">Correct <code>iv:tag:data</code> output format</li>
+<li class="">Error when <code>AUTH_SECRET</code> is missing</li>
+<li class="">Error when ciphertext is tampered</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libauditts"><code>lib/audit.ts</code><a href="#libauditts" class="hash-link" aria-label="Direct link to libauditts" title="Direct link to libauditts" translate="no">​</a></h4>
+<p>Tests for the three pure helper functions:</p>
+<ul>
+<li class=""><strong><code>getIpFromRequest()</code></strong> — <code>x-forwarded-for</code> (first IP, whitespace trimming), <code>x-real-ip</code> fallback, null when absent, preference ordering</li>
+<li class=""><strong><code>getUserId()</code></strong> — email, name fallback, <code>&quot;unknown&quot;</code> fallback</li>
+<li class=""><strong><code>diffChanges()</code></strong> — changed fields, no-change, added keys, removed keys, <code>skip</code> list, multiple changed fields</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libstorageinterfacets"><code>lib/storage/interface.ts</code><a href="#libstorageinterfacets" class="hash-link" aria-label="Direct link to libstorageinterfacets" title="Direct link to libstorageinterfacets" translate="no">​</a></h4>
+<p>Tests for <code>globToRegex()</code>:</p>
+<ul>
+<li class="">Empty pattern matches everything</li>
+<li class="">Single extension (<code>*.csv</code>)</li>
+<li class="">Literal filename</li>
+<li class="">Prefix wildcard (<code>report_*</code>)</li>
+<li class="">Comma-separated patterns as OR (<code>*.csv, *.txt</code>)</li>
+<li class="">Three or more patterns</li>
+<li class=""><code>?</code> single-character wildcard</li>
+<li class="">Dot escaping (literal dot vs regex <code>.</code>)</li>
+<li class="">Whitespace trimming in comma-separated patterns</li>
+<li class="">Empty segments filtered out</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libdbconnectionsts"><code>lib/db/connections.ts</code><a href="#libdbconnectionsts" class="hash-link" aria-label="Direct link to libdbconnectionsts" title="Direct link to libdbconnectionsts" translate="no">​</a></h4>
+<p>Tests for credentials encryption wrappers:</p>
+<ul>
+<li class=""><code>encryptCreds</code> / <code>decryptCreds</code> round-trip for simple, complex, and unicode credentials</li>
+<li class="">Encrypted output is opaque (not parseable as plain JSON, password not visible in plaintext)</li>
+<li class="">Random IV: different ciphertext per call, both decrypt correctly</li>
+<li class="">Legacy plaintext JSON fallback (migration guard)</li>
+<li class="">Invalid input returns <code>{}</code> without throwing</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="libhooksexecutorts"><code>lib/hooks/executor.ts</code><a href="#libhooksexecutorts" class="hash-link" aria-label="Direct link to libhooksexecutorts" title="Direct link to libhooksexecutorts" translate="no">​</a></h4>
+<p>Tests for the hook execution engine:</p>
+<ul>
+<li class="">Empty hook list completes silently</li>
+<li class="">Disabled hooks are skipped (fetch is never called)</li>
+<li class="">Webhook URL is called with the configured HTTP method</li>
+<li class=""><code>{{template}}</code> variables are interpolated into custom webhook bodies</li>
+<li class="">Success runs are recorded with <code>status: &quot;success&quot;</code> in <code>hookRuns</code></li>
+<li class="">Non-2xx HTTP responses are recorded as <code>status: &quot;failure&quot;</code> and the error is thrown</li>
+<li class="">Network errors (fetch throws) are recorded and re-thrown</li>
+<li class="">Invalid config JSON is caught, logged, and thrown</li>
+<li class="">Multiple hooks execute in order; execution stops at the first failure</li>
+<li class="">Large response bodies are truncated to 4096 bytes with <code>[truncated]</code> marker</li>
+</ul>
+<hr>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="api-routes">API Routes<a href="#api-routes" class="hash-link" aria-label="Direct link to API Routes" title="Direct link to API Routes" translate="no">​</a></h3>
+<p>Each route handler is tested with all collaborators mocked (database, auth, scheduler, transfer engine) so no real SQLite file or network connection is needed.</p>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apihealth"><code>GET /api/health</code><a href="#get-apihealth" class="hash-link" aria-label="Direct link to get-apihealth" title="Direct link to get-apihealth" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 200 and <code>status: &quot;ok&quot;</code> when all checks pass</li>
+<li class="">Returns HTTP 503 and <code>status: &quot;degraded&quot;</code> when the database throws</li>
+<li class="">Scheduler errors do not crash the handler; <code>checks.scheduler.status</code> is <code>&quot;error&quot;</code></li>
+<li class="">Response includes <code>uptime</code> and <code>version</code> fields</li>
+<li class=""><code>checks.scheduler.scheduledJobs</code> reflects the actual count</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apiversion"><code>GET /api/version</code><a href="#get-apiversion" class="hash-link" aria-label="Direct link to get-apiversion" title="Direct link to get-apiversion" translate="no">​</a></h4>
+<ul>
+<li class=""><code>currentVersion</code> comes from <code>package.json</code></li>
+<li class=""><code>updateAvailable: false</code> when already on latest</li>
+<li class=""><code>updateAvailable: true</code> when a newer GitHub release exists</li>
+<li class=""><code>updateAvailable: false</code> when running a pre-release ahead of the tag</li>
+<li class="">GitHub API failure is silently absorbed; <code>latestVersion</code> is <code>null</code></li>
+<li class="">Non-200 GitHub API response is handled gracefully</li>
+<li class=""><code>releasesUrl</code> always points to the FileBridge GitHub releases page</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apisetupstatus"><code>GET /api/setup/status</code><a href="#get-apisetupstatus" class="hash-link" aria-label="Direct link to get-apisetupstatus" title="Direct link to get-apisetupstatus" translate="no">​</a></h4>
+<ul>
+<li class="">Returns <code>{ needsSetup: true }</code> when no users exist</li>
+<li class="">Returns <code>{ needsSetup: false }</code> after setup is complete</li>
+<li class="">Falls back to <code>{ needsSetup: true }</code> if the database throws</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="post-apisetup"><code>POST /api/setup</code><a href="#post-apisetup" class="hash-link" aria-label="Direct link to post-apisetup" title="Direct link to post-apisetup" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 403 if setup has already been completed</li>
+<li class="">Returns HTTP 201 with <code>{ success: true, userId }</code> on success</li>
+<li class=""><code>createUser</code> is called with the correct role (<code>&quot;admin&quot;</code>) and <code>isLocal: true</code></li>
+<li class="">Validates username: minimum 3 characters, maximum 50 characters, allowed character set (<code>[a-zA-Z0-9_.-]</code>)</li>
+<li class="">Validates password: minimum 8 characters, max 128, must contain lowercase, uppercase, and a digit</li>
+<li class="">Returns HTTP 400 when passwords do not match</li>
+<li class="">Returns HTTP 400 for a missing display name</li>
+<li class="">Returns HTTP 409 when the username is already taken (UNIQUE constraint)</li>
+<li class="">Returns HTTP 500 on unexpected database errors</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apihooks--post-apihooks"><code>GET /api/hooks</code> · <code>POST /api/hooks</code><a href="#get-apihooks--post-apihooks" class="hash-link" aria-label="Direct link to get-apihooks--post-apihooks" title="Direct link to get-apihooks--post-apihooks" translate="no">​</a></h4>
+<ul>
+<li class="">GET returns HTTP 401 without a session</li>
+<li class="">GET returns the full list of hooks</li>
+<li class="">POST returns HTTP 401 / 403 for unauthenticated / non-admin callers</li>
+<li class="">POST validates: name required, name non-empty, type must be <code>webhook|shell|email</code></li>
+<li class="">POST validates webhook: URL required</li>
+<li class="">POST validates email: SMTP host, from address, and recipient all required</li>
+<li class="">POST validates shell: command required and non-whitespace</li>
+<li class="">POST returns HTTP 201 for all three valid hook types</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apiconnections--post-apiconnections"><code>GET /api/connections</code> · <code>POST /api/connections</code><a href="#get-apiconnections--post-apiconnections" class="hash-link" aria-label="Direct link to get-apiconnections--post-apiconnections" title="Direct link to get-apiconnections--post-apiconnections" translate="no">​</a></h4>
+<ul>
+<li class="">GET returns HTTP 401 without a session</li>
+<li class="">GET returns the list of connections with credentials stripped</li>
+<li class="">GET exposes <code>username</code> (safe field) from the encrypted credentials object</li>
+<li class="">GET never exposes the password in any form</li>
+<li class="">POST returns HTTP 403 for non-admin callers</li>
+<li class="">POST returns HTTP 201 and strips credentials from the response</li>
+<li class="">POST returns HTTP 500 on database errors</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="post-apiconnectionstest"><code>POST /api/connections/test</code><a href="#post-apiconnectionstest" class="hash-link" aria-label="Direct link to post-apiconnectionstest" title="Direct link to post-apiconnectionstest" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 403 for non-admin callers</li>
+<li class="">Returns HTTP 400 for each missing required field (<code>protocol</code>, <code>host</code>, <code>port</code>, <code>credentials</code>)</li>
+<li class="">Returns <code>{ success: true }</code> with item count on successful connection</li>
+<li class="">Calls connect → listDirectory → disconnect in the correct order</li>
+<li class="">Returns <code>{ success: false, error }</code> (HTTP 200) when the provider connection fails</li>
+<li class="">Always calls <code>disconnect()</code> even when <code>connect()</code> fails</li>
+<li class="">Uses <code>getWorkingDirectory()</code> when the provider supports it</li>
+<li class="">Falls back to <code>&quot;root&quot;</code> when <code>getWorkingDirectory</code> is not available</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apijobs--post-apijobs"><code>GET /api/jobs</code> · <code>POST /api/jobs</code><a href="#get-apijobs--post-apijobs" class="hash-link" aria-label="Direct link to get-apijobs--post-apijobs" title="Direct link to get-apijobs--post-apijobs" translate="no">​</a></h4>
+<ul>
+<li class="">GET returns HTTP 401 without a session</li>
+<li class="">GET returns the array of jobs</li>
+<li class="">GET sets <code>nextRunAt: null</code> for inactive/error jobs</li>
+<li class="">GET computes a valid future ISO timestamp for active jobs with a valid cron</li>
+<li class="">GET returns <code>nextRunAt: null</code> when the cron expression is invalid</li>
+<li class="">POST returns HTTP 403 for non-admin callers</li>
+<li class="">POST returns HTTP 201 with the created job</li>
+<li class="">POST defaults <code>fileFilter</code> to <code>&quot;&quot;</code> when omitted</li>
+<li class="">POST returns HTTP 500 on database errors</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="post-apijobsidrun"><code>POST /api/jobs/[id]/run</code><a href="#post-apijobsidrun" class="hash-link" aria-label="Direct link to post-apijobsidrun" title="Direct link to post-apijobsidrun" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 403 for non-admin callers</li>
+<li class="">Returns HTTP 200 with <code>{ message: &quot;Job triggered&quot; }</code></li>
+<li class="">Calls <code>runJob(id)</code> asynchronously (fire-and-forget)</li>
+<li class="">Returns HTTP 200 even when the job does not exist in the database</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="post-apijobsiddry-run"><code>POST /api/jobs/[id]/dry-run</code><a href="#post-apijobsiddry-run" class="hash-link" aria-label="Direct link to post-apijobsiddry-run" title="Direct link to post-apijobsiddry-run" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 403 for non-admin callers</li>
+<li class="">Returns dry-run results (<code>wouldTransfer</code>, <code>skipped</code>, <code>totalFiles</code>, <code>totalBytes</code>)</li>
+<li class="">Returns HTTP 404 when the job is not found</li>
+<li class="">Returns HTTP 500 on unexpected engine errors</li>
+<li class="">Passes the correctly typed numeric ID to <code>dryRunJob()</code></li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="get-apiaudit-logs"><code>GET /api/audit-logs</code><a href="#get-apiaudit-logs" class="hash-link" aria-label="Direct link to get-apiaudit-logs" title="Direct link to get-apiaudit-logs" translate="no">​</a></h4>
+<ul>
+<li class="">Returns HTTP 401 without a session</li>
+<li class="">Returns <code>{ logs, total }</code> with the correct row count</li>
+<li class="">Returns empty logs when none exist</li>
+<li class="">Respects <code>offset</code> and <code>limit</code> query parameters</li>
+<li class="">Caps <code>limit</code> at 200</li>
+</ul>
+<hr>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="react-components">React Components<a href="#react-components" class="hash-link" aria-label="Direct link to React Components" title="Direct link to React Components" translate="no">​</a></h3>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="themetoggle"><code>ThemeToggle</code><a href="#themetoggle" class="hash-link" aria-label="Direct link to themetoggle" title="Direct link to themetoggle" translate="no">​</a></h4>
+<ul>
+<li class="">Renders with an accessible <code>&quot;Toggle theme&quot;</code> label</li>
+<li class="">Opens dropdown with Light / Dark / System items on click</li>
+<li class="">Calls <code>setTheme(&quot;light&quot;)</code> / <code>&quot;dark&quot;</code> / <code>&quot;system&quot;</code> on each item click</li>
+</ul>
+<hr>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="react-hooks">React Hooks<a href="#react-hooks" class="hash-link" aria-label="Direct link to React Hooks" title="Direct link to React Hooks" translate="no">​</a></h3>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="userole"><code>useRole()</code><a href="#userole" class="hash-link" aria-label="Direct link to userole" title="Direct link to userole" translate="no">​</a></h4>
+<ul>
+<li class="">Returns <code>{ role: &quot;viewer&quot;, isAdmin: false }</code> with no session</li>
+<li class="">Returns <code>{ role: &quot;admin&quot;, isAdmin: true }</code> for admin users</li>
+<li class="">Returns <code>{ role: &quot;viewer&quot;, isAdmin: false }</code> for viewer users</li>
+<li class="">Defaults to <code>&quot;viewer&quot;</code> when session exists but <code>role</code> is undefined</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id="usetimeformat"><code>useTimeFormat()</code><a href="#usetimeformat" class="hash-link" aria-label="Direct link to usetimeformat" title="Direct link to usetimeformat" translate="no">​</a></h4>
+<ul>
+<li class="">Returns <code>&quot;24h&quot;</code> as the default while data is loading</li>
+<li class="">Returns <code>&quot;12h&quot;</code> / <code>&quot;24h&quot;</code> from the API response</li>
+<li class="">Falls back to <code>&quot;24h&quot;</code> on network error</li>
+<li class="">Always calls <code>GET /api/settings/display</code></li>
+</ul>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="ci-integration">CI Integration<a href="#ci-integration" class="hash-link" aria-label="Direct link to CI Integration" title="Direct link to CI Integration" translate="no">​</a></h2>
+<p>Every pull request targeting <code>main</code> must pass three required status checks before it can be merged:</p>
+<ol>
+<li class=""><strong>Lint &amp; Type Check</strong> — ESLint + <code>tsc --noEmit</code></li>
+<li class=""><strong>Unit &amp; Integration Tests</strong> — full Vitest run with coverage</li>
+<li class=""><strong>Build</strong> — <code>next build</code> (only runs after checks 1 and 2 pass)</li>
+</ol>
+<p>The workflow is defined in <a href="https://github.com/Go2Engle/FileBridge/blob/main/.github/workflows/ci.yml" target="_blank" rel="noopener noreferrer" class=""><code>.github/workflows/ci.yml</code></a>.</p>
+<p>Coverage reports are uploaded as a <code>coverage-report</code> artifact on every run and are available in the Actions UI for 7 days.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="branch-protection">Branch Protection<a href="#branch-protection" class="hash-link" aria-label="Direct link to Branch Protection" title="Direct link to Branch Protection" translate="no">​</a></h3>
+<p>To enforce these checks, configure branch protection on <code>main</code> in <strong>Settings → Branches → Branch protection rules</strong>:</p>
+<ul>
+<li class="">✅ <em>Require status checks to pass before merging</em>
+<ul>
+<li class=""><code>Lint &amp; Type Check</code></li>
+<li class=""><code>Unit &amp; Integration Tests</code></li>
+<li class=""><code>Build</code></li>
+</ul>
+</li>
+<li class="">✅ <em>Require branches to be up to date before merging</em></li>
+<li class="">✅ <em>Do not allow bypassing the above settings</em></li>
+</ul>
+<hr>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id="adding-new-tests">Adding New Tests<a href="#adding-new-tests" class="hash-link" aria-label="Direct link to Adding New Tests" title="Direct link to Adding New Tests" translate="no">​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="naming-conventions">Naming Conventions<a href="#naming-conventions" class="hash-link" aria-label="Direct link to Naming Conventions" title="Direct link to Naming Conventions" translate="no">​</a></h3>
+<table><thead><tr><th>Type</th><th>Location</th><th>Suffix</th></tr></thead><tbody><tr><td>Library / util</td><td><code>__tests__/lib/**</code></td><td><code>.test.ts</code></td></tr><tr><td>API route</td><td><code>__tests__/api/**</code></td><td><code>.test.ts</code></td></tr><tr><td>React component</td><td><code>__tests__/components/**</code></td><td><code>.test.tsx</code></td></tr><tr><td>React hook</td><td><code>__tests__/hooks/**</code></td><td><code>.test.tsx</code></td></tr></tbody></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="mocking-guidelines">Mocking Guidelines<a href="#mocking-guidelines" class="hash-link" aria-label="Direct link to Mocking Guidelines" title="Direct link to Mocking Guidelines" translate="no">​</a></h3>
+<ul>
+<li class=""><strong>Database</strong>: mock <code>@/lib/db</code> with <code>vi.mock</code> so no SQLite file is created</li>
+<li class=""><strong>Auth</strong>: mock <code>@/lib/auth/rbac</code> — return <code>{ session }</code> for authenticated, <code>{ error: Response }</code> for 401/403</li>
+<li class=""><strong>External services</strong>: mock at the module level (<code>@/lib/storage/registry</code>, <code>@/lib/transfer/engine</code>, etc.)</li>
+<li class=""><strong><code>fetch</code></strong>: use <code>vi.stubGlobal(&quot;fetch&quot;, ...)</code> and call <code>vi.unstubAllGlobals()</code> in cleanup</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="coverage-thresholds">Coverage Thresholds<a href="#coverage-thresholds" class="hash-link" aria-label="Direct link to Coverage Thresholds" title="Direct link to Coverage Thresholds" translate="no">​</a></h3>
+<p>The suite enforces minimum coverage thresholds (configured in <code>vitest.config.ts</code>):</p>
+<table><thead><tr><th>Metric</th><th>Threshold</th></tr></thead><tbody><tr><td>Lines</td><td>70%</td></tr><tr><td>Functions</td><td>70%</td></tr><tr><td>Branches</td><td>60%</td></tr><tr><td>Statements</td><td>70%</td></tr></tbody></table>
+<p>The build will fail if any threshold is not met.</p></div></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href="/FileBridge/docs/Extending-FileBridge"><div class="pagination-nav__sublabel">Previous</div><div class="pagination-nav__label">Extending FileBridge</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#running-tests" class="table-of-contents__link toc-highlight">Running Tests</a><ul><li><a href="#prerequisites" class="table-of-contents__link toc-highlight">Prerequisites</a></li><li><a href="#commands" class="table-of-contents__link toc-highlight">Commands</a></li></ul></li><li><a href="#test-structure" class="table-of-contents__link toc-highlight">Test Structure</a></li><li><a href="#coverage-by-area" class="table-of-contents__link toc-highlight">Coverage by Area</a><ul><li><a href="#library--pure-logic" class="table-of-contents__link toc-highlight">Library / Pure Logic</a></li><li><a href="#api-routes" class="table-of-contents__link toc-highlight">API Routes</a></li><li><a href="#react-components" class="table-of-contents__link toc-highlight">React Components</a></li><li><a href="#react-hooks" class="table-of-contents__link toc-highlight">React Hooks</a></li></ul></li><li><a href="#ci-integration" class="table-of-contents__link toc-highlight">CI Integration</a><ul><li><a href="#branch-protection" class="table-of-contents__link toc-highlight">Branch Protection</a></li></ul></li><li><a href="#adding-new-tests" class="table-of-contents__link toc-highlight">Adding New Tests</a><ul><li><a href="#naming-conventions" class="table-of-contents__link toc-highlight">Naming Conventions</a></li><li><a href="#mocking-guidelines" class="table-of-contents__link toc-highlight">Mocking Guidelines</a></li><li><a href="#coverage-thresholds" class="table-of-contents__link toc-highlight">Coverage Thresholds</a></li></ul></li></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer footer--dark"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class="footer__title">Docs</div><ul class="footer__items clean-list"><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/Server-Install">Server Install</a></li><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/Docker-Deployment">Docker Deployment</a></li><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/Configuration">Configuration</a></li><li class="footer__item"><a class="footer__link-item" href="/FileBridge/docs/API-Reference">API Reference</a></li></ul></div><div class="theme-layout-footer-column col footer__col"><div class="footer__title">More</div><ul class="footer__items clean-list"><li class="footer__item"><a href="https://go2engle.com" target="_blank" rel="noopener noreferrer" class="footer__link-item">Home<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a></li><li class="footer__item"><a href="https://github.com/go2engle/FileBridge" target="_blank" rel="noopener noreferrer" class="footer__link-item">GitHub<svg width="13.5" height="13.5" aria-label="(opens in new tab)" class="iconExternalLink_nPIU"><use href="#theme-svg-external-link"></use></svg></a></li></ul></div></div><div class="footer__bottom text--center"><div class="footer__copyright">Copyright © 2026 FileBridge. Built with Docusaurus.</div></div></div></footer></div>
+</body>
+</html>
