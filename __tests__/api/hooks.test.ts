@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
 
 const mockAdminSession = { user: { email: "admin@test.com", role: "admin" as const, id: "1", isLocal: true } };
-const mockViewerSession = { user: { email: "viewer@test.com", role: "viewer" as const, id: "2", isLocal: true } };
 
 vi.mock("@/lib/auth/rbac", () => ({
   requireAuth: vi.fn(() => ({ session: mockAdminSession })),
