@@ -183,6 +183,8 @@ const migrations = [
   `ALTER TABLE job_runs ADD COLUMN total_bytes INTEGER`,
   `ALTER TABLE job_runs ADD COLUMN current_file_size INTEGER`,
   `ALTER TABLE job_runs ADD COLUMN current_file_bytes_transferred INTEGER`,
+  `ALTER TABLE connections ADD COLUMN folder TEXT`,
+  `ALTER TABLE jobs ADD COLUMN folder TEXT`,
 ];
 
 for (const sql of migrations) {

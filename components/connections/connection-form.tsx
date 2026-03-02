@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -26,6 +26,7 @@ import { LocalFolderPicker } from "@/components/ui/local-folder-picker";
 
 const baseSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  folder: z.string().optional(),
   protocol: z.enum(["sftp", "smb", "azure-blob", "local"]),
   host: z.string().min(1, "Required"),
   port: z.coerce.number().int().min(0).max(65535),
@@ -85,10 +86,21 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   const [isTesting, setIsTesting] = useState(false);
   const [isBrowsing, setIsBrowsing] = useState(false);
 
+  // Fetch all connections to derive existing folder names for autocomplete
+  const { data: allConnections } = useQuery<{ folder?: string | null }[]>({
+    queryKey: ["connections"],
+    queryFn: () => axios.get("/api/connections").then((r) => r.data),
+  });
+  const existingFolders = useMemo(
+    () => [...new Set((allConnections ?? []).map((c) => c.folder).filter(Boolean) as string[])].sort(),
+    [allConnections]
+  );
+
   const form = useForm<FormValues>({
     resolver: zodResolver(baseSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
+      folder: "",
       protocol: "sftp",
       host: "",
       port: 22,
@@ -121,6 +133,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
       const creds = fullConnection.credentials;
       form.reset({
         name: fullConnection.name,
+        folder: fullConnection.folder ?? "",
         protocol: fullConnection.protocol as FormValues["protocol"],
         host: fullConnection.host,
         port: fullConnection.port,
@@ -138,6 +151,7 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
     } else if (!editConnection) {
       form.reset({
         name: "",
+        folder: "",
         protocol: "sftp",
         host: "",
         port: 22,
@@ -216,9 +230,9 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-      const { name, protocol, host, port } = values;
+      const { name, protocol, host, port, folder } = values;
       const credentials = buildCredentials(values);
-      const payload = { name, protocol, host, port, credentials };
+      const payload = { name, protocol, host, port, credentials, folder: folder || null };
       return isEditing
         ? axios.put(`/api/connections/${editConnection!.id}`, payload)
         : axios.post("/api/connections", payload);
@@ -249,6 +263,31 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                   <FormControl>
                     <Input placeholder="Production SFTP" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="folder"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Folder <span className="text-muted-foreground font-normal">(optional)</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. Production, Dev, Cloud"
+                      list="conn-folders"
+                      {...field}
+                    />
+                  </FormControl>
+                  <datalist id="conn-folders">
+                    {existingFolders.map((f) => (
+                      <option key={f} value={f} />
+                    ))}
+                  </datalist>
                   <FormMessage />
                 </FormItem>
               )}

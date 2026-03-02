@@ -15,7 +15,9 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CircleAlert, PenLine, FlaskConical, Play, Plus, Search, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import {
+  CircleAlert, PenLine, FlaskConical, Play, Plus, Search, Trash2, ToggleLeft, ToggleRight, Folder, ChevronDown, ChevronRight,
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -71,6 +73,16 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<JobSortOption>("created-desc");
   const [dryRunJob, setDryRunJob] = useState<Job | null>(null);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+
+  function toggleFolder(name: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   const { data, isLoading } = useQuery<Job[]>({
     queryKey: ["jobs"],
@@ -169,6 +181,25 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
     return sorted;
   }, [data, statusFilter, search, sort]);
 
+  const folderGroups = useMemo(() => {
+    if (!filtered.length) return null;
+    const hasFolders = filtered.some((j) => j.folder);
+    if (!hasFolders) return null;
+    const map = new Map<string, Job[]>();
+    for (const job of filtered) {
+      const key = job.folder || "__ungrouped__";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(job);
+    }
+    const groups = Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+    groups.sort((a, b) => {
+      if (a.name === "__ungrouped__") return 1;
+      if (b.name === "__ungrouped__") return -1;
+      return a.name.localeCompare(b.name);
+    });
+    return groups;
+  }, [filtered]);
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -239,6 +270,136 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">No jobs match your filters.</p>
           <p className="text-xs mt-1">Try adjusting your search or filter.</p>
+        </div>
+      ) : folderGroups ? (
+        <div className="space-y-2">
+          {folderGroups.map(({ name, items }) => {
+            const isCollapsed = collapsedFolders.has(name);
+            const label = name === "__ungrouped__" ? "Ungrouped" : name;
+            return (
+              <div key={name} className="rounded-lg border overflow-hidden">
+                <button
+                  onClick={() => toggleFolder(name)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium bg-muted/30 hover:bg-muted/60 transition-colors"
+                >
+                  {isCollapsed
+                    ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-left">{label}</span>
+                  <Badge variant="secondary">{items.length}</Badge>
+                </button>
+                {!isCollapsed && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Schedule</TableHead>
+                        <TableHead>Filter</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Last Run</TableHead>
+                        <TableHead>Next Run</TableHead>
+                        {isAdmin && <TableHead className="w-32" />}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((job) => (
+                        <TableRow
+                          key={job.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => onSelect(job)}
+                        >
+                          <TableCell className="font-medium">{job.name}</TableCell>
+                          <TableCell className="font-mono text-sm">{job.schedule}</TableCell>
+                          <TableCell className="font-mono text-sm">{job.fileFilter}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant={statusVariant[job.status]} className="capitalize">
+                                {job.status}
+                              </Badge>
+                              {job.status === "error" && <JobErrorInfo jobId={job.id} />}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {job.lastRunAt
+                              ? formatDistanceToNow(parseDBDate(job.lastRunAt), { addSuffix: true })
+                              : "Never"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {job.nextRunAt
+                              ? formatDistanceToNow(new Date(job.nextRunAt), { addSuffix: true })
+                              : "—"}
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell>
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => toggleMutation.mutate({ id: job.id, status: job.status })}
+                                      disabled={job.status === "running"}
+                                    >
+                                      {job.status === "active"
+                                        ? <ToggleRight className="h-4 w-4 text-emerald-500" />
+                                        : <ToggleLeft className="h-4 w-4" />}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{job.status === "active" ? "Disable" : "Enable"}</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => runMutation.mutate(job.id)}
+                                      disabled={job.status === "running"}
+                                    >
+                                      <Play className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Run now</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => setDryRunJob(job)}
+                                      disabled={job.status === "running"}
+                                    >
+                                      <FlaskConical className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Dry run</TooltipContent>
+                                </Tooltip>
+                                <Button variant="ghost" size="icon" onClick={() => onEdit(job)}>
+                                  <PenLine className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => {
+                                    if (confirm(`Delete job "${job.name}"?`)) {
+                                      deleteMutation.mutate(job.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <Table>
