@@ -48,6 +48,7 @@ export async function PUT(
       extractArchives,
       deltaSync,
       status,
+      folder,
     } = body;
 
     // Snapshot current state before update for diffing
@@ -69,6 +70,7 @@ export async function PUT(
         skipHiddenFiles: skipHiddenFiles ?? true,
         extractArchives: extractArchives ?? false,
         deltaSync: deltaSync ?? false,
+        folder: folder || null,
         status,
         updatedAt: new Date().toISOString(),
       })

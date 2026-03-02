@@ -8,6 +8,7 @@ export const connections = sqliteTable("connections", {
   host: text("host").notNull(),
   port: integer("port").notNull(),
   credentials: text("credentials").notNull(),
+  folder: text("folder"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
@@ -54,6 +55,7 @@ export const jobs = sqliteTable("jobs", {
     .default("inactive"),
   lastRunAt: text("last_run_at"),
   nextRunAt: text("next_run_at"),
+  folder: text("folder"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),

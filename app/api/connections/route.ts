@@ -29,11 +29,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, protocol, host, port, credentials } = body;
+    const { name, protocol, host, port, credentials, folder } = body;
 
     const [row] = await db
       .insert(connections)
-      .values({ name, protocol, host, port, credentials: encryptCreds(credentials) })
+      .values({ name, protocol, host, port, credentials: encryptCreds(credentials), folder: folder || null })
       .returning();
 
     logAudit({

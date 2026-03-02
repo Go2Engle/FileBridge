@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
       skipHiddenFiles,
       extractArchives,
       deltaSync,
+      folder,
     } = body;
 
     const [row] = await db
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
         skipHiddenFiles: skipHiddenFiles ?? true,
         extractArchives: extractArchives ?? false,
         deltaSync: deltaSync ?? false,
+        folder: folder || null,
         status: "inactive",
       })
       .returning();

@@ -34,7 +34,7 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await req.json();
-    const { name, protocol, host, port, credentials } = body;
+    const { name, protocol, host, port, credentials, folder } = body;
 
     // Snapshot current state before update for diffing (exclude credentials from diff)
     const [before] = await db
@@ -50,6 +50,7 @@ export async function PUT(
         host,
         port,
         credentials: encryptCreds(credentials),
+        folder: folder || null,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(connections.id, Number(id)))

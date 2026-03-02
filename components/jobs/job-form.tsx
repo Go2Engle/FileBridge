@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,6 +29,7 @@ import type { Connection, Job, Hook } from "@/lib/db/schema";
 
 const jobSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  folder: z.string().optional(),
   sourceConnectionId: z.coerce.number().min(1, "Source connection required"),
   sourcePath: z.string().min(1, "Source path is required"),
   destinationConnectionId: z.coerce.number().min(1, "Destination connection required"),
@@ -127,6 +128,15 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     queryFn: () => axios.get("/api/connections").then((r) => r.data),
   });
 
+  const { data: allJobs } = useQuery<{ folder?: string | null }[]>({
+    queryKey: ["jobs"],
+    queryFn: () => axios.get("/api/jobs").then((r) => r.data),
+  });
+  const existingFolders = useMemo(
+    () => [...new Set((allJobs ?? []).map((j) => j.folder).filter(Boolean) as string[])].sort(),
+    [allJobs]
+  );
+
   const { data: availableHooks } = useQuery<Hook[]>({
     queryKey: ["hooks"],
     queryFn: () => axios.get("/api/hooks").then((r) => r.data),
@@ -139,6 +149,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     resolver: zodResolver(jobSchema) as Resolver<FormValues>,
     defaultValues: {
       name: "",
+      folder: "",
       sourceConnectionId: 0,
       sourcePath: "",
       destinationConnectionId: 0,
@@ -159,6 +170,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     if (editJob) {
       form.reset({
         name: editJob.name,
+        folder: editJob.folder ?? "",
         sourceConnectionId: editJob.sourceConnectionId,
         sourcePath: editJob.sourcePath,
         destinationConnectionId: editJob.destinationConnectionId,
@@ -181,6 +193,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     } else {
       form.reset({
         name: "",
+        folder: "",
         sourceConnectionId: 0,
         sourcePath: "",
         destinationConnectionId: 0,
@@ -249,6 +262,31 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                       <FormControl>
                         <Input placeholder="Daily CSV Transfer" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="folder"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Folder <span className="text-muted-foreground font-normal">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. Nightly, Reports, Backups"
+                          list="job-folders"
+                          {...field}
+                        />
+                      </FormControl>
+                      <datalist id="job-folders">
+                        {existingFolders.map((f) => (
+                          <option key={f} value={f} />
+                        ))}
+                      </datalist>
                       <FormMessage />
                     </FormItem>
                   )}

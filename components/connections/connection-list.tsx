@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { PenLine, FolderSearch, Loader2, Plus, PlugZap, Search, Trash2 } from "lucide-react";
+import { PenLine, FolderSearch, Loader2, Plus, PlugZap, Search, Trash2, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -40,6 +40,16 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
   const [search, setSearch] = useState("");
   const [protocolFilter, setProtocolFilter] = useState<ProtocolFilter>("all");
   const [sort, setSort] = useState<SortOption>("created-desc");
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+
+  function toggleFolder(name: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   async function testConnection(conn: ConnectionSummary) {
     setTestingId(conn.id);
@@ -132,6 +142,25 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
     return sorted;
   }, [data, protocolFilter, search, sort]);
 
+  const folderGroups = useMemo(() => {
+    if (!filtered.length) return null;
+    const hasFolders = filtered.some((c) => c.folder);
+    if (!hasFolders) return null;
+    const map = new Map<string, ConnectionSummary[]>();
+    for (const conn of filtered) {
+      const key = conn.folder || "__ungrouped__";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(conn);
+    }
+    const groups = Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+    groups.sort((a, b) => {
+      if (a.name === "__ungrouped__") return 1;
+      if (b.name === "__ungrouped__") return -1;
+      return a.name.localeCompare(b.name);
+    });
+    return groups;
+  }, [filtered]);
+
   return (
     <>
     <div className="space-y-4">
@@ -202,6 +231,101 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-sm">No connections match your filters.</p>
           <p className="text-xs mt-1">Try adjusting your search or filter.</p>
+        </div>
+      ) : folderGroups ? (
+        <div className="space-y-2">
+          {folderGroups.map(({ name, items }) => {
+            const isCollapsed = collapsedFolders.has(name);
+            const label = name === "__ungrouped__" ? "Ungrouped" : name;
+            return (
+              <div key={name} className="rounded-lg border overflow-hidden">
+                <button
+                  onClick={() => toggleFolder(name)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium bg-muted/30 hover:bg-muted/60 transition-colors"
+                >
+                  {isCollapsed
+                    ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-left">{label}</span>
+                  <Badge variant="secondary">{items.length}</Badge>
+                </button>
+                {!isCollapsed && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Protocol</TableHead>
+                        <TableHead>Host</TableHead>
+                        <TableHead>Port</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="w-20" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((conn) => (
+                        <TableRow key={conn.id}>
+                          <TableCell className="font-medium">{conn.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="uppercase">
+                              {conn.protocol}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{conn.host}</TableCell>
+                          <TableCell>{conn.port}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Test connection"
+                                disabled={testingId === conn.id}
+                                onClick={() => testConnection(conn)}
+                              >
+                                {testingId === conn.id
+                                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                                  : <PlugZap className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Browse file system"
+                                onClick={() => setBrowser({ conn })}
+                              >
+                                <FolderSearch className="h-4 w-4" />
+                              </Button>
+                              {isAdmin && (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => onEdit(conn)}>
+                                    <PenLine className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-destructive hover:text-destructive"
+                                    onClick={() => {
+                                      if (confirm("Delete this connection?")) {
+                                        deleteMutation.mutate(conn.id);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <Table>
