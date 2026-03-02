@@ -44,12 +44,11 @@ ntlmHashMod.createNTLMv2Response = function (
 
   // result.key = NTProofStr = HMAC-MD5(NTLMv2Hash, challenge + blob)
   _lastNtProofStr = result.key;
-  // Recompute NTLMv2Hash — cheap HMAC-MD5, same inputs produce same result
-  _lastNtlm2Hash = ntlmHashMod.createNTLMv2Hash(
-    ntlmhash,
-    username,
-    targetName
-  );
+  // NTLMv2Hash = HMAC-MD5(NT_Hash, UPPER(username) + targetName in UCS-2)
+  // This is a private function in ntlm2/lib/hash.js, so we compute it inline.
+  const hmac = crypto.createHmac("md5", ntlmhash);
+  hmac.update(Buffer.from(username.toUpperCase() + (targetName || ""), "ucs2"));
+  _lastNtlm2Hash = hmac.digest();
 
   return result;
 };
