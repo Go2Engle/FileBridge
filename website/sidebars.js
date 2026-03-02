@@ -52,6 +52,7 @@ const sidebars = {
         'Architecture',
         'Security',
         'Extending-FileBridge',
+        'Testing',
       ],
     },
   ],

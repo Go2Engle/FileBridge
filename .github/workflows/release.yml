@@ -269,6 +269,10 @@ jobs:
             "$STAGE/docs"               \
             "$STAGE/website"            \
             "$STAGE/images"             \
+            "$STAGE/hooks-library"      \
+            "$STAGE/__tests__"          \
+            "$STAGE/vitest.config.ts"   \
+            "$STAGE/vitest.setup.ts"    \
             "$STAGE/prd.md"             \
             "$STAGE/README.md"          \
             "$STAGE/CONTRIBUTING.md"    \
@@ -313,7 +317,8 @@ jobs:
           Copy-Item -Path "$standalone\*" -Destination $stage -Recurse -Force
 
           @(
-            'docs', 'website', 'images',
+            'docs', 'website', 'images', '__tests__',
+            'vitest.config.ts', 'vitest.setup.ts',
             'prd.md', 'README.md', 'CONTRIBUTING.md',
             'LICENSE', 'index.html',
             'install.sh', 'install.ps1', 'Dockerfile',
