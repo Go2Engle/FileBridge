@@ -3,8 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -85,3 +83,65 @@ jobs:
           AUTH_SECRET: ci-build-placeholder
           DATABASE_PATH: /tmp/filebridge-build.db
           NEXT_PHASE: phase-production-build
+
+  label:
+    name: Label PR
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck, test, build]
+    if: always() && github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Apply CI result label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const passed =
+              '${{ needs.lint-typecheck.result }}' === 'success' &&
+              '${{ needs.test.result }}'           === 'success' &&
+              '${{ needs.build.result }}'          === 'success';
+
+            const passLabel   = 'ci: passed';
+            const failLabel   = 'ci: failed';
+            const addLabel    = passed ? passLabel : failLabel;
+            const removeLabel = passed ? failLabel : passLabel;
+
+            // Ensure both labels exist on the repo (creates them if missing)
+            for (const [name, color] of [
+              [passLabel, '0e8a16'],
+              [failLabel, 'd73a4a'],
+            ]) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name,
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name,
+                  color,
+                });
+              }
+            }
+
+            // Remove the stale opposite label (ignore 404 if it wasn't applied)
+            try {
+              await github.rest.issues.removeLabel({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                name:         removeLabel,
+              });
+            } catch (_) {}
+
+            // Apply the current result label
+            await github.rest.issues.addLabels({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              labels:       [addLabel],
+            });
