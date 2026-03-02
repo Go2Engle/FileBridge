@@ -1,0 +1,27 @@
+name: PagerDuty Alert
+description: >
+  Creates a PagerDuty incident when a job fails. Requires a PagerDuty Events API v2 integration key.
+  Best used as a post-job hook for critical production transfers where on-call engineers
+  need to be notified immediately. Create an Events API v2 integration in your PagerDuty
+  service settings to get a routing key.
+type: webhook
+tags:
+  - pagerduty
+  - alerting
+  - on-call
+  - incident
+author: FileBridge Community
+inputs:
+  - id: PAGERDUTY_ROUTING_KEY
+    label: Integration/Routing Key
+    type: secret
+    required: true
+    description: "Create an Events API v2 integration in your PagerDuty service settings to get this key"
+config:
+  url: "https://events.pagerduty.com/v2/enqueue"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: |
+    {"routing_key":"{{PAGERDUTY_ROUTING_KEY}}","event_action":"trigger","payload":{"summary":"FileBridge job {{job_name}} failed","severity":"error","source":"FileBridge","custom_details":{"job_id":"{{job_id}}","run_id":"{{run_id}}","trigger":"{{trigger}}","error":"{{error_message}}"}}}
+  timeoutMs: 10000

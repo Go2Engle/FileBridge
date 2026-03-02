@@ -1,0 +1,24 @@
+name: Healthchecks.io Ping
+description: >
+  Pings a Healthchecks.io check to signal job start or completion.
+  Use as a pre-job hook to signal "start" and a post-job hook to signal success/failure.
+  Healthchecks.io will alert you if your scheduled transfers stop running — a dead-man's switch
+  for critical file transfer jobs. Free tier available at healthchecks.io.
+type: webhook
+tags:
+  - healthchecks
+  - monitoring
+  - cron
+  - uptime
+author: FileBridge Community
+inputs:
+  - id: PING_URL
+    label: Ping URL
+    type: secret
+    required: true
+    placeholder: "https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    description: "Copy the ping URL from your Healthchecks.io check dashboard. Append /start for pre-job hooks and /fail for failure hooks."
+config:
+  url: "{{PING_URL}}"
+  method: GET
+  timeoutMs: 5000

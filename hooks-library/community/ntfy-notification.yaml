@@ -1,0 +1,32 @@
+name: Ntfy Push Notification
+description: >
+  Sends a push notification via ntfy.sh (or a self-hosted ntfy server) when a job completes.
+  Works with the ntfy mobile app (Android/iOS) and web UI. No account required for ntfy.sh.
+type: webhook
+tags:
+  - ntfy
+  - push
+  - notification
+  - self-hosted
+author: FileBridge Community
+inputs:
+  - id: NTFY_URL
+    label: Ntfy Server URL + Topic
+    type: text
+    required: true
+    placeholder: "https://ntfy.sh/my-filebridge-topic"
+    description: "Use ntfy.sh for free cloud hosting, or your own self-hosted server URL including the topic name"
+  - id: NTFY_TOKEN
+    label: Access Token (optional)
+    type: secret
+    required: false
+    description: "Only needed if your topic requires authentication (leave blank for public topics)"
+config:
+  url: "{{NTFY_URL}}"
+  method: POST
+  headers:
+    Content-Type: text/plain
+    Title: "FileBridge: {{job_name}} {{status}}"
+    Authorization: "Bearer {{NTFY_TOKEN}}"
+  body: "Job {{job_name}} finished with status: {{status}}\nFiles transferred: {{files_transferred}}\nTrigger: {{trigger}}"
+  timeoutMs: 5000

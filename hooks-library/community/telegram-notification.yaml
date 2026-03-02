@@ -1,0 +1,32 @@
+name: Telegram Notification
+description: >
+  Sends a message via a Telegram bot when a job completes.
+  You need a Telegram bot token (from @BotFather) and a chat ID.
+  Supports personal chats, groups, and channels. Free with no rate limits for personal use.
+type: webhook
+tags:
+  - telegram
+  - notification
+  - messaging
+author: FileBridge Community
+inputs:
+  - id: BOT_TOKEN
+    label: Bot Token
+    type: secret
+    required: true
+    placeholder: "1234567890:ABCdefGhIJKlmNoPQRstUVwxYZ"
+    description: "Create a bot via @BotFather on Telegram and copy the token it gives you"
+  - id: CHAT_ID
+    label: Chat ID
+    type: text
+    required: true
+    placeholder: "-1001234567890"
+    description: "Your personal chat ID, group ID, or channel ID. Use @userinfobot on Telegram to find yours."
+config:
+  url: "https://api.telegram.org/bot{{BOT_TOKEN}}/sendMessage"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: |
+    {"chat_id":"{{CHAT_ID}}","text":"*FileBridge* \u2014 `{{job_name}}` {{status}}\nFiles transferred: {{files_transferred}}\nTrigger: {{trigger}}","parse_mode":"Markdown"}
+  timeoutMs: 10000

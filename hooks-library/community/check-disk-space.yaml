@@ -1,0 +1,38 @@
+name: Check Disk Space
+description: >
+  Pre-job shell hook that checks available disk space before starting a transfer.
+  Aborts the job if free space falls below a configurable threshold (default: 1 GB).
+  Only useful when FileBridge has local access to the path being checked
+  (e.g., a local staging directory or NFS/SMB mount).
+type: shell
+tags:
+  - disk
+  - pre-job
+  - safety
+  - maintenance
+author: FileBridge Community
+inputs:
+  - id: CHECK_PATH
+    label: Path to Check
+    type: text
+    required: true
+    default: "/tmp"
+    description: "Local filesystem path to check for free space (e.g., your download/staging directory)"
+  - id: MIN_GB
+    label: Minimum Free Space (GB)
+    type: number
+    required: true
+    default: "1"
+    description: "Job will be aborted if free space on the path's filesystem is below this threshold"
+config:
+  command: |
+    AVAILABLE_KB=$(df -k "{{CHECK_PATH}}" | awk 'NR==2 {print $4}')
+    AVAILABLE_GB=$((AVAILABLE_KB / 1024 / 1024))
+    MIN_GB={{MIN_GB}}
+    echo "Path: {{CHECK_PATH}} | Available: ${AVAILABLE_GB} GB | Required: ${MIN_GB} GB"
+    if [ "$AVAILABLE_GB" -lt "$MIN_GB" ]; then
+      echo "ERROR: Insufficient disk space. Aborting job: $FILEBRIDGE_JOB_NAME"
+      exit 1
+    fi
+    echo "Disk space check passed for job: $FILEBRIDGE_JOB_NAME"
+  timeoutMs: 10000

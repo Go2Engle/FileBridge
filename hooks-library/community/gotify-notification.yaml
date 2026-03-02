@@ -1,0 +1,32 @@
+name: Gotify Push Notification
+description: >
+  Sends a push notification via a self-hosted Gotify server when a job completes.
+  Gotify is a free, open-source push notification server ideal for self-hosters who want
+  mobile alerts without any cloud dependency. Install it from gotify.net.
+type: webhook
+tags:
+  - gotify
+  - push
+  - notification
+  - self-hosted
+author: FileBridge Community
+inputs:
+  - id: GOTIFY_URL
+    label: Gotify Server URL
+    type: text
+    required: true
+    placeholder: "https://gotify.example.com"
+    description: "Base URL of your Gotify server (no trailing slash)"
+  - id: GOTIFY_TOKEN
+    label: App Token
+    type: secret
+    required: true
+    description: "Create an application in the Gotify web UI and copy its token"
+config:
+  url: "{{GOTIFY_URL}}/message?token={{GOTIFY_TOKEN}}"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body: |
+    {"title":"FileBridge: {{job_name}} {{status}}","message":"Files transferred: {{files_transferred}}\nTrigger: {{trigger}}\n{{error_message}}","priority":5}
+  timeoutMs: 5000
