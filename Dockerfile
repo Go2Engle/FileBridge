@@ -19,6 +19,10 @@ RUN --mount=type=cache,target=/var/cache/apk \
 
 WORKDIR /app
 
+# Upgrade npm to match the version used to generate package-lock.json locally (npm 11.x)
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g npm@11
+
 COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci
