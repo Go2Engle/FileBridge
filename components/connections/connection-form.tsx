@@ -248,12 +248,13 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
   return (
     <>
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-w-lg flex flex-col max-h-[90vh]">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEditing ? "Edit Connection" : "New Connection"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+          <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="flex flex-col min-h-0 flex-1">
+            <div className="overflow-y-auto flex-1 space-y-4 pr-1">
             <FormField
               control={form.control}
               name="name"
@@ -576,7 +577,8 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
               </>
             )}
 
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            </div>
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0 pt-4">
               <Button
                 type="button"
                 variant="outline"
