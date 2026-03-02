@@ -2,6 +2,8 @@ import { Readable, Writable } from "stream";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
 import { createLogger } from "@/lib/logger";
+// Activate SMB2 message signing support (patches v9u-smb2 at import time)
+import "./smb-signing";
 
 const log = createLogger("smb");
 
