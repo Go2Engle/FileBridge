@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { vi } from "vitest";
 
 // Set AUTH_SECRET before any imports touch crypto
