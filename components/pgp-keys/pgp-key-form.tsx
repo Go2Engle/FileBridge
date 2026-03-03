@@ -290,7 +290,7 @@ export function PgpKeyForm({ open, onClose, editKey }: PgpKeyFormProps) {
                               />
                             </FormControl>
                             <FormDescription>
-                              Embedded in the key's user ID for identification.
+                              Embedded in the key&apos;s user ID for identification.
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
