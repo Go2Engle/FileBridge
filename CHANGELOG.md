@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Go2Engle/FileBridge/compare/v0.7.0...v0.7.1) (2026-03-03)
+
+
+### Bug Fixes
+
+* use PAT for release-please to allow downstream workflow triggers ([3f0bb9a](https://github.com/Go2Engle/FileBridge/commit/3f0bb9ab23a399c52e3cf17d278a083cc8248432))
+
 ## [0.7.0](https://github.com/Go2Engle/FileBridge/compare/v0.6.3...v0.7.0) (2026-03-03)
 
 
