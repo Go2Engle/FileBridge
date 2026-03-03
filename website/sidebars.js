@@ -56,6 +56,13 @@ const sidebars = {
         'Testing',
       ],
     },
+    {
+      type: 'category',
+      label: 'Contributing',
+      items: [
+        'Contributing',
+      ],
+    },
   ],
 };
 

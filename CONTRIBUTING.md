@@ -254,6 +254,24 @@ chore: upgrade node-cron to v4
 
 Link related issues in the commit or PR body (`Closes #42`).
 
+### How commits drive releases
+
+FileBridge uses **[Release Please](https://github.com/googleapis/release-please)** for fully automated releases. You should **never manually edit `package.json` version or `package-lock.json` as part of a feature/fix PR** — the release bot handles that.
+
+Here's how it works:
+
+| Commit type | Changelog section | Version bump |
+|---|---|---|
+| `feat:` | Features | **minor** (`0.x.0`) |
+| `fix:` | Bug Fixes | **patch** (`0.0.x`) |
+| `perf:` | Performance Improvements | patch |
+| `deps:` | Dependencies | patch |
+| `revert:` | Reverts | patch |
+| `feat!:` or `BREAKING CHANGE:` footer | Features | **major** (`x.0.0`) |
+| `docs:`, `chore:`, `ci:`, `test:`, `refactor:` | *(hidden)* | none — but tracked |
+
+After PRs are merged into `main`, Release Please automatically opens (or updates) a **Release PR** that accumulates the next version bump and a generated `CHANGELOG.md` entry. When a maintainer is ready to ship, they merge the Release PR — that triggers the full build pipeline (Docker images, standalone bundles, and a GitHub Release).
+
 ---
 
 ## Pull Request Process

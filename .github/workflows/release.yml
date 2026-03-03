@@ -1,91 +1,35 @@
 name: Release
 
-# Flow:
-#   create-release  ──┬──► docker-build (linux/amd64 natively) ───► docker-merge (GHCR)
-#                     ├──► docker-build (linux/arm64 natively) ───┘
-#                     ├──► standalone (linux/amd64)   → .tar.gz
-#                     ├──► standalone (linux/arm64)   → .tar.gz
-#                     ├──► standalone (darwin/arm64)  → .tar.gz
-#                     ├──► standalone (windows/amd64) → .zip
-#                     └──► standalone (windows/arm64) → .zip
+# Flow (triggered when Release Please merges its release PR and publishes a GitHub Release):
+#   docker-build (linux/amd64 natively) ───► docker-merge (GHCR)
+#   docker-build (linux/arm64 natively) ───┘
+#   standalone (linux/amd64)   → .tar.gz
+#   standalone (linux/arm64)   → .tar.gz
+#   standalone (darwin/arm64)  → .tar.gz
+#   standalone (windows/amd64) → .zip
+#   standalone (windows/arm64) → .zip
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - package.json
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v1.2.3)'
+        required: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: go2engle/filebridge
+  # Resolve tag from either the release event or a manual workflow_dispatch input
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
 
-  # ── Step 1: Create the git tag and GitHub Release ──────────────────────────
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-      pull-requests: read # Required to fetch PR body via gh api
-
-    outputs:
-      tag:    ${{ steps.version.outputs.tag }}
-      exists: ${{ steps.version.outputs.exists }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Check version and existing tags
-        id: version
-        run: |
-          tag="v$(jq -r .version package.json)"
-          if git ls-remote --tags origin "$tag" | grep -q "$tag"; then
-            echo "exists=true"  >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Get release notes from merged PR
-        if: steps.version.outputs.exists == 'false'
-        id: pr_notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          pr_body=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
-            --jq '.[0].body // empty' 2>/dev/null || echo "")
-          if [ -n "$pr_body" ]; then
-            echo "body<<PREOF" >> "$GITHUB_OUTPUT"
-            echo "$pr_body"   >> "$GITHUB_OUTPUT"
-            echo "PREOF"      >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create git tag and GitHub Release
-        if: steps.version.outputs.exists == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_BODY: ${{ steps.pr_notes.outputs.body }}
-        run: |
-          tag="${{ steps.version.outputs.tag }}"
-          git tag "$tag"
-          git push origin "$tag"
-          if [ -n "$PR_BODY" ]; then
-            gh release create "$tag" --title="$tag" --notes "$PR_BODY"
-          else
-            gh release create "$tag" --title="$tag" --generate-notes
-          fi
-
-  # ── Step 2a: Build native Docker images per architecture ────────────────────
+  # ── Step 1: Build native Docker images per architecture ─────────────────────
   docker-build:
     name: Docker build ${{ matrix.os-label }}/${{ matrix.arch }}
-    needs: create-release
-    if: needs.create-release.outputs.exists == 'false'
 
     strategy:
       fail-fast: false
@@ -151,11 +95,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # ── Step 2b: Merge digests into multi-arch manifest ─────────────────────────
+  # ── Step 2: Merge digests into multi-arch manifest ─────────────────────────
   docker-merge:
     name: Docker merge manifests
-    needs: [create-release, docker-build]
-    if: needs.create-release.outputs.exists == 'false'
+    needs: [docker-build]
     runs-on: ubuntu-latest
 
     permissions:
@@ -186,9 +129,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.create-release.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.tag }}
-            type=semver,pattern={{major}},value=${{ needs.create-release.outputs.tag }}
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }}
+            type=semver,pattern={{major}},value=${{ env.TAG }}
             type=raw,value=latest
 
       # Combine the digests into one manifest and push with your tags
@@ -198,11 +141,9 @@ jobs:
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
-  # ── Step 2c: Build native standalone bundles (tarballs + zips) ───────────────
+  # ── Step 3: Build native standalone bundles (tarballs + zips) ───────────────
   standalone:
     name: Standalone ${{ matrix.os-label }}/${{ matrix.arch }}
-    needs: create-release
-    if: needs.create-release.outputs.exists == 'false'
 
     strategy:
       fail-fast: false
@@ -251,7 +192,7 @@ jobs:
       - name: Package standalone tarball (Unix)
         if: runner.os != 'Windows'
         run: |
-          TAG="${{ needs.create-release.outputs.tag }}"
+          TAG="${{ env.TAG }}"
           SLUG="${{ matrix.os-label }}-${{ matrix.arch }}"
           ARTIFACT="filebridge-${TAG}-${SLUG}.tar.gz"
 
@@ -300,7 +241,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tag      = "${{ needs.create-release.outputs.tag }}"
+          $tag      = "${{ env.TAG }}"
           $slug     = "windows-${{ matrix.arch }}"
           $artifact = "filebridge-$tag-$slug.zip"
 
@@ -343,5 +284,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ needs.create-release.outputs.tag }}" \
+          gh release upload "${{ env.TAG }}" \
             "$ARTIFACT" --clobber
