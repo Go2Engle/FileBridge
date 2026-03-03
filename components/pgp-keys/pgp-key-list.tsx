@@ -17,10 +17,11 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PenLine, Trash2, Plus, Download, Eye, Copy } from "lucide-react";
+import { PenLine, Trash2, Plus, Download, Eye, Copy, RefreshCw } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { PgpKeyForm } from "./pgp-key-form";
 import { PgpKeyDetail } from "./pgp-key-detail";
+import { PgpKeyRotateDialog } from "./pgp-key-rotate-dialog";
 
 export interface PgpKeyPublic {
   id: number;
@@ -45,6 +46,7 @@ export function PgpKeyList() {
   const [detailKey, setDetailKey] = useState<PgpKeyPublic | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PgpKeyPublic | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [rotateKey, setRotateKey] = useState<PgpKeyPublic | null>(null);
 
   const { data: keys, isLoading } = useQuery<PgpKeyPublic[]>({
     queryKey: ["pgp-keys"],
@@ -193,6 +195,20 @@ export function PgpKeyList() {
                       </Tooltip>
                       {isAdmin && (
                         <>
+                          {key.keyType === "keypair" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setRotateKey(key)}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Rotate key</TooltipContent>
+                            </Tooltip>
+                          )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -241,6 +257,12 @@ export function PgpKeyList() {
         onClose={() => setDetailKey(null)}
       />
 
+      <PgpKeyRotateDialog
+        open={!!rotateKey}
+        onClose={() => setRotateKey(null)}
+        sourceKey={rotateKey}
+      />
+
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteError(null); } }}
@@ -264,10 +286,10 @@ export function PgpKeyList() {
             {!deleteError && (
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+                onClick={(e) => { e.preventDefault(); if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
                 disabled={deleteMutation.isPending}
               >
-                Delete
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
               </AlertDialogAction>
             )}
           </AlertDialogFooter>

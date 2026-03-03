@@ -6,9 +6,6 @@ import {
   deletePgpKey,
   getJobsUsingPgpKey,
 } from "@/lib/db/pgp-keys";
-import { db } from "@/lib/db";
-import { jobs } from "@/lib/db/schema";
-import { inArray } from "drizzle-orm";
 import { logAudit, getUserId, getIpFromRequest } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
 
@@ -98,15 +95,10 @@ export async function DELETE(
     return NextResponse.json({ error: "PGP key not found" }, { status: 404 });
 
   // Block deletion if the key is used by jobs
-  const jobIds = getJobsUsingPgpKey(Number(id));
-  if (jobIds.length > 0) {
-    const jobRows = db
-      .select({ id: jobs.id, name: jobs.name })
-      .from(jobs)
-      .where(inArray(jobs.id, jobIds))
-      .all();
+  const usages = getJobsUsingPgpKey(Number(id));
+  if (usages.length > 0) {
     return NextResponse.json(
-      { error: "PGP key is in use", jobs: jobRows },
+      { error: "PGP key is in use", jobs: usages.map((u) => ({ id: u.jobId, name: u.jobName })) },
       { status: 409 }
     );
   }

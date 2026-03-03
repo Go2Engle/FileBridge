@@ -101,10 +101,17 @@ export function deletePgpKey(id: number): void {
   db.delete(pgpKeys).where(eq(pgpKeys.id, id)).run();
 }
 
-/** Returns job IDs that reference a given PGP key (for dependency check before delete). */
-export function getJobsUsingPgpKey(keyId: number): number[] {
+export interface KeyUsage {
+  jobId: number;
+  jobName: string;
+  usedForEncrypt: boolean;
+  usedForDecrypt: boolean;
+}
+
+/** Returns jobs that reference a given PGP key with usage details. */
+export function getJobsUsingPgpKey(keyId: number): KeyUsage[] {
   const rows = db
-    .select({ id: jobs.id })
+    .select({ id: jobs.id, name: jobs.name, encKeyId: jobs.pgpEncryptKeyId, decKeyId: jobs.pgpDecryptKeyId })
     .from(jobs)
     .where(
       or(
@@ -113,5 +120,23 @@ export function getJobsUsingPgpKey(keyId: number): number[] {
       )
     )
     .all();
-  return rows.map((r) => r.id);
+  return rows.map((r) => ({
+    jobId: r.id,
+    jobName: r.name,
+    usedForEncrypt: r.encKeyId === keyId,
+    usedForDecrypt: r.decKeyId === keyId,
+  }));
+}
+
+/** Reassign all job references from oldKeyId to newKeyId. Returns count of jobs updated. */
+export function reassignPgpKey(oldKeyId: number, newKeyId: number): number {
+  const usages = getJobsUsingPgpKey(oldKeyId);
+  const now = new Date().toISOString();
+  for (const usage of usages) {
+    const set: Record<string, unknown> = { updatedAt: now };
+    if (usage.usedForEncrypt) set.pgpEncryptKeyId = newKeyId;
+    if (usage.usedForDecrypt) set.pgpDecryptKeyId = newKeyId;
+    db.update(jobs).set(set).where(eq(jobs.id, usage.jobId)).run();
+  }
+  return usages.length;
 }
