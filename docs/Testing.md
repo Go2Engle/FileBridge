@@ -50,6 +50,7 @@ __tests__/
 │   ├── health.test.ts
 │   ├── hooks.test.ts
 │   ├── jobs.test.ts
+│   ├── pgp-keys.test.ts
 │   ├── jobs-dry-run.test.ts
 │   ├── jobs-run.test.ts
 │   ├── setup.test.ts
@@ -68,6 +69,8 @@ __tests__/
     ├── utils.test.ts
     ├── db/
     │   └── connections.test.ts
+    ├── pgp/
+    │   └── index.test.ts
     └── hooks/
         └── executor.test.ts
 ```
@@ -132,6 +135,25 @@ Tests for the hook execution engine:
 - Invalid config JSON is caught, logged, and thrown
 - Multiple hooks execute in order; execution stops at the first failure
 - Large response bodies are truncated to 4096 bytes with `[truncated]` marker
+
+#### `lib/pgp/index.ts`
+Tests for PGP key generation, metadata parsing, encryption/decryption, and utilities:
+- ECC Curve25519 keypair generation produces valid armored keys and fingerprint
+- RSA 4096 keypair generation produces valid keys
+- Email is embedded in the key's userId when provided
+- Expiration is set correctly when `expirationDays > 0`
+- Different fingerprints are generated each time
+- `parseKeyMetadata()` extracts fingerprint, algorithm, userId, and creation date from public keys
+- `parseKeyMetadata()` detects private keys and sets `isPrivate: true`
+- Public and private keys from the same keypair share the same fingerprint
+- `encryptBuffer()` / `decryptBuffer()` round-trip preserves plaintext exactly
+- Binary data (all 256 byte values) survives encryption round-trip
+- Same plaintext produces different ciphertext each encryption (random session key)
+- Passphrase-protected keys encrypt and decrypt correctly
+- `stripPgpExtension()` strips `.pgp`, `.gpg`, and `.asc` extensions (case-insensitive)
+- `stripPgpExtension()` returns unchanged filenames without PGP extensions
+- `isPgpFile()` identifies PGP file extensions (case-insensitive)
+- `isPgpFile()` returns false for non-PGP extensions
 
 ---
 
@@ -223,6 +245,38 @@ Each route handler is tested with all collaborators mocked (database, auth, sche
 - Returns HTTP 404 when the job is not found
 - Returns HTTP 500 on unexpected engine errors
 - Passes the correctly typed numeric ID to `dryRunJob()`
+
+#### `GET /api/pgp-keys` · `POST /api/pgp-keys`
+- GET returns HTTP 401 without a session
+- GET returns the list of all keys (private material stripped)
+- GET returns empty array when no keys exist
+- POST (generate) returns HTTP 403 for non-admin callers
+- POST (generate) returns HTTP 400 when name is missing or blank
+- POST (generate) returns HTTP 400 for invalid algorithm
+- POST (generate) returns HTTP 400 for invalid action
+- POST (generate) returns HTTP 201 with the key (no private material in response)
+- POST (import) returns HTTP 400 when public key is missing
+- POST (import) returns HTTP 201 for a public-only key
+
+#### `GET /api/pgp-keys/[id]` · `PUT /api/pgp-keys/[id]` · `DELETE /api/pgp-keys/[id]`
+- GET returns HTTP 404 for non-existent key
+- GET returns the key metadata
+- PUT returns HTTP 403 for non-admin callers
+- PUT returns HTTP 404 for non-existent key
+- PUT returns HTTP 400 when name is empty
+- PUT updates name and returns the key (no private material)
+- DELETE returns HTTP 403 for non-admin callers
+- DELETE returns HTTP 404 for non-existent key
+- DELETE returns HTTP 409 when key is used by jobs (with job names)
+- DELETE returns HTTP 204 on successful deletion
+
+#### `POST /api/pgp-keys/[id]/rotate`
+- Returns HTTP 403 for non-admin callers
+- Returns HTTP 404 when source key does not exist
+- Returns HTTP 400 when name is missing or algorithm is invalid
+- Generates a new key and reassigns all jobs from the old key
+- Returns HTTP 201 with `{ newKey, updatedJobCount }`
+- Returns `updatedJobCount: 0` when no jobs use the key
 
 #### `GET /api/audit-logs`
 - Returns HTTP 401 without a session

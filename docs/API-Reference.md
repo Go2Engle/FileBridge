@@ -194,6 +194,10 @@ Creates a new job.
   "skipHiddenFiles": true,
   "extractArchives": false,
   "deltaSync": false,
+  "pgpEncrypt": false,
+  "pgpEncryptKeyId": null,
+  "pgpDecrypt": false,
+  "pgpDecryptKeyId": null,
   "status": "active"
 }
 ```
@@ -253,6 +257,140 @@ Returns the run history for a job (most recent first).
   }
 ]
 ```
+
+---
+
+## PGP Keys
+
+### `GET /api/pgp-keys`
+
+Returns all PGP keys. Private key material and passphrases are **never** returned — only metadata (name, fingerprint, algorithm, etc.).
+
+**Response**
+```json
+[
+  {
+    "id": 1,
+    "name": "Production Key",
+    "keyType": "keypair",
+    "algorithm": "curve25519",
+    "fingerprint": "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555",
+    "userId": "FileBridge <ops@example.com>",
+    "keyCreatedAt": "2026-01-15T00:00:00.000Z",
+    "keyExpiresAt": null,
+    "publicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...",
+    "createdAt": "2026-01-15T09:00:00.000Z",
+    "updatedAt": "2026-01-15T09:00:00.000Z"
+  }
+]
+```
+
+---
+
+### `POST /api/pgp-keys`
+
+Creates a new PGP key. Requires `admin` role. Supports two actions: `generate` and `import`.
+
+**Generate Request Body**
+```json
+{
+  "action": "generate",
+  "name": "My PGP Key",
+  "algorithm": "ecc-curve25519",
+  "email": "ops@example.com",
+  "passphrase": "optional-passphrase",
+  "expirationDays": 365
+}
+```
+
+- `algorithm`: `"rsa4096"` or `"ecc-curve25519"`
+- `expirationDays`: `0` = never expires
+
+**Import Request Body**
+```json
+{
+  "action": "import",
+  "name": "Partner Public Key",
+  "publicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...",
+  "privateKey": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n...",
+  "passphrase": "optional"
+}
+```
+
+- `privateKey` is optional — omit to import a public-only key
+- When both keys are provided, fingerprints are validated to match
+
+**Response**: `201` with the created key (private material stripped).
+
+---
+
+### `GET /api/pgp-keys/[id]`
+
+Returns a single PGP key (metadata only, no private material).
+
+---
+
+### `PUT /api/pgp-keys/[id]`
+
+Updates key metadata. Requires `admin` role. Only `name` and `description` can be changed — key material is immutable.
+
+**Request Body**
+```json
+{
+  "name": "Renamed Key",
+  "description": "Updated description"
+}
+```
+
+---
+
+### `DELETE /api/pgp-keys/[id]`
+
+Deletes a PGP key. Requires `admin` role. Returns `409 Conflict` if any job references this key.
+
+**Conflict Response (409)**
+```json
+{
+  "error": "PGP key is in use",
+  "jobs": [{ "id": 7, "name": "Daily Report Transfer" }]
+}
+```
+
+---
+
+### `GET /api/pgp-keys/[id]/export?type=public|private`
+
+Downloads the key as an `.asc` file attachment.
+
+- `type=public` — any authenticated user
+- `type=private` — requires `admin` role; returns `400` if no private key
+
+---
+
+### `POST /api/pgp-keys/[id]/rotate`
+
+Rotates a PGP key: generates a new keypair and reassigns all jobs that referenced the old key. Requires `admin` role.
+
+**Request Body**
+```json
+{
+  "name": "Production Key (rotated)",
+  "algorithm": "ecc-curve25519",
+  "email": "ops@example.com",
+  "passphrase": "optional",
+  "expirationDays": 365
+}
+```
+
+**Response (201)**
+```json
+{
+  "newKey": { "id": 2, "name": "Production Key (rotated)", "..." : "..." },
+  "updatedJobCount": 3
+}
+```
+
+The old key is **not** deleted — it remains available for decrypting files encrypted with it.
 
 ---
 
@@ -399,7 +537,7 @@ Returns paginated audit log entries.
 | `limit` | number | Results per page (default: 50) |
 | `userId` | string | Filter by user email |
 | `action` | string | Filter by action: `create`, `update`, `delete`, `execute`, `login`, `settings_change` |
-| `resource` | string | Filter by resource: `connection`, `job`, `settings`, `job_run`, `auth` |
+| `resource` | string | Filter by resource: `connection`, `job`, `settings`, `job_run`, `auth`, `hook`, `pgp_key`, `user` |
 
 **Response**
 ```json

@@ -58,6 +58,17 @@ The filter is case-insensitive and applies to file **names only** (not paths). S
 | **Extract Archives** | Off | Automatically extracts ZIP, TAR, TAR.GZ, and TGZ archives at the destination |
 | **Delta Sync** | Off | Only transfers files where the source is newer than the destination copy |
 
+### PGP Encryption
+
+Jobs can optionally encrypt or decrypt files using PGP keys managed in the [PGP Keys](PGP-Keys) page.
+
+| Field | Default | Description |
+|---|---|---|
+| **Encrypt files before upload** | Off | Encrypts each file with the selected PGP public key before uploading. Appends `.pgp` to the filename. |
+| **Decrypt PGP files after download** | Off | Decrypts PGP-encrypted files (`.pgp`, `.gpg`, `.asc`) with the selected private key after downloading. Strips the PGP extension. |
+
+Both options can be enabled simultaneously to re-encrypt files from one key to another. See [PGP Encryption](PGP-Keys) for full details.
+
 ### Post-Transfer Action
 
 Controls what happens to the **source file** after a successful transfer:

@@ -22,6 +22,7 @@ const sidebars = {
       items: [
         'Connections',
         'Jobs',
+        'PGP-Keys',
         'Transfer-Engine',
       ],
     },

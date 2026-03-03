@@ -24,12 +24,15 @@ When a job is triggered (scheduled or manual), the engine executes these steps i
 13. (Optional) List destination files for overwrite-check / delta-sync
 14. For each source file:
     a. Update job_runs.currentFile
-    b. Delta sync check → skip if destination is same age or newer
-    c. Overwrite check → skip if exists and overwrite = false
-    d. Download file from source (streamed — not buffered in memory)
-    e. If extractArchives → buffer and extract archive, upload each entry individually
-    f. Else → stream directly to destination (delete existing first if overwrite/delta)
-    g. Apply post-transfer action (retain / delete / move)
+    b. Compute output filename (strip/add .pgp extension based on PGP config)
+    c. Delta sync check → skip if destination is same age or newer
+    d. Overwrite check → skip if exists and overwrite = false
+    e. Download file from source (streamed — not buffered in memory)
+    f. If PGP decrypt enabled → apply decryption to stream/buffer
+    g. If extractArchives → buffer and extract archive, upload each entry individually
+    h. If PGP encrypt enabled → apply encryption to stream/buffer before upload
+    i. Else → stream directly to destination (delete existing first if overwrite/delta)
+    j. Apply post-transfer action (retain / delete / move)
     h. Insert transfer_logs record (success or failure)
     i. Increment filesTransferred + bytesTransferred counters
 15. Disconnect both providers
@@ -119,6 +122,44 @@ else:
 
 ---
 
+## PGP Encryption / Decryption
+
+When PGP is configured on a job, the engine applies transforms inline during the transfer pipeline.
+
+### Streaming Path (non-archive files)
+
+```
+Source → Download stream → [PGP Decrypt] → byte tracker → [PGP Encrypt] → Upload stream → Destination
+```
+
+- The byte tracker sits between decrypt and encrypt to count plaintext bytes
+- `uploadSizeHint` is set to `undefined` when PGP transforms are active (encrypted size is unknown)
+- The SMB provider handles unknown-size uploads by buffering to determine actual size before writing
+
+### Archive Path (when extractArchives is enabled)
+
+```
+Source → Download → Buffer → [PGP Decrypt buffer] → Extract archive → For each entry: [PGP Encrypt buffer] → Upload
+```
+
+- The full archive is buffered into memory (required for extraction)
+- Decryption is applied to the entire archive buffer before extraction
+- Encryption is applied to each extracted entry individually
+
+### Filename Handling
+
+- **Decrypt**: strips `.pgp`, `.gpg`, or `.asc` extension from the source filename
+- **Encrypt**: appends `.pgp` to the filename
+- Delta sync and overwrite checks use the **output filename** (after extension changes)
+
+### Progress Tracking with PGP
+
+When PGP transforms are active, the source file size doesn't match the transferred bytes. The engine sets `currentFileSize` to `null` so the UI shows indeterminate progress for individual files. Overall job-level counters (`filesTransferred`, `bytesTransferred`) remain accurate.
+
+See [PGP Encryption](PGP-Keys) for key management and job configuration details.
+
+---
+
 ## Post-Transfer Actions
 
 Applied after a successful upload (or archive extraction):
@@ -188,6 +229,9 @@ The `dryRunJob(jobId)` function performs all the same logic as `runJob` except:
   moveDest: string | null;    // Full path if postAction = "move"
   isArchive: boolean;
   wouldExtract: boolean;      // true if extractArchives + isArchive
+  wouldDecrypt: boolean;      // true if PGP decrypt enabled for this file
+  wouldEncrypt: boolean;      // true if PGP encrypt enabled for this file
+  outputFileName: string;     // Destination filename (after PGP extension changes)
 }
 ```
 
