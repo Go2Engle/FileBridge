@@ -432,7 +432,22 @@ export class SmbProvider implements StorageProvider {
       return;
     }
 
-    // Large/unknown files: stream chunks with pre-allocated file size (constant memory)
+    // Unknown size (e.g. PGP-transformed streams): buffer first to get actual size,
+    // then use the appropriate upload path. Without a known size, the SMB server
+    // rejects writes with STATUS_INVALID_PARAMETER because it can't pre-allocate.
+    if (typeof sizeHint !== "number") {
+      const content = await this.streamToBuffer(stream);
+      if (content.length <= SmbProvider.BUFFERED_UPLOAD_MAX_BYTES) {
+        log.info("Uploading file (buffered, size resolved)", { smbPath, bytes: content.length });
+        await this.writeFileAsync(smbPath, content);
+        return;
+      }
+      log.info("Uploading file (streaming, size resolved)", { smbPath, bytes: content.length });
+      await this.streamingWriteAsync(smbPath, Readable.from(content), content.length);
+      return;
+    }
+
+    // Large files with known size: stream chunks with pre-allocated file size (constant memory)
     log.info("Uploading file (streaming)", { smbPath, sizeHint });
     await this.streamingWriteAsync(smbPath, stream, sizeHint);
   }

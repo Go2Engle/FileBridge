@@ -48,6 +48,14 @@ export const jobs = sqliteTable("jobs", {
   deltaSync: integer("delta_sync", { mode: "boolean" })
     .notNull()
     .default(false),
+  pgpEncrypt: integer("pgp_encrypt", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  pgpEncryptKeyId: integer("pgp_encrypt_key_id"),
+  pgpDecrypt: integer("pgp_decrypt", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  pgpDecryptKeyId: integer("pgp_decrypt_key_id"),
   status: text("status", {
     enum: ["active", "inactive", "running", "error"],
   })
@@ -132,7 +140,7 @@ export const auditLogs = sqliteTable("audit_logs", {
     enum: ["create", "update", "delete", "execute", "login", "logout", "settings_change"],
   }).notNull(),
   resource: text("resource", {
-    enum: ["connection", "job", "settings", "job_run", "auth", "user"],
+    enum: ["connection", "job", "settings", "job_run", "auth", "user", "pgp_key"],
   }).notNull(),
   resourceId: integer("resource_id"),
   resourceName: text("resource_name"),
@@ -191,6 +199,27 @@ export const hookRuns = sqliteTable("hook_runs", {
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
 });
 
+export const pgpKeys = sqliteTable("pgp_keys", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  keyType: text("key_type", { enum: ["public", "keypair"] }).notNull(),
+  algorithm: text("algorithm").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  userId: text("user_id_str"),
+  keyCreatedAt: text("key_created_at"),
+  keyExpiresAt: text("key_expires_at"),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key"),
+  passphrase: text("passphrase"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+});
+
 // Hook config type interfaces
 export interface WebhookConfig {
   url: string;
@@ -236,3 +265,5 @@ export type Hook = typeof hooks.$inferSelect;
 export type NewHook = typeof hooks.$inferInsert;
 export type JobHook = typeof jobHooks.$inferSelect;
 export type HookRun = typeof hookRuns.$inferSelect;
+export type PgpKey = typeof pgpKeys.$inferSelect;
+export type NewPgpKey = typeof pgpKeys.$inferInsert;

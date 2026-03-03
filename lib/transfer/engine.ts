@@ -12,6 +12,14 @@ import { gunzipSync } from "zlib";
 import yauzl from "yauzl";
 import * as tar from "tar-stream";
 import { createLogger, withJobContext } from "@/lib/logger";
+import { getPgpKey } from "@/lib/db/pgp-keys";
+import {
+  encryptStream as pgpEncryptStream,
+  decryptStream as pgpDecryptStream,
+  encryptBuffer as pgpEncryptBuffer,
+  decryptBuffer as pgpDecryptBuffer,
+  stripPgpExtension,
+} from "@/lib/pgp";
 
 const log = createLogger("engine");
 
@@ -226,6 +234,12 @@ export interface DryRunFile {
   isArchive: boolean;
   /** True when extractArchives is enabled and isArchive is true — contents will be extracted rather than the archive transferred as-is. */
   wouldExtract: boolean;
+  /** True when PGP decryption will be applied to this file. */
+  wouldDecrypt: boolean;
+  /** True when PGP encryption will be applied before upload. */
+  wouldEncrypt: boolean;
+  /** The output filename at destination (after PGP extension changes). */
+  outputFileName: string;
 }
 
 export interface DryRunResult {
@@ -309,19 +323,26 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
 
     const dryRunFiles: DryRunFile[] = allFiles.map((f) => {
       const matchesFilter = matchingNames.has(f.name);
-      const fileIsArchive = isArchive(f.name);
+      const wouldDecrypt = !!job.pgpDecrypt && !!job.pgpDecryptKeyId;
+      const wouldEncrypt = !!job.pgpEncrypt && !!job.pgpEncryptKeyId;
+
+      // Compute the output filename
+      let outName = f.name;
+      if (wouldDecrypt) outName = stripPgpExtension(outName);
+      if (wouldEncrypt) outName = outName + ".pgp";
+
+      const archiveCheckName = wouldDecrypt ? stripPgpExtension(f.name) : f.name;
+      const fileIsArchive = isArchive(archiveCheckName);
 
       let skipReason: DryRunFile["skipReason"] = null;
       if (!matchesFilter) {
         skipReason = "filter";
-      } else if (job.deltaSync && existingDestFiles.has(f.name)) {
-        // Delta sync: skip if destination is same age or newer than source.
-        const destTime = destFileTimes.get(f.name);
+      } else if (job.deltaSync && existingDestFiles.has(outName)) {
+        const destTime = destFileTimes.get(outName);
         if (destTime && destTime >= f.modifiedAt) {
           skipReason = "delta";
         }
-        // If source is newer, fall through → will transfer (skipReason stays null).
-      } else if (!job.overwriteExisting && !job.deltaSync && existingDestFiles.has(f.name)) {
+      } else if (!job.overwriteExisting && !job.deltaSync && existingDestFiles.has(outName)) {
         skipReason = "exists";
       }
 
@@ -341,6 +362,9 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
         moveDest,
         isArchive: fileIsArchive,
         wouldExtract: !wouldSkip && job.extractArchives && fileIsArchive,
+        wouldDecrypt: !wouldSkip && wouldDecrypt,
+        wouldEncrypt: !wouldSkip && wouldEncrypt,
+        outputFileName: outName,
       };
     });
 
@@ -453,6 +477,27 @@ export async function runJob(jobId: number): Promise<void> {
         log.info("Pre-job hooks completed");
       }
 
+      // Load PGP keys if configured
+      let pgpEncryptPublicKey: string | undefined;
+      let pgpDecryptPrivateKey: string | undefined;
+      let pgpDecryptPassphrase: string | undefined;
+
+      if (job.pgpEncrypt && job.pgpEncryptKeyId) {
+        const key = getPgpKey(job.pgpEncryptKeyId);
+        if (!key) throw new Error(`PGP encrypt key ${job.pgpEncryptKeyId} not found`);
+        pgpEncryptPublicKey = key.publicKey;
+        log.info("PGP encryption enabled", { keyName: key.name, keyId: key.id });
+      }
+
+      if (job.pgpDecrypt && job.pgpDecryptKeyId) {
+        const key = getPgpKey(job.pgpDecryptKeyId);
+        if (!key) throw new Error(`PGP decrypt key ${job.pgpDecryptKeyId} not found`);
+        if (!key.privateKey) throw new Error(`PGP key "${key.name}" has no private key for decryption`);
+        pgpDecryptPrivateKey = key.privateKey;
+        pgpDecryptPassphrase = key.passphrase ?? undefined;
+        log.info("PGP decryption enabled", { keyName: key.name, keyId: key.id });
+      }
+
       log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
       let files = await source.listFiles(job.sourcePath, job.fileFilter);
       log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
@@ -520,7 +565,16 @@ export async function runJob(jobId: number): Promise<void> {
 
       for (const file of files) {
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
-        const dstFilePath = path.posix.join(job.destinationPath, file.name);
+
+        // Compute the output filename based on PGP settings
+        let outputFileName = file.name;
+        if (pgpDecryptPrivateKey) {
+          outputFileName = stripPgpExtension(outputFileName);
+        }
+        if (pgpEncryptPublicKey) {
+          outputFileName = outputFileName + ".pgp";
+        }
+        const dstFilePath = path.posix.join(job.destinationPath, outputFileName);
 
         // Update currentFile and clear stale per-file progress from previous file
         await db
@@ -529,11 +583,13 @@ export async function runJob(jobId: number): Promise<void> {
           .where(eq(jobRuns.id, run.id));
 
         // Delta sync: skip if destination file is the same age or newer than the source.
-        if (job.deltaSync && existingDestFiles?.has(file.name)) {
-          const destTime = destFileTimes.get(file.name);
+        // Use outputFileName to check since PGP may change the extension.
+        if (job.deltaSync && existingDestFiles?.has(outputFileName)) {
+          const destTime = destFileTimes.get(outputFileName);
           if (destTime && destTime >= file.modifiedAt) {
             log.info("Skipping file — destination up to date", {
               fileName: file.name,
+              outputFileName,
               srcModified: file.modifiedAt.toISOString(),
               dstModified: destTime.toISOString(),
             });
@@ -543,12 +599,12 @@ export async function runJob(jobId: number): Promise<void> {
           log.info("File source is newer — transferring", {
             fileName: file.name,
             srcModified: file.modifiedAt.toISOString(),
-            dstModified: destFileTimes.get(file.name)?.toISOString() ?? "n/a",
+            dstModified: destFileTimes.get(outputFileName)?.toISOString() ?? "n/a",
           });
         }
 
         // Skip files that already exist at destination (when overwrite is off and delta sync is off)
-        if (!job.deltaSync && existingDestFiles?.has(file.name)) {
+        if (!job.deltaSync && existingDestFiles?.has(outputFileName)) {
           log.info("Skipping file — already exists at destination", { fileName: file.name });
           filesSkipped++;
           continue;
@@ -562,22 +618,38 @@ export async function runJob(jobId: number): Promise<void> {
         for (let transferAttempt = 1; transferAttempt <= maxTransferAttempts; transferAttempt++) {
           try {
           // ── Archive path: buffer the stream so we can extract entries ─────────
-          if (job.extractArchives && isArchive(file.name)) {
+          // When PGP decrypt is enabled, check if the decrypted name is an archive
+          const archiveCheckName = pgpDecryptPrivateKey ? stripPgpExtension(file.name) : file.name;
+          if (job.extractArchives && isArchive(archiveCheckName)) {
             const srcStream = await source.downloadFile(srcFilePath);
-            const content = await streamToBuffer(srcStream);
+            let content = await streamToBuffer(srcStream);
             const actualSize = content.length;
             log.info("Archive downloaded", { fileName: file.name, actualSize });
 
-            const extracted = await extractArchive(file.name, content);
+            // Decrypt before extraction if PGP decrypt is enabled
+            if (pgpDecryptPrivateKey) {
+              log.info("Decrypting archive before extraction", { fileName: file.name });
+              content = await pgpDecryptBuffer(content, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+              log.info("Archive decrypted", { decryptedSize: content.length });
+            }
+
+            const extracted = await extractArchive(archiveCheckName, content);
             if (extracted && extracted.length > 0) {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
               for (const entry of extracted) {
-                const entryDstPath = path.posix.join(job.destinationPath, entry.name);
+                // Apply PGP encryption to each extracted entry if enabled
+                let entryContent = entry.content;
+                let entryOutputName = entry.name;
+                if (pgpEncryptPublicKey) {
+                  entryContent = await pgpEncryptBuffer(entry.content, pgpEncryptPublicKey);
+                  entryOutputName = entry.name + ".pgp";
+                }
+                const entryDstPath = path.posix.join(job.destinationPath, entryOutputName);
 
                 // Skip existing files at destination (when overwrite is off)
-                if (existingDestFiles?.has(entry.name)) {
-                  log.info("Skipping extracted entry — already exists", { entryName: entry.name });
+                if (existingDestFiles?.has(entryOutputName)) {
+                  log.info("Skipping extracted entry — already exists", { entryName: entryOutputName });
                   filesSkipped++;
                   continue;
                 }
@@ -592,33 +664,33 @@ export async function runJob(jobId: number): Promise<void> {
                     }
                   }
 
-                  await dest.uploadFile(Readable.from(entry.content), entryDstPath, entry.content.length);
-                  await verifyDestinationFileSize(dest, entryDstPath, entry.content.length, dstConn.protocol);
-                  log.info("Extracted entry uploaded", { entryName: entry.name, dstPath: entryDstPath });
+                  await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
+                  await verifyDestinationFileSize(dest, entryDstPath, entryContent.length, dstConn.protocol);
+                  log.info("Extracted entry uploaded", { entryName: entryOutputName, dstPath: entryDstPath });
 
                   await db.insert(transferLogs).values({
                     jobId,
                     jobRunId: run.id,
-                    fileName: entry.name,
+                    fileName: entryOutputName,
                     sourcePath: `${srcFilePath}!${entry.name}`,
                     destinationPath: entryDstPath,
-                    fileSize: entry.content.length,
+                    fileSize: entryContent.length,
                     transferredAt: new Date().toISOString(),
                     status: "success",
                   });
 
                   filesTransferred++;
-                  bytesTransferred += entry.content.length;
+                  bytesTransferred += entryContent.length;
                   await db
                     .update(jobRuns)
                     .set({ filesTransferred, bytesTransferred })
                     .where(eq(jobRuns.id, run.id));
                 } catch (entryError) {
-                  log.error("Failed to upload extracted entry", { entryName: entry.name, error: entryError });
+                  log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
                   await db.insert(transferLogs).values({
                     jobId,
                     jobRunId: run.id,
-                    fileName: entry.name,
+                    fileName: entryOutputName,
                     sourcePath: `${srcFilePath}!${entry.name}`,
                     destinationPath: entryDstPath,
                     fileSize: 0,
@@ -649,6 +721,13 @@ export async function runJob(jobId: number): Promise<void> {
             // Archive yielded no entries — upload as-is (fall through using buffered content)
             log.info("Archive yielded no entries — transferring as-is", { fileName: file.name });
 
+            // Apply PGP encryption if enabled
+            let uploadContent = content;
+            if (pgpEncryptPublicKey) {
+              uploadContent = await pgpEncryptBuffer(content, pgpEncryptPublicKey);
+            }
+            const uploadSize = uploadContent.length;
+
             if (job.overwriteExisting || job.deltaSync) {
               try {
                 await dest.deleteFile(dstFilePath);
@@ -658,17 +737,17 @@ export async function runJob(jobId: number): Promise<void> {
               }
             }
 
-            await dest.uploadFile(Readable.from(content), dstFilePath, actualSize);
-            await verifyDestinationFileSize(dest, dstFilePath, actualSize, dstConn.protocol);
-            log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+            await dest.uploadFile(Readable.from(uploadContent), dstFilePath, uploadSize);
+            await verifyDestinationFileSize(dest, dstFilePath, uploadSize, dstConn.protocol);
+            log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath });
 
             await db.insert(transferLogs).values({
               jobId,
               jobRunId: run.id,
-              fileName: file.name,
+              fileName: outputFileName,
               sourcePath: srcFilePath,
               destinationPath: dstFilePath,
-              fileSize: actualSize,
+              fileSize: uploadSize,
               transferredAt: new Date().toISOString(),
               status: "success",
             });
@@ -687,7 +766,7 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             filesTransferred++;
-            bytesTransferred += actualSize;
+            bytesTransferred += uploadSize;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
@@ -698,12 +777,19 @@ export async function runJob(jobId: number): Promise<void> {
           } else {
             // ── Streaming path: pipe directly from source to destination ─────────
             const fileSize = file.size;
-            log.info("Streaming file", { fileName: file.name, expectedSize: fileSize });
+            const hasPgpDecrypt = !!pgpDecryptPrivateKey;
+            const hasPgpEncrypt = !!pgpEncryptPublicKey;
+            log.info("Streaming file", { fileName: file.name, expectedSize: fileSize, pgpDecrypt: hasPgpDecrypt, pgpEncrypt: hasPgpEncrypt });
 
-            // Record the file size so the UI can show a per-file progress bar
+            // Record the file size so the UI can show a per-file progress bar.
+            // When PGP transforms are active, the actual bytes flowing will differ from
+            // the source file size — set currentFileSize to null for indeterminate progress.
             await db
               .update(jobRuns)
-              .set({ currentFileSize: fileSize, currentFileBytesTransferred: 0 })
+              .set({
+                currentFileSize: (hasPgpDecrypt || hasPgpEncrypt) ? null : fileSize,
+                currentFileBytesTransferred: 0,
+              })
               .where(eq(jobRuns.id, run.id));
 
             // Delete existing destination file BEFORE creating the download stream
@@ -718,10 +804,17 @@ export async function runJob(jobId: number): Promise<void> {
               }
             }
 
-            const srcStream = await source.downloadFile(srcFilePath, fileSize);
+            let srcStream: Readable = await source.downloadFile(srcFilePath, fileSize);
+
+            // Apply PGP decryption to the stream if configured
+            if (pgpDecryptPrivateKey) {
+              log.info("Applying PGP decryption to stream", { fileName: file.name });
+              srcStream = await pgpDecryptStream(srcStream, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+            }
 
             // Transform counts bytes inside _transform — stays paused until the
             // consumer (uploadFile) starts pulling, so no data is lost.
+            // Tracker is placed between decrypt and encrypt so it counts plaintext bytes.
             let currentBytes = 0;
             const tracker = new Transform({
               transform(chunk, _encoding, callback) {
@@ -734,6 +827,19 @@ export async function runJob(jobId: number): Promise<void> {
             srcStream.on("error", (err) => tracker.destroy(err));
             tracker.on("error", () => { if (!srcStream.destroyed) srcStream.destroy(); });
 
+            // Apply PGP encryption to the stream if configured
+            let uploadStream: Readable = tracker;
+            let uploadSizeHint: number | undefined = fileSize;
+            if (pgpEncryptPublicKey) {
+              log.info("Applying PGP encryption to stream", { fileName: file.name });
+              uploadStream = await pgpEncryptStream(tracker, pgpEncryptPublicKey);
+              uploadSizeHint = undefined; // Encrypted size unknown
+            }
+            if (hasPgpDecrypt && !hasPgpEncrypt) {
+              // Decrypted size is unknown too
+              uploadSizeHint = undefined;
+            }
+
             // Flush byte count to DB every 500 ms — throttled to avoid DB overload
             const progressInterval = setInterval(() => {
               db.update(jobRuns)
@@ -743,7 +849,7 @@ export async function runJob(jobId: number): Promise<void> {
             }, 500);
 
             try {
-              await dest.uploadFile(tracker, dstFilePath, fileSize);
+              await dest.uploadFile(uploadStream, dstFilePath, uploadSizeHint);
             } finally {
               clearInterval(progressInterval);
               // Write final byte count (interval may not have fired for the last chunk)
@@ -753,21 +859,25 @@ export async function runJob(jobId: number): Promise<void> {
                 .where(eq(jobRuns.id, run.id));
             }
 
-            if (currentBytes !== fileSize) {
-              throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
+            // When PGP transforms are active, skip the byte mismatch check since
+            // encryption/decryption changes the byte count. PGP itself provides
+            // integrity verification.
+            if (!hasPgpDecrypt && !hasPgpEncrypt) {
+              if (currentBytes !== fileSize) {
+                throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
+              }
+              await verifyDestinationFileSize(dest, dstFilePath, fileSize, dstConn.protocol);
             }
-
-            await verifyDestinationFileSize(dest, dstFilePath, fileSize, dstConn.protocol);
-            log.info("File uploaded", { fileName: file.name, dstPath: dstFilePath });
+            log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath, plaintextBytes: currentBytes });
 
             // Log success
             await db.insert(transferLogs).values({
               jobId,
               jobRunId: run.id,
-              fileName: file.name,
+              fileName: outputFileName,
               sourcePath: srcFilePath,
               destinationPath: dstFilePath,
-              fileSize,
+              fileSize: currentBytes,
               transferredAt: new Date().toISOString(),
               status: "success",
             });
@@ -787,7 +897,7 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             filesTransferred++;
-            bytesTransferred += fileSize;
+            bytesTransferred += currentBytes;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })

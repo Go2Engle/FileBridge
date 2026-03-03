@@ -111,13 +111,31 @@ sqlite.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
     action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'logout', 'settings_change')),
-    resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user')),
+    resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user', 'pgp_key')),
     resource_id INTEGER,
     resource_name TEXT,
     ip_address TEXT,
     details TEXT,
     timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  CREATE TABLE IF NOT EXISTS pgp_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    key_type TEXT NOT NULL CHECK(key_type IN ('public', 'keypair')),
+    algorithm TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    user_id_str TEXT,
+    key_created_at TEXT,
+    key_expires_at TEXT,
+    public_key TEXT NOT NULL,
+    private_key TEXT,
+    passphrase TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_pgp_keys_fingerprint ON pgp_keys(fingerprint);
 
   CREATE TABLE IF NOT EXISTS hooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,6 +203,10 @@ const migrations = [
   `ALTER TABLE job_runs ADD COLUMN current_file_bytes_transferred INTEGER`,
   `ALTER TABLE connections ADD COLUMN folder TEXT`,
   `ALTER TABLE jobs ADD COLUMN folder TEXT`,
+  `ALTER TABLE jobs ADD COLUMN pgp_encrypt INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE jobs ADD COLUMN pgp_encrypt_key_id INTEGER`,
+  `ALTER TABLE jobs ADD COLUMN pgp_decrypt INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE jobs ADD COLUMN pgp_decrypt_key_id INTEGER`,
 ];
 
 for (const sql of migrations) {
@@ -199,14 +221,14 @@ for (const sql of migrations) {
 const auditDef = sqlite
   .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='audit_logs'")
   .get() as { sql: string } | undefined;
-if (auditDef && !auditDef.sql.includes("'user'")) {
+if (auditDef && !auditDef.sql.includes("'pgp_key'")) {
   sqlite.pragma("foreign_keys = OFF");
   sqlite.exec(`
     CREATE TABLE audit_logs_new (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
       action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete', 'execute', 'login', 'logout', 'settings_change')),
-      resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user')),
+      resource TEXT NOT NULL CHECK(resource IN ('connection', 'job', 'settings', 'job_run', 'auth', 'user', 'pgp_key')),
       resource_id INTEGER,
       resource_name TEXT,
       ip_address TEXT,

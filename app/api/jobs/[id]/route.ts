@@ -49,6 +49,10 @@ export async function PUT(
       deltaSync,
       status,
       folder,
+      pgpEncrypt,
+      pgpEncryptKeyId,
+      pgpDecrypt,
+      pgpDecryptKeyId,
     } = body;
 
     // Snapshot current state before update for diffing
@@ -71,6 +75,10 @@ export async function PUT(
         extractArchives: extractArchives ?? false,
         deltaSync: deltaSync ?? false,
         folder: folder || null,
+        pgpEncrypt: pgpEncrypt ?? false,
+        pgpEncryptKeyId: pgpEncryptKeyId ?? null,
+        pgpDecrypt: pgpDecrypt ?? false,
+        pgpDecryptKeyId: pgpDecryptKeyId ?? null,
         status,
         updatedAt: new Date().toISOString(),
       })

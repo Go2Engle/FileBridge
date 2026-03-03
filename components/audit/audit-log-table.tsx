@@ -56,6 +56,7 @@ const RESOURCE_LABELS: Record<AuditLog["resource"], string> = {
   job_run: "Job Run",
   auth: "Auth",
   user: "User",
+  pgp_key: "PGP Key",
 };
 
 export function AuditLogTable() {

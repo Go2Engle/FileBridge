@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { FolderSearch, Terminal, Webhook } from "lucide-react";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 import type { Connection, Job, Hook } from "@/lib/db/schema";
+import type { PgpKeyPublic } from "@/components/pgp-keys/pgp-key-list";
 
 const jobSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -42,6 +43,10 @@ const jobSchema = z.object({
   skipHiddenFiles: z.boolean().default(true),
   extractArchives: z.boolean().default(false),
   deltaSync: z.boolean().default(false),
+  pgpEncrypt: z.boolean().default(false),
+  pgpEncryptKeyId: z.coerce.number().optional(),
+  pgpDecrypt: z.boolean().default(false),
+  pgpDecryptKeyId: z.coerce.number().optional(),
 });
 
 type FormValues = z.infer<typeof jobSchema>;
@@ -142,6 +147,11 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
     queryFn: () => axios.get("/api/hooks").then((r) => r.data),
   });
 
+  const { data: pgpKeys } = useQuery<PgpKeyPublic[]>({
+    queryKey: ["pgp-keys"],
+    queryFn: () => axios.get("/api/pgp-keys").then((r) => r.data),
+  });
+
   const [preHookIds, setPreHookIds] = useState<number[]>([]);
   const [postHookIds, setPostHookIds] = useState<number[]>([]);
 
@@ -162,6 +172,10 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
       skipHiddenFiles: true,
       extractArchives: false,
       deltaSync: false,
+      pgpEncrypt: false,
+      pgpEncryptKeyId: undefined,
+      pgpDecrypt: false,
+      pgpDecryptKeyId: undefined,
     },
   });
 
@@ -183,6 +197,10 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         skipHiddenFiles: editJob.skipHiddenFiles ?? true,
         extractArchives: editJob.extractArchives ?? false,
         deltaSync: editJob.deltaSync ?? false,
+        pgpEncrypt: editJob.pgpEncrypt ?? false,
+        pgpEncryptKeyId: editJob.pgpEncryptKeyId ?? undefined,
+        pgpDecrypt: editJob.pgpDecrypt ?? false,
+        pgpDecryptKeyId: editJob.pgpDecryptKeyId ?? undefined,
       });
       // Load existing hook associations
       axios.get(`/api/jobs/${editJob.id}/hooks`).then((r) => {
@@ -206,6 +224,10 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         skipHiddenFiles: true,
         extractArchives: false,
         deltaSync: false,
+        pgpEncrypt: false,
+        pgpEncryptKeyId: undefined,
+        pgpDecrypt: false,
+        pgpDecryptKeyId: undefined,
       });
       setPreHookIds([]);
       setPostHookIds([]);
@@ -217,6 +239,8 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
   const destinationConnectionId = form.watch("destinationConnectionId");
   const extractArchives = form.watch("extractArchives");
   const deltaSync = form.watch("deltaSync");
+  const pgpEncrypt = form.watch("pgpEncrypt");
+  const pgpDecrypt = form.watch("pgpDecrypt");
 
   const getConnectionName = (id: number) =>
     connections?.find((c) => c.id === id)?.name ?? "Connection";
@@ -626,6 +650,120 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                     Delta sync does not apply to archive files. When both options are enabled,
                     archives are always downloaded and extracted on every run.
                   </p>
+                )}
+
+                {/* PGP Encryption */}
+                {pgpKeys && pgpKeys.length > 0 && (
+                  <>
+                    <Separator />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">PGP Encryption</p>
+
+                    <FormField
+                      control={form.control}
+                      name="pgpEncrypt"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel>Encrypt files before upload</FormLabel>
+                            <FormDescription>
+                              Encrypt each file with PGP before placing it at the destination.
+                              Files will have a .pgp extension appended.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    {pgpEncrypt && (
+                      <FormField
+                        control={form.control}
+                        name="pgpEncryptKeyId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Encryption Key (Public)</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value ? String(field.value) : ""}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a key for encryption" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {pgpKeys.map((k) => (
+                                  <SelectItem key={k.id} value={String(k.id)}>
+                                    {k.name} ({k.algorithm} - {k.fingerprint.slice(-8)})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Any key can be used for encryption (only the public key is needed).
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    <FormField
+                      control={form.control}
+                      name="pgpDecrypt"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel>Decrypt PGP files after download</FormLabel>
+                            <FormDescription>
+                              Decrypt .pgp/.gpg/.asc files from the source before uploading to
+                              the destination. Requires a private key.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    {pgpDecrypt && (
+                      <FormField
+                        control={form.control}
+                        name="pgpDecryptKeyId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Decryption Key (Private)</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value ? String(field.value) : ""}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a key for decryption" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {pgpKeys
+                                  .filter((k) => k.keyType === "keypair")
+                                  .map((k) => (
+                                    <SelectItem key={k.id} value={String(k.id)}>
+                                      {k.name} ({k.algorithm} - {k.fingerprint.slice(-8)})
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Only keys with a private key can be used for decryption.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </>
                 )}
 
                 {/* Hooks */}
