@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: # Allow manually triggering from the Actions UI
 
 permissions:
   contents: write
