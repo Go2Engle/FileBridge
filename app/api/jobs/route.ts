@@ -59,6 +59,10 @@ export async function POST(req: NextRequest) {
       extractArchives,
       deltaSync,
       folder,
+      pgpEncrypt,
+      pgpEncryptKeyId,
+      pgpDecrypt,
+      pgpDecryptKeyId,
     } = body;
 
     const [row] = await db
@@ -78,6 +82,10 @@ export async function POST(req: NextRequest) {
         extractArchives: extractArchives ?? false,
         deltaSync: deltaSync ?? false,
         folder: folder || null,
+        pgpEncrypt: pgpEncrypt ?? false,
+        pgpEncryptKeyId: pgpEncryptKeyId ?? null,
+        pgpDecrypt: pgpDecrypt ?? false,
+        pgpDecryptKeyId: pgpDecryptKeyId ?? null,
         status: "inactive",
       })
       .returning();

@@ -49,6 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/go2engle/filebridge/main/install.sh
 | [Authentication](Authentication) | Azure AD SSO setup, access control, dev bypass |
 | [Connections](Connections) | SFTP, SMB/CIFS, and Azure Blob Storage setup |
 | [Jobs](Jobs) | Creating and managing transfer jobs |
+| [PGP Encryption](PGP-Keys) | PGP key management, file encryption, and decryption |
 | [Hooks](Hooks) | Pre/post-job webhooks, email alerts, and shell commands |
 | [Hook Library](Hook-Library) | Browse, import, and manage hook templates |
 | [Hook Template Authoring](Hook-Template-Authoring) | Write and submit community hook templates |
@@ -74,6 +75,7 @@ FileBridge lets you define **transfer jobs** that move files between storage sys
 - **File filtering** via glob patterns (`*.csv`, `report_*.xlsx`) narrows what gets transferred
 - **Post-transfer actions** let you retain, delete, or move source files after a successful transfer
 - **Archive extraction** automatically unpacks ZIP, TAR, TAR.GZ, and TGZ files at the destination
+- **PGP encryption/decryption** secures files in transit with per-job key configuration
 - **Delta sync** skips files that are already up to date at the destination
 - **Every file touched** is logged to an audit trail; every job execution is recorded
 

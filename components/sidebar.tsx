@@ -13,6 +13,7 @@ import {
   Users,
   KeyRound,
   Webhook,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/connections", label: "Connections", icon: Network },
   { href: "/jobs", label: "Jobs", icon: Calendar },
   { href: "/hooks", label: "Hooks", icon: Webhook },
+  { href: "/pgp-keys", label: "PGP Keys", icon: Lock },
   { href: "/logs", label: "Logs", icon: FileText },
   { href: "/audit-logs", label: "Audit Log", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
