@@ -234,6 +234,12 @@ export interface DryRunFile {
   isArchive: boolean;
   /** True when extractArchives is enabled and isArchive is true — contents will be extracted rather than the archive transferred as-is. */
   wouldExtract: boolean;
+  /**
+   * True when wouldExtract is true and archiveEntryFilter is non-empty.
+   * In this case the reported size is the compressed archive size, not the sum of
+   * matching entry sizes — counts and bytes in the dry-run summary are approximate.
+   */
+  entryFilterApplied: boolean;
   /** True when PGP decryption will be applied to this file. */
   wouldDecrypt: boolean;
   /** True when PGP encryption will be applied before upload. */
@@ -248,11 +254,17 @@ export interface DryRunResult {
   sourcePath: string;
   destinationPath: string;
   fileFilter: string;
+  archiveEntryFilter: string;
   files: DryRunFile[];
   /** All files visible in the source directory (after hidden/move-folder exclusions). */
   totalInSource: number;
   /** Files that match the job's file filter. */
   totalMatched: number;
+  /**
+   * Number of files (or archives) that would be transferred.
+   * When archiveEntryFilter is set this counts each archive as 1 regardless of
+   * how many entries it contains — the real number of uploaded files may be lower.
+   */
   wouldTransfer: number;
   wouldSkip: number;
   /** Files excluded because they don't match the file filter. */
@@ -261,6 +273,11 @@ export interface DryRunResult {
   skippedByExists: number;
   /** Files excluded because the destination copy is the same age or newer (delta sync enabled). */
   skippedByDelta: number;
+  /**
+   * Sum of source-file sizes for files that would be transferred.
+   * For archives with entryFilterApplied this is the compressed archive size, not
+   * the sum of matching entry sizes — treat as an upper bound.
+   */
   totalBytes: number;
 }
 
@@ -362,6 +379,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
         moveDest,
         isArchive: fileIsArchive,
         wouldExtract: !wouldSkip && job.extractArchives && fileIsArchive,
+        entryFilterApplied: !wouldSkip && job.extractArchives && fileIsArchive && !!(job.archiveEntryFilter ?? ""),
         wouldDecrypt: !wouldSkip && wouldDecrypt,
         wouldEncrypt: !wouldSkip && wouldEncrypt,
         outputFileName: outName,
@@ -383,6 +401,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       sourcePath: job.sourcePath,
       destinationPath: job.destinationPath,
       fileFilter: job.fileFilter,
+      archiveEntryFilter: job.archiveEntryFilter ?? "",
       files: dryRunFiles,
       totalInSource: allFiles.length,
       totalMatched: matchingNames.size,
@@ -637,7 +656,16 @@ export async function runJob(jobId: number): Promise<void> {
             if (extracted && extracted.length > 0) {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
+              const entryFilterRegex = globToRegex(job.archiveEntryFilter ?? "");
+              let entriesFilteredOut = false;
               for (const entry of extracted) {
+                if (!entryFilterRegex.test(entry.name)) {
+                  log.info("Skipping extracted entry — filtered by archiveEntryFilter", { entryName: entry.name });
+                  entriesFilteredOut = true;
+                  filesSkipped++;
+                  continue;
+                }
+
                 // Apply PGP encryption to each extracted entry if enabled
                 let entryContent = entry.content;
                 let entryOutputName = entry.name;
@@ -701,18 +729,27 @@ export async function runJob(jobId: number): Promise<void> {
                 }
               }
 
-              // Post-transfer action applies to the original archive
-              try {
-                if (job.postTransferAction === "delete") {
-                  log.info("Deleting source archive", { srcPath: srcFilePath });
-                  await deleteSourceAndConfirm(source, srcFilePath);
-                } else if (job.postTransferAction === "move" && job.movePath) {
-                  const moveDest = path.posix.join(job.movePath, file.name);
-                  log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
-                  await source.moveFile(srcFilePath, moveDest);
+              // Post-transfer action applies to the original archive.
+              // If any entries were excluded by the archive entry filter the archive
+              // is intentionally retained so those unextracted files are not lost.
+              if (entriesFilteredOut && job.postTransferAction !== "retain") {
+                log.info("Skipping post-transfer action — archive has filtered-out entries", {
+                  archiveName: file.name,
+                  postTransferAction: job.postTransferAction,
+                });
+              } else {
+                try {
+                  if (job.postTransferAction === "delete") {
+                    log.info("Deleting source archive", { srcPath: srcFilePath });
+                    await deleteSourceAndConfirm(source, srcFilePath);
+                  } else if (job.postTransferAction === "move" && job.movePath) {
+                    const moveDest = path.posix.join(job.movePath, file.name);
+                    log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
+                    await source.moveFile(srcFilePath, moveDest);
+                  }
+                } catch (postErr) {
+                  log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
                 }
-              } catch (postErr) {
-                log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
               }
 
               fileHandled = true;
