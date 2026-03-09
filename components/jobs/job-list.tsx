@@ -63,6 +63,7 @@ function JobErrorInfo({ jobId }: { jobId: number }) {
 interface JobRowProps {
   job: Job;
   isAdmin: boolean;
+  id?: string;
   onSelect: (job: Job) => void;
   onEdit: (job: Job) => void;
   onSetDryRun: (job: Job) => void;
@@ -71,11 +72,14 @@ interface JobRowProps {
   onDelete: (id: number) => void;
 }
 
-function JobRow({ job, isAdmin, onSelect, onEdit, onSetDryRun, onToggle, onRun, onDelete }: JobRowProps) {
+function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onRun, onDelete }: JobRowProps) {
   return (
     <TableRow
+      id={id}
       className="cursor-pointer hover:bg-muted/50"
+      tabIndex={0}
       onClick={() => onSelect(job)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(job); } }}
     >
       <TableCell className="font-medium">{job.name}</TableCell>
       <TableCell className="font-mono text-sm">{job.schedule}</TableCell>
@@ -95,7 +99,7 @@ function JobRow({ job, isAdmin, onSelect, onEdit, onSetDryRun, onToggle, onRun, 
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
         {job.nextRunAt
-          ? formatDistanceToNow(new Date(job.nextRunAt), { addSuffix: true })
+          ? formatDistanceToNow(parseDBDate(job.nextRunAt), { addSuffix: true })
           : "—"}
       </TableCell>
       {isAdmin && (
@@ -408,6 +412,8 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                     <TableCell colSpan={isAdmin ? 7 : 6} className="py-0 px-0">
                       <button
                         onClick={() => toggleFolder(name)}
+                        aria-expanded={!isCollapsed}
+                        aria-controls={`folder-${name}`}
                         className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium"
                       >
                         {isCollapsed
@@ -419,9 +425,10 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                       </button>
                     </TableCell>
                   </TableRow>
-                  {!isCollapsed && items.map((job) => (
+                  {!isCollapsed && items.map((job, i) => (
                     <JobRow
                       key={job.id}
+                      id={i === 0 ? `folder-${name}` : undefined}
                       job={job}
                       isAdmin={isAdmin}
                       onSelect={onSelect}

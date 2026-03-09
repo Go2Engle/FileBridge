@@ -31,15 +31,16 @@ interface ConnectionRowProps {
   conn: ConnectionSummary;
   testingId: number | null;
   isAdmin: boolean;
+  id?: string;
   onEdit: (conn: ConnectionSummary) => void;
   onTest: (conn: ConnectionSummary) => void;
   onBrowse: (conn: ConnectionSummary) => void;
   onDelete: (id: number) => void;
 }
 
-function ConnectionRow({ conn, testingId, isAdmin, onEdit, onTest, onBrowse, onDelete }: ConnectionRowProps) {
+function ConnectionRow({ conn, testingId, isAdmin, id, onEdit, onTest, onBrowse, onDelete }: ConnectionRowProps) {
   return (
-    <TableRow>
+    <TableRow id={id}>
       <TableCell className="font-medium">{conn.name}</TableCell>
       <TableCell>
         <Badge variant="secondary" className="uppercase">
@@ -330,6 +331,8 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                     <TableCell colSpan={6} className="py-0 px-0">
                       <button
                         onClick={() => toggleFolder(name)}
+                        aria-expanded={!isCollapsed}
+                        aria-controls={`folder-${name}`}
                         className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium"
                       >
                         {isCollapsed
@@ -341,9 +344,10 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                       </button>
                     </TableCell>
                   </TableRow>
-                  {!isCollapsed && items.map((conn) => (
+                  {!isCollapsed && items.map((conn, i) => (
                     <ConnectionRow
                       key={conn.id}
+                      id={i === 0 ? `folder-${name}` : undefined}
                       conn={conn}
                       testingId={testingId}
                       isAdmin={isAdmin}
