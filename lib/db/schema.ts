@@ -45,6 +45,7 @@ export const jobs = sqliteTable("jobs", {
   extractArchives: integer("extract_archives", { mode: "boolean" })
     .notNull()
     .default(false),
+  archiveEntryFilter: text("archive_entry_filter").notNull().default(""),
   deltaSync: integer("delta_sync", { mode: "boolean" })
     .notNull()
     .default(false),
