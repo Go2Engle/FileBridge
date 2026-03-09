@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -26,6 +26,83 @@ import { FileBrowserDialog } from "@/components/ui/file-browser-dialog";
 
 type ProtocolFilter = "all" | "sftp" | "smb" | "azure-blob" | "local";
 type SortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc";
+
+interface ConnectionRowProps {
+  conn: ConnectionSummary;
+  testingId: number | null;
+  isAdmin: boolean;
+  id?: string;
+  onEdit: (conn: ConnectionSummary) => void;
+  onTest: (conn: ConnectionSummary) => void;
+  onBrowse: (conn: ConnectionSummary) => void;
+  onDelete: (id: number) => void;
+}
+
+function ConnectionRow({ conn, testingId, isAdmin, id, onEdit, onTest, onBrowse, onDelete }: ConnectionRowProps) {
+  return (
+    <TableRow id={id}>
+      <TableCell className="font-medium">{conn.name}</TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="uppercase">
+          {conn.protocol}
+        </Badge>
+      </TableCell>
+      <TableCell className="font-mono text-sm">{conn.host}</TableCell>
+      <TableCell>{conn.port}</TableCell>
+      <TableCell className="text-muted-foreground text-sm">
+        {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Test connection"
+            disabled={testingId === conn.id}
+            onClick={() => onTest(conn)}
+          >
+            {testingId === conn.id
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <PlugZap className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Browse file system"
+            onClick={() => onBrowse(conn)}
+          >
+            <FolderSearch className="h-4 w-4" />
+          </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Edit connection"
+                onClick={() => onEdit(conn)}
+              >
+                <PenLine className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Delete connection"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (confirm("Delete this connection?")) {
+                    onDelete(conn.id);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 interface ConnectionListProps {
   onEdit: (connection: ConnectionSummary) => void;
@@ -233,100 +310,58 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
           <p className="text-xs mt-1">Try adjusting your search or filter.</p>
         </div>
       ) : folderGroups ? (
-        <div className="space-y-2">
-          {folderGroups.map(({ name, items }) => {
-            const isCollapsed = collapsedFolders.has(name);
-            const label = name === "__ungrouped__" ? "Ungrouped" : name;
-            return (
-              <div key={name} className="rounded-lg border overflow-hidden">
-                <button
-                  onClick={() => toggleFolder(name)}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium bg-muted/30 hover:bg-muted/60 transition-colors"
-                >
-                  {isCollapsed
-                    ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 text-left">{label}</span>
-                  <Badge variant="secondary">{items.length}</Badge>
-                </button>
-                {!isCollapsed && (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Protocol</TableHead>
-                        <TableHead>Host</TableHead>
-                        <TableHead>Port</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead className="w-20" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((conn) => (
-                        <TableRow key={conn.id}>
-                          <TableCell className="font-medium">{conn.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="uppercase">
-                              {conn.protocol}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{conn.host}</TableCell>
-                          <TableCell>{conn.port}</TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Test connection"
-                                disabled={testingId === conn.id}
-                                onClick={() => testConnection(conn)}
-                              >
-                                {testingId === conn.id
-                                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                                  : <PlugZap className="h-4 w-4" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Browse file system"
-                                onClick={() => setBrowser({ conn })}
-                              >
-                                <FolderSearch className="h-4 w-4" />
-                              </Button>
-                              {isAdmin && (
-                                <>
-                                  <Button variant="ghost" size="icon" onClick={() => onEdit(conn)}>
-                                    <PenLine className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() => {
-                                      if (confirm("Delete this connection?")) {
-                                        deleteMutation.mutate(conn.id);
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Protocol</TableHead>
+              <TableHead>Host</TableHead>
+              <TableHead>Port</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-20" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {folderGroups.map(({ name, items }) => {
+              const isCollapsed = collapsedFolders.has(name);
+              const label = name === "__ungrouped__" ? "Ungrouped" : name;
+              return (
+                <Fragment key={name}>
+                  <TableRow className="bg-muted/30 hover:bg-muted/60">
+                    <TableCell colSpan={6} className="py-0 px-0">
+                      <button
+                        onClick={() => toggleFolder(name)}
+                        aria-expanded={!isCollapsed}
+                        aria-controls={`folder-${name}`}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium"
+                      >
+                        {isCollapsed
+                          ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 text-left">{label}</span>
+                        <Badge variant="secondary">{items.length}</Badge>
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                  {!isCollapsed && items.map((conn, i) => (
+                    <ConnectionRow
+                      key={conn.id}
+                      id={i === 0 ? `folder-${name}` : undefined}
+                      conn={conn}
+                      testingId={testingId}
+                      isAdmin={isAdmin}
+                      onEdit={onEdit}
+                      onTest={testConnection}
+                      onBrowse={(c) => setBrowser({ conn: c })}
+                      onDelete={(id) => deleteMutation.mutate(id)}
+                    />
+                  ))}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
       ) : (
         <Table>
           <TableHeader>
@@ -341,65 +376,16 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
           </TableHeader>
           <TableBody>
             {filtered.map((conn) => (
-              <TableRow key={conn.id}>
-                <TableCell className="font-medium">{conn.name}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="uppercase">
-                    {conn.protocol}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono text-sm">{conn.host}</TableCell>
-                <TableCell>{conn.port}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Test connection"
-                      disabled={testingId === conn.id}
-                      onClick={() => testConnection(conn)}
-                    >
-                      {testingId === conn.id
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <PlugZap className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Browse file system"
-                      onClick={() => setBrowser({ conn })}
-                    >
-                      <FolderSearch className="h-4 w-4" />
-                    </Button>
-                    {isAdmin && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onEdit(conn)}
-                        >
-                          <PenLine className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (confirm("Delete this connection?")) {
-                              deleteMutation.mutate(conn.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
+              <ConnectionRow
+                key={conn.id}
+                conn={conn}
+                testingId={testingId}
+                isAdmin={isAdmin}
+                onEdit={onEdit}
+                onTest={testConnection}
+                onBrowse={(c) => setBrowser({ conn: c })}
+                onDelete={(id) => deleteMutation.mutate(id)}
+              />
             ))}
           </TableBody>
         </Table>
