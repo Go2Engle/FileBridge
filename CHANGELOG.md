@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.3](https://github.com/Go2Engle/FileBridge/compare/v0.7.2...v0.7.3) (2026-03-09)
+
+
+### Features
+
+* archive entry filter ([#19](https://github.com/Go2Engle/FileBridge/issues/19)) ([95a18ee](https://github.com/Go2Engle/FileBridge/commit/95a18ee22e6298ebb23ee1bd262451430443cf0e))
+
+
+### Bug Fixes
+
+* improve folder group table alignment and structure ([#20](https://github.com/Go2Engle/FileBridge/issues/20)) ([9eac654](https://github.com/Go2Engle/FileBridge/commit/9eac654f782c6e6cab9756065e52b3b68ea4ed51))
+
 ## [0.7.2](https://github.com/Go2Engle/FileBridge/compare/v0.7.1...v0.7.2) (2026-03-09)
 
 
