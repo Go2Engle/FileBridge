@@ -93,9 +93,67 @@ negotiateMsg.onSuccess = function (connection: any, response: any) {
   }
 };
 
-// ── 3. Patch SESSION_SETUP step 2 to store session key after auth ───────────
+// ── 3. Patch SESSION_SETUP step 2 to include domain + store session key ──────
+//
+// v9u-smb2 calls ntlm.encodeType3() without the domain/target argument,
+// leaving DomainName empty in the NTLM AUTHENTICATE (Type 3) message. Domain-
+// joined Windows servers pass NTLM auth to the DC, which reads DomainName to
+// determine the account scope. An empty DomainName causes the DC to reject the
+// request with STATUS_USER_SESSION_DELETED for domain accounts.
+//
+// This patch also replaces session_setup_step2.generate so that connection.domain
+// (e.g. "newholland.goodville.com") is forwarded as the NTLM target. NAS / local
+// accounts configure domain as "" so their behaviour is unchanged.
 
+const SMB2MessageCls = require("v9u-smb2/lib/tools/smb2-message");
+const ntlmLib = require("ntlm2");
 const sessionSetup2Msg = require("v9u-smb2/lib/messages/session_setup_step2");
+
+// Intercept session_setup_step1.onSuccess to log what the server sends in
+// its NTLM Type 2 (CHALLENGE) message — useful for diagnosing auth failures.
+const sessionSetup1Msg = require("v9u-smb2/lib/messages/session_setup_step1");
+const origStep1OnSuccess = sessionSetup1Msg.onSuccess;
+sessionSetup1Msg.onSuccess = function (connection: any, response: any) {
+  origStep1OnSuccess(connection, response);
+  const nonce = connection.nonce;
+  if (nonce) {
+    log.info("NTLM Type2 (CHALLENGE) received", {
+      host: connection.ip,
+      version: nonce.version,
+      encoding: nonce.encoding,
+      targetName: nonce.targetName,
+      flags: nonce.flags != null ? `0x${(nonce.flags >>> 0).toString(16)}` : undefined,
+      hasTargetInfo: !!nonce.targetInfo,
+      targetInfoKeys: nonce.targetInfo?.parsed ? Object.keys(nonce.targetInfo.parsed) : [],
+    });
+  }
+};
+
+sessionSetup2Msg.generate = function (connection: any) {
+  const target = connection.domain || "";
+  log.info("NTLM Type3 (AUTHENTICATE) sending", {
+    host: connection.ip,
+    username: connection.username,
+    domain: target,
+    nonceVersion: connection.nonce?.version,
+  });
+  return new SMB2MessageCls({
+    headers: {
+      Command: "SESSION_SETUP",
+      SessionId: connection.SessionId,
+      ProcessId: connection.ProcessId,
+    },
+    request: {
+      Buffer: ntlmLib.encodeType3(
+        connection.nonce,
+        connection.username,
+        connection.password,
+        undefined, // workstation (empty, matching original behaviour)
+        target,    // domain – passed to DomainName field in AUTHENTICATE
+      ),
+    },
+  });
+};
 
 sessionSetup2Msg.onSuccess = function (connection: any) {
   const key = computeSessionKey();
