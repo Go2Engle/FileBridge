@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/Go2Engle/FileBridge/compare/v0.7.1...v0.7.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* enhance NTLM authentication by including domain in Type 3 message ([#17](https://github.com/Go2Engle/FileBridge/issues/17)) ([284a876](https://github.com/Go2Engle/FileBridge/commit/284a8768efc60125d85139a1277f98dd3125f295))
+
 ## [0.7.1](https://github.com/Go2Engle/FileBridge/compare/v0.7.0...v0.7.1) (2026-03-03)
 
 
