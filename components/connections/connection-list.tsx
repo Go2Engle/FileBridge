@@ -27,6 +27,82 @@ import { FileBrowserDialog } from "@/components/ui/file-browser-dialog";
 type ProtocolFilter = "all" | "sftp" | "smb" | "azure-blob" | "local";
 type SortOption = "name-asc" | "name-desc" | "created-desc" | "created-asc";
 
+interface ConnectionRowProps {
+  conn: ConnectionSummary;
+  testingId: number | null;
+  isAdmin: boolean;
+  onEdit: (conn: ConnectionSummary) => void;
+  onTest: (conn: ConnectionSummary) => void;
+  onBrowse: (conn: ConnectionSummary) => void;
+  onDelete: (id: number) => void;
+}
+
+function ConnectionRow({ conn, testingId, isAdmin, onEdit, onTest, onBrowse, onDelete }: ConnectionRowProps) {
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{conn.name}</TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="uppercase">
+          {conn.protocol}
+        </Badge>
+      </TableCell>
+      <TableCell className="font-mono text-sm">{conn.host}</TableCell>
+      <TableCell>{conn.port}</TableCell>
+      <TableCell className="text-muted-foreground text-sm">
+        {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Test connection"
+            disabled={testingId === conn.id}
+            onClick={() => onTest(conn)}
+          >
+            {testingId === conn.id
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <PlugZap className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Browse file system"
+            onClick={() => onBrowse(conn)}
+          >
+            <FolderSearch className="h-4 w-4" />
+          </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Edit connection"
+                onClick={() => onEdit(conn)}
+              >
+                <PenLine className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Delete connection"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (confirm("Delete this connection?")) {
+                    onDelete(conn.id);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 interface ConnectionListProps {
   onEdit: (connection: ConnectionSummary) => void;
   onNew: () => void;
@@ -266,61 +342,16 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
                     </TableCell>
                   </TableRow>
                   {!isCollapsed && items.map((conn) => (
-                    <TableRow key={conn.id}>
-                      <TableCell className="font-medium">{conn.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="uppercase">
-                          {conn.protocol}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{conn.host}</TableCell>
-                      <TableCell>{conn.port}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Test connection"
-                            disabled={testingId === conn.id}
-                            onClick={() => testConnection(conn)}
-                          >
-                            {testingId === conn.id
-                              ? <Loader2 className="h-4 w-4 animate-spin" />
-                              : <PlugZap className="h-4 w-4" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Browse file system"
-                            onClick={() => setBrowser({ conn })}
-                          >
-                            <FolderSearch className="h-4 w-4" />
-                          </Button>
-                          {isAdmin && (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => onEdit(conn)}>
-                                <PenLine className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  if (confirm("Delete this connection?")) {
-                                    deleteMutation.mutate(conn.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <ConnectionRow
+                      key={conn.id}
+                      conn={conn}
+                      testingId={testingId}
+                      isAdmin={isAdmin}
+                      onEdit={onEdit}
+                      onTest={testConnection}
+                      onBrowse={(c) => setBrowser({ conn: c })}
+                      onDelete={(id) => deleteMutation.mutate(id)}
+                    />
                   ))}
                 </Fragment>
               );
@@ -341,65 +372,16 @@ export function ConnectionList({ onEdit, onNew }: ConnectionListProps) {
           </TableHeader>
           <TableBody>
             {filtered.map((conn) => (
-              <TableRow key={conn.id}>
-                <TableCell className="font-medium">{conn.name}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="uppercase">
-                    {conn.protocol}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono text-sm">{conn.host}</TableCell>
-                <TableCell>{conn.port}</TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {formatDistanceToNow(parseDBDate(conn.createdAt), { addSuffix: true })}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Test connection"
-                      disabled={testingId === conn.id}
-                      onClick={() => testConnection(conn)}
-                    >
-                      {testingId === conn.id
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <PlugZap className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Browse file system"
-                      onClick={() => setBrowser({ conn })}
-                    >
-                      <FolderSearch className="h-4 w-4" />
-                    </Button>
-                    {isAdmin && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onEdit(conn)}
-                        >
-                          <PenLine className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            if (confirm("Delete this connection?")) {
-                              deleteMutation.mutate(conn.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
+              <ConnectionRow
+                key={conn.id}
+                conn={conn}
+                testingId={testingId}
+                isAdmin={isAdmin}
+                onEdit={onEdit}
+                onTest={testConnection}
+                onBrowse={(c) => setBrowser({ conn: c })}
+                onDelete={(id) => deleteMutation.mutate(id)}
+              />
             ))}
           </TableBody>
         </Table>
