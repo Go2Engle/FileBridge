@@ -248,6 +248,7 @@ export interface DryRunResult {
   sourcePath: string;
   destinationPath: string;
   fileFilter: string;
+  archiveEntryFilter: string;
   files: DryRunFile[];
   /** All files visible in the source directory (after hidden/move-folder exclusions). */
   totalInSource: number;
@@ -383,6 +384,7 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       sourcePath: job.sourcePath,
       destinationPath: job.destinationPath,
       fileFilter: job.fileFilter,
+      archiveEntryFilter: job.archiveEntryFilter ?? "",
       files: dryRunFiles,
       totalInSource: allFiles.length,
       totalMatched: matchingNames.size,
@@ -637,7 +639,14 @@ export async function runJob(jobId: number): Promise<void> {
             if (extracted && extracted.length > 0) {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
-              for (const entry of extracted) {
+              const entryFilterRegex = globToRegex(job.archiveEntryFilter ?? "");
+            for (const entry of extracted) {
+                if (!entryFilterRegex.test(entry.name)) {
+                  log.info("Skipping extracted entry — filtered by archiveEntryFilter", { entryName: entry.name });
+                  filesSkipped++;
+                  continue;
+                }
+
                 // Apply PGP encryption to each extracted entry if enabled
                 let entryContent = entry.content;
                 let entryOutputName = entry.name;

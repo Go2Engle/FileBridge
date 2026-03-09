@@ -42,6 +42,7 @@ const jobSchema = z.object({
   overwriteExisting: z.boolean().default(false),
   skipHiddenFiles: z.boolean().default(true),
   extractArchives: z.boolean().default(false),
+  archiveEntryFilter: z.string().default(""),
   deltaSync: z.boolean().default(false),
   pgpEncrypt: z.boolean().default(false),
   pgpEncryptKeyId: z.coerce.number().optional(),
@@ -171,6 +172,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
       overwriteExisting: false,
       skipHiddenFiles: true,
       extractArchives: false,
+      archiveEntryFilter: "",
       deltaSync: false,
       pgpEncrypt: false,
       pgpEncryptKeyId: undefined,
@@ -196,6 +198,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         overwriteExisting: editJob.overwriteExisting ?? false,
         skipHiddenFiles: editJob.skipHiddenFiles ?? true,
         extractArchives: editJob.extractArchives ?? false,
+        archiveEntryFilter: editJob.archiveEntryFilter ?? "",
         deltaSync: editJob.deltaSync ?? false,
         pgpEncrypt: editJob.pgpEncrypt ?? false,
         pgpEncryptKeyId: editJob.pgpEncryptKeyId ?? undefined,
@@ -223,6 +226,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         overwriteExisting: false,
         skipHiddenFiles: true,
         extractArchives: false,
+        archiveEntryFilter: "",
         deltaSync: false,
         pgpEncrypt: false,
         pgpEncryptKeyId: undefined,
@@ -625,6 +629,25 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                     </FormItem>
                   )}
                 />
+
+                {extractArchives && (
+                  <FormField
+                    control={form.control}
+                    name="archiveEntryFilter"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Archive entry filter</FormLabel>
+                        <FormControl>
+                          <Input placeholder="*.pdf" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Glob pattern to filter which files are extracted from archives (e.g. <code>*.pdf</code>). Leave empty to extract all files.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
