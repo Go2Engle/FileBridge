@@ -658,6 +658,16 @@ export async function runJob(jobId: number): Promise<void> {
 
               const entryFilterRegex = globToRegex(job.archiveEntryFilter ?? "");
               let entriesFilteredOut = false;
+
+              // ── Phase 1: Prepare entries (filter, encrypt, skip) ───────────────
+              interface PreparedEntry {
+                entry: ExtractedFile;
+                content: Buffer;
+                outputName: string;
+                dstPath: string;
+              }
+              const toUpload: PreparedEntry[] = [];
+
               for (const entry of extracted) {
                 if (!entryFilterRegex.test(entry.name)) {
                   log.info("Skipping extracted entry — filtered by archiveEntryFilter", { entryName: entry.name });
@@ -666,7 +676,6 @@ export async function runJob(jobId: number): Promise<void> {
                   continue;
                 }
 
-                // Apply PGP encryption to each extracted entry if enabled
                 let entryContent = entry.content;
                 let entryOutputName = entry.name;
                 if (pgpEncryptPublicKey) {
@@ -675,58 +684,106 @@ export async function runJob(jobId: number): Promise<void> {
                 }
                 const entryDstPath = path.posix.join(job.destinationPath, entryOutputName);
 
-                // Skip existing files at destination (when overwrite is off)
                 if (existingDestFiles?.has(entryOutputName)) {
                   log.info("Skipping extracted entry — already exists", { entryName: entryOutputName });
                   filesSkipped++;
                   continue;
                 }
 
-                try {
-                  // If overwrite is enabled, delete existing destination file first
-                  if (job.overwriteExisting) {
+                toUpload.push({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath });
+              }
+
+              // ── Phase 2: Upload entries concurrently ──────────────────────────
+              const ENTRY_UPLOAD_CONCURRENCY = 4;
+              const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
+
+              for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
+                const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
+                const batchResults = await Promise.all(
+                  batch.map(async ({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath }) => {
                     try {
-                      await dest.deleteFile(entryDstPath);
-                    } catch {
-                      // File doesn't exist yet — that's fine
+                      if (job.overwriteExisting) {
+                        try { await dest.deleteFile(entryDstPath); } catch { /* doesn't exist */ }
+                      }
+                      await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
+                      log.info("Extracted entry uploaded", { entryName: entryOutputName, dstPath: entryDstPath });
+                      return { outputName: entryOutputName, bytes: entryContent.length, srcEntry: entry.name, dstPath: entryDstPath };
+                    } catch (entryError) {
+                      log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
+                      return { outputName: entryOutputName, bytes: 0, srcEntry: entry.name, dstPath: entryDstPath, error: entryError instanceof Error ? entryError : new Error(String(entryError)) };
                     }
+                  })
+                );
+                uploadResults.push(...batchResults);
+              }
+
+              // ── Phase 3: Batch-verify uploaded files ──────────────────────────
+              const successResults = uploadResults.filter((r) => !r.error);
+              if (successResults.length > 0) {
+                const expectedSizes = new Map(successResults.map((r) => [r.outputName, r.bytes]));
+                const parentPath = job.destinationPath;
+                const isSmbDest = dstConn.protocol === "smb";
+                const maxVerifyAttempts = isSmbDest ? 10 : 5;
+                const verifyPollMs = isSmbDest ? 1000 : 500;
+
+                for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
+                  try {
+                    const destListing = await dest.listFiles(parentPath);
+                    const destMap = new Map(destListing.map((f) => [f.name, f.size]));
+                    let allVerified = true;
+                    for (const [name, expectedSize] of expectedSizes) {
+                      const actualSize = destMap.get(name);
+                      if (actualSize !== expectedSize) {
+                        allVerified = false;
+                        if (attempt === maxVerifyAttempts) {
+                          log.warn("Batch verification: size mismatch", { name, expectedSize, actualSize, attempt });
+                        }
+                      }
+                    }
+                    if (allVerified) break;
+                  } catch (err) {
+                    log.warn("Batch verification list failed — retrying", { parentPath, attempt, error: err });
                   }
+                  if (attempt < maxVerifyAttempts) {
+                    await new Promise((r) => setTimeout(r, verifyPollMs));
+                  }
+                }
+              }
 
-                  await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
-                  await verifyDestinationFileSize(dest, entryDstPath, entryContent.length, dstConn.protocol);
-                  log.info("Extracted entry uploaded", { entryName: entryOutputName, dstPath: entryDstPath });
-
+              // ── Phase 4: Log results and update counters ──────────────────────
+              for (const result of uploadResults) {
+                if (!result.error) {
                   await db.insert(transferLogs).values({
                     jobId,
                     jobRunId: run.id,
-                    fileName: entryOutputName,
-                    sourcePath: `${srcFilePath}!${entry.name}`,
-                    destinationPath: entryDstPath,
-                    fileSize: entryContent.length,
+                    fileName: result.outputName,
+                    sourcePath: `${srcFilePath}!${result.srcEntry}`,
+                    destinationPath: result.dstPath,
+                    fileSize: result.bytes,
                     transferredAt: new Date().toISOString(),
                     status: "success",
                   });
-
                   filesTransferred++;
-                  bytesTransferred += entryContent.length;
-                  await db
-                    .update(jobRuns)
-                    .set({ filesTransferred, bytesTransferred })
-                    .where(eq(jobRuns.id, run.id));
-                } catch (entryError) {
-                  log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
+                  bytesTransferred += result.bytes;
+                } else {
                   await db.insert(transferLogs).values({
                     jobId,
                     jobRunId: run.id,
-                    fileName: entryOutputName,
-                    sourcePath: `${srcFilePath}!${entry.name}`,
-                    destinationPath: entryDstPath,
+                    fileName: result.outputName,
+                    sourcePath: `${srcFilePath}!${result.srcEntry}`,
+                    destinationPath: result.dstPath,
                     fileSize: 0,
                     transferredAt: new Date().toISOString(),
                     status: "failure",
-                    errorMessage: entryError instanceof Error ? entryError.message : "Unknown error",
+                    errorMessage: result.error.message,
                   });
                 }
+              }
+              if (successResults.length > 0) {
+                await db
+                  .update(jobRuns)
+                  .set({ filesTransferred, bytesTransferred })
+                  .where(eq(jobRuns.id, run.id));
               }
 
               // Post-transfer action applies to the original archive.

@@ -7,6 +7,13 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("sftp");
 
+// ── SFTP performance tuning ──────────────────────────────────────────────────
+// These values match what modern SFTP clients (WinSCP, FileZilla) use for
+// large-file transfers. The defaults in ssh2-sftp-client are conservatively
+// low (~32 KB chunks, ~few concurrent requests) which causes poor throughput.
+const SFTP_CHUNK_SIZE = 256 * 1024;        // 256 KB per SFTP read/write request
+const SFTP_CONCURRENT_REQUESTS = 16;       // pipelined in-flight requests
+
 export interface SftpCredentials {
   username: string;
   password?: string;
@@ -99,8 +106,15 @@ export class SftpProvider implements StorageProvider {
   }
 
   async downloadFile(remotePath: string): Promise<Readable> {
+    log.info("Downloading file (stream)", { remotePath, chunkSize: SFTP_CHUNK_SIZE, concurrentRequests: SFTP_CONCURRENT_REQUESTS });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (this.client as any).createReadStream(remotePath) as Readable;
+    return (this.client as any).createReadStream(remotePath, {
+      chunkSize: SFTP_CHUNK_SIZE,
+      concurrentRequests: SFTP_CONCURRENT_REQUESTS,
+      readStreamOptions: {
+        highWaterMark: SFTP_CHUNK_SIZE,
+      },
+    }) as Readable;
   }
 
   async uploadFile(stream: Readable, remotePath: string, _sizeHint?: number): Promise<void> {
@@ -108,7 +122,13 @@ export class SftpProvider implements StorageProvider {
     const dir = path.posix.dirname(remotePath);
     await this.client.mkdir(dir, true).catch(() => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (this.client as any).put(stream, remotePath);
+    await (this.client as any).put(stream, remotePath, {
+      chunkSize: SFTP_CHUNK_SIZE,
+      concurrentRequests: SFTP_CONCURRENT_REQUESTS,
+      writeStreamOptions: {
+        highWaterMark: SFTP_CHUNK_SIZE,
+      },
+    });
   }
 
   async deleteFile(remotePath: string): Promise<void> {

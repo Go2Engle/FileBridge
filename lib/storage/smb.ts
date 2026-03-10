@@ -31,6 +31,7 @@ export interface SmbCredentials {
  */
 export class SmbProvider implements StorageProvider {
   private static readonly BUFFERED_UPLOAD_MAX_BYTES = 256 * 1024 * 1024; // 256 MB
+  private static readonly STREAMING_WRITE_CHUNK = 1024 * 1024; // 1 MB coalesced write chunks
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   private credentials: SmbCredentials;
@@ -165,10 +166,13 @@ export class SmbProvider implements StorageProvider {
         });
       }
 
-      // 3. Write stream chunks at sequential offsets
+      // 3. Write stream chunks at sequential offsets, coalesced to ~1 MB
+      //    to reduce SMB2 round trips (default stream chunks are ~64 KB).
+      const targetChunk = SmbProvider.STREAMING_WRITE_CHUNK;
       let offset = 0;
-      for await (const chunk of stream) {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      let pending = Buffer.alloc(0);
+
+      const flushChunk = async (buf: Buffer) => {
         await new Promise<void>((resolve, reject) => {
           SMB2Request(
             "write",
@@ -183,6 +187,19 @@ export class SmbProvider implements StorageProvider {
           );
         });
         offset += buf.length;
+      };
+
+      for await (const chunk of stream) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        pending = pending.length === 0 ? buf : Buffer.concat([pending, buf]);
+        while (pending.length >= targetChunk) {
+          await flushChunk(pending.subarray(0, targetChunk));
+          pending = pending.subarray(targetChunk);
+        }
+      }
+      // Flush remaining data
+      if (pending.length > 0) {
+        await flushChunk(pending);
       }
 
       // 4. Verify total bytes written
