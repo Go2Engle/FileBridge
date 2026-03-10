@@ -13,8 +13,6 @@ const log = createLogger("sftp");
 // low (~32 KB chunks, ~few concurrent requests) which causes poor throughput.
 const SFTP_CHUNK_SIZE = 256 * 1024;        // 256 KB per SFTP read/write request
 const SFTP_CONCURRENT_REQUESTS = 16;       // pipelined in-flight requests
-const SSH_WINDOW_SIZE = 16 * 1024 * 1024;  // 16 MB SSH transport window
-const SSH_PACKET_SIZE = 256 * 1024;        // 256 KB max SSH packet size
 
 export interface SftpCredentials {
   username: string;
@@ -53,10 +51,6 @@ export class SftpProvider implements StorageProvider {
         privateKey: this.credentials.privateKey,
         passphrase: this.credentials.passphrase,
         readyTimeout: 20000,
-        // ── SSH transport tuning for large-file throughput ──────────────────
-        // These match settings used by high-performance SFTP clients.
-        // readableHighWaterMark: buffer size for the SSH socket stream
-        readableHighWaterMark: SSH_WINDOW_SIZE,
       });
       log.info("Connected", { host: this.host, port: this.port });
     } catch (err) {
