@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Go2Engle/FileBridge/compare/v0.7.3...v0.8.0) (2026-03-10)
+
+
+### Features
+
+* **sftp:** tune chunk size, concurrency, and SSH window for large-file throughput ([#22](https://github.com/Go2Engle/FileBridge/issues/22)) ([eb80c27](https://github.com/Go2Engle/FileBridge/commit/eb80c279aed7d75fda8dc0bc1a61c4e589115492))
+
 ## [0.7.3](https://github.com/Go2Engle/FileBridge/compare/v0.7.2...v0.7.3) (2026-03-09)
 
 
