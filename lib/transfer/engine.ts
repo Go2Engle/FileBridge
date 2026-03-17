@@ -719,12 +719,15 @@ export async function runJob(jobId: number): Promise<void> {
 
               // ── Phase 3: Batch-verify uploaded files ──────────────────────────
               const successResults = uploadResults.filter((r) => !r.error);
+              const failedResults = uploadResults.filter((r) => r.error);
+              let allEntriesVerified = failedResults.length === 0; // start false if any upload failed
               if (successResults.length > 0) {
                 const expectedSizes = new Map(successResults.map((r) => [r.outputName, r.bytes]));
                 const parentPath = job.destinationPath;
                 const isSmbDest = dstConn.protocol === "smb";
                 const maxVerifyAttempts = isSmbDest ? 10 : 5;
                 const verifyPollMs = isSmbDest ? 1000 : 500;
+                let sizeVerificationPassed = false;
 
                 for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
                   try {
@@ -740,7 +743,10 @@ export async function runJob(jobId: number): Promise<void> {
                         }
                       }
                     }
-                    if (allVerified) break;
+                    if (allVerified) {
+                      sizeVerificationPassed = true;
+                      break;
+                    }
                   } catch (err) {
                     log.warn("Batch verification list failed — retrying", { parentPath, attempt, error: err });
                   }
@@ -748,6 +754,14 @@ export async function runJob(jobId: number): Promise<void> {
                     await new Promise((r) => setTimeout(r, verifyPollMs));
                   }
                 }
+
+                if (!sizeVerificationPassed) {
+                  log.warn("Batch verification failed — one or more entries did not pass size check", {
+                    archiveName: file.name,
+                  });
+                }
+                // Only mark all entries verified if uploads all succeeded AND sizes match
+                allEntriesVerified = allEntriesVerified && sizeVerificationPassed;
               }
 
               // ── Phase 4: Log results and update counters ──────────────────────
@@ -787,14 +801,25 @@ export async function runJob(jobId: number): Promise<void> {
               }
 
               // Post-transfer action applies to the original archive.
-              // If any entries were excluded by the archive entry filter the archive
-              // is intentionally retained so those unextracted files are not lost.
-              if (entriesFilteredOut && job.postTransferAction !== "retain") {
-                log.info("Skipping post-transfer action — archive has filtered-out entries", {
+              // Always respect the configured postTransferAction even when an
+              // archiveEntryFilter excluded some entries — the user chose to filter
+              // and chose to delete/move, so honour both settings together.
+              // However, only proceed if ALL entries that were queued for upload
+              // transferred and verified successfully — otherwise retain the archive
+              // so no data is lost.
+              if (!allEntriesVerified) {
+                log.warn("Skipping post-transfer action — not all filtered entries were successfully transferred and verified", {
                   archiveName: file.name,
                   postTransferAction: job.postTransferAction,
+                  failedCount: failedResults.length,
                 });
               } else {
+                if (entriesFilteredOut) {
+                  log.info("Archive had filtered-out entries — proceeding with post-transfer action anyway", {
+                    archiveName: file.name,
+                    postTransferAction: job.postTransferAction,
+                  });
+                }
                 try {
                   if (job.postTransferAction === "delete") {
                     log.info("Deleting source archive", { srcPath: srcFilePath });
