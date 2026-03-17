@@ -787,26 +787,26 @@ export async function runJob(jobId: number): Promise<void> {
               }
 
               // Post-transfer action applies to the original archive.
-              // If any entries were excluded by the archive entry filter the archive
-              // is intentionally retained so those unextracted files are not lost.
-              if (entriesFilteredOut && job.postTransferAction !== "retain") {
-                log.info("Skipping post-transfer action — archive has filtered-out entries", {
+              // Always respect the configured postTransferAction even when an
+              // archiveEntryFilter excluded some entries — the user chose to filter
+              // and chose to delete/move, so honour both settings together.
+              if (entriesFilteredOut) {
+                log.info("Archive had filtered-out entries — proceeding with post-transfer action anyway", {
                   archiveName: file.name,
                   postTransferAction: job.postTransferAction,
                 });
-              } else {
-                try {
-                  if (job.postTransferAction === "delete") {
-                    log.info("Deleting source archive", { srcPath: srcFilePath });
-                    await deleteSourceAndConfirm(source, srcFilePath);
-                  } else if (job.postTransferAction === "move" && job.movePath) {
-                    const moveDest = path.posix.join(job.movePath, file.name);
-                    log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
-                    await source.moveFile(srcFilePath, moveDest);
-                  }
-                } catch (postErr) {
-                  log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
+              }
+              try {
+                if (job.postTransferAction === "delete") {
+                  log.info("Deleting source archive", { srcPath: srcFilePath });
+                  await deleteSourceAndConfirm(source, srcFilePath);
+                } else if (job.postTransferAction === "move" && job.movePath) {
+                  const moveDest = path.posix.join(job.movePath, file.name);
+                  log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
+                  await source.moveFile(srcFilePath, moveDest);
                 }
+              } catch (postErr) {
+                log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
               }
 
               fileHandled = true;
