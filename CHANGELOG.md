@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Go2Engle/FileBridge/compare/v0.8.0...v0.8.1) (2026-03-17)
+
+
+### Bug Fixes
+
+* post transfer delete ([#24](https://github.com/Go2Engle/FileBridge/issues/24)) ([950f301](https://github.com/Go2Engle/FileBridge/commit/950f3013a7cbe4c6e2e611fb387e4648734b2ab9))
+
 ## [0.8.0](https://github.com/Go2Engle/FileBridge/compare/v0.7.3...v0.8.0) (2026-03-10)
 
 
