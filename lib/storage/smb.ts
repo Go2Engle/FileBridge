@@ -31,7 +31,7 @@ export interface SmbCredentials {
  */
 export class SmbProvider implements StorageProvider {
   private static readonly BUFFERED_UPLOAD_MAX_BYTES = 256 * 1024 * 1024; // 256 MB
-  private static readonly STREAMING_WRITE_CHUNK = 1024 * 1024; // 1 MB coalesced write chunks
+  private static readonly STREAMING_WRITE_CHUNK = 4 * 1024 * 1024; // 4 MB coalesced write chunks
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   private credentials: SmbCredentials;
@@ -166,7 +166,7 @@ export class SmbProvider implements StorageProvider {
         });
       }
 
-      // 3. Write stream chunks at sequential offsets, coalesced to ~1 MB
+      // 3. Write stream chunks at sequential offsets, coalesced to ~4 MB
       //    to reduce SMB2 round trips (default stream chunks are ~64 KB).
       const targetChunk = SmbProvider.STREAMING_WRITE_CHUNK;
       let offset = 0;
