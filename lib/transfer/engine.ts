@@ -36,6 +36,12 @@ interface ExtractedFile {
   content: Buffer;
 }
 
+interface SourceFileResult {
+  srcFilePath: string;
+  fileName: string;
+  transferSuccess: boolean;
+}
+
 const ARCHIVE_EXTENSIONS = [".zip", ".tar", ".tar.gz", ".tgz"];
 
 /** Check if an error indicates the path is a directory, not a file. */
@@ -131,6 +137,74 @@ async function verifyDestinationFileSize(
   }
 
   throw new Error(`Destination file size verification failed: ${dstFilePath}`);
+}
+
+/**
+ * Verify multiple destination files in a single directory using one listFiles
+ * call per poll attempt instead of one per file.
+ */
+async function verifyDestinationFileSizesBatch(
+  dest: ReturnType<typeof createStorageProvider>,
+  entries: { dstFilePath: string; expectedSize: number }[],
+  destinationProtocol?: string
+): Promise<Map<string, Error>> {
+  if (entries.length === 0) return new Map();
+
+  // All entries share the same parent directory (archive extraction target)
+  const parentPath = path.posix.dirname(entries[0].dstFilePath);
+  const isSmbDestination = destinationProtocol === "smb";
+  const maxAttempts = isSmbDestination ? 10 : 5;
+  const pollIntervalMs = isSmbDestination ? 1000 : 500;
+
+  const pending = new Map<string, { dstFilePath: string; expectedSize: number }>();
+  for (const e of entries) {
+    const base = path.posix.basename(e.dstFilePath);
+    if (pending.has(base)) {
+      throw new Error(`Duplicate basename in batch verification: "${base}" (paths: ${pending.get(base)!.dstFilePath}, ${e.dstFilePath})`);
+    }
+    pending.set(base, e);
+  }
+  const errors = new Map<string, Error>();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const files = await dest.listFiles(parentPath);
+      const fileMap = new Map(files.map((f) => [f.name, f]));
+
+      for (const [fileName, entry] of [...pending]) {
+        const uploaded = fileMap.get(fileName);
+        if (uploaded && uploaded.size === entry.expectedSize) {
+          pending.delete(fileName);
+        } else if (uploaded) {
+          log.warn("Destination file size mismatch", {
+            dstPath: entry.dstFilePath,
+            expectedSize: entry.expectedSize,
+            actualSize: uploaded.size,
+            attempt,
+          });
+        }
+      }
+    } catch (err) {
+      log.warn("Destination size verification list failed — retrying", {
+        parentPath,
+        pendingCount: pending.size,
+        attempt,
+        error: err,
+      });
+    }
+
+    if (pending.size === 0) return errors;
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+  }
+
+  // Any still-pending entries are failures
+  for (const [, entry] of pending) {
+    errors.set(entry.dstFilePath, new Error(`Destination file size verification failed: ${entry.dstFilePath}`));
+  }
+  return errors;
 }
 
 /**
@@ -581,6 +655,7 @@ export async function runJob(jobId: number): Promise<void> {
       let filesTransferred = 0;
       let bytesTransferred = 0;
       let filesSkipped = 0;
+      const sourceFileResults: SourceFileResult[] = [];
 
       for (const file of files) {
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
@@ -657,7 +732,6 @@ export async function runJob(jobId: number): Promise<void> {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
               const entryFilterRegex = globToRegex(job.archiveEntryFilter ?? "");
-              let entriesFilteredOut = false;
 
               // ── Phase 1: Prepare entries (filter, encrypt, skip) ───────────────
               interface PreparedEntry {
@@ -671,7 +745,6 @@ export async function runJob(jobId: number): Promise<void> {
               for (const entry of extracted) {
                 if (!entryFilterRegex.test(entry.name)) {
                   log.info("Skipping extracted entry — filtered by archiveEntryFilter", { entryName: entry.name });
-                  entriesFilteredOut = true;
                   filesSkipped++;
                   continue;
                 }
@@ -693,20 +766,21 @@ export async function runJob(jobId: number): Promise<void> {
                 toUpload.push({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath });
               }
 
-              // ── Phase 2: Upload entries concurrently ──────────────────────────
+              // ── Phase 2: Upload entries in batches, then bulk-verify per batch ──
               const ENTRY_UPLOAD_CONCURRENCY = 4;
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
                 const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
-                const batchResults = await Promise.all(
+
+                // Upload all entries in the batch concurrently
+                const batchUploaded = await Promise.all(
                   batch.map(async ({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath }) => {
                     try {
                       if (job.overwriteExisting) {
                         try { await dest.deleteFile(entryDstPath); } catch { /* doesn't exist */ }
                       }
                       await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
-                      log.info("Extracted entry uploaded", { entryName: entryOutputName, dstPath: entryDstPath });
                       return { outputName: entryOutputName, bytes: entryContent.length, srcEntry: entry.name, dstPath: entryDstPath };
                     } catch (entryError) {
                       log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
@@ -714,55 +788,31 @@ export async function runJob(jobId: number): Promise<void> {
                     }
                   })
                 );
-                uploadResults.push(...batchResults);
+
+                // Bulk-verify all successful uploads in this batch with a single listFiles poll loop
+                const successfulUploads = batchUploaded.filter((r) => !r.error);
+                const verifyErrors = await verifyDestinationFileSizesBatch(
+                  dest,
+                  successfulUploads.map((r) => ({ dstFilePath: r.dstPath, expectedSize: r.bytes })),
+                  dstConn.protocol,
+                );
+
+                for (const result of batchUploaded) {
+                  const verifyErr = verifyErrors.get(result.dstPath);
+                  if (verifyErr) {
+                    log.error("Failed to verify extracted entry", { entryName: result.outputName, error: verifyErr });
+                    uploadResults.push({ ...result, bytes: 0, error: verifyErr });
+                  } else if (result.error) {
+                    uploadResults.push(result);
+                  } else {
+                    log.info("Extracted entry uploaded and verified", { entryName: result.outputName, dstPath: result.dstPath });
+                    uploadResults.push(result);
+                  }
+                }
               }
 
-              // ── Phase 3: Batch-verify uploaded files ──────────────────────────
               const successResults = uploadResults.filter((r) => !r.error);
               const failedResults = uploadResults.filter((r) => r.error);
-              let allEntriesVerified = failedResults.length === 0; // start false if any upload failed
-              if (successResults.length > 0) {
-                const expectedSizes = new Map(successResults.map((r) => [r.outputName, r.bytes]));
-                const parentPath = job.destinationPath;
-                const isSmbDest = dstConn.protocol === "smb";
-                const maxVerifyAttempts = isSmbDest ? 10 : 5;
-                const verifyPollMs = isSmbDest ? 1000 : 500;
-                let sizeVerificationPassed = false;
-
-                for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
-                  try {
-                    const destListing = await dest.listFiles(parentPath);
-                    const destMap = new Map(destListing.map((f) => [f.name, f.size]));
-                    let allVerified = true;
-                    for (const [name, expectedSize] of expectedSizes) {
-                      const actualSize = destMap.get(name);
-                      if (actualSize !== expectedSize) {
-                        allVerified = false;
-                        if (attempt === maxVerifyAttempts) {
-                          log.warn("Batch verification: size mismatch", { name, expectedSize, actualSize, attempt });
-                        }
-                      }
-                    }
-                    if (allVerified) {
-                      sizeVerificationPassed = true;
-                      break;
-                    }
-                  } catch (err) {
-                    log.warn("Batch verification list failed — retrying", { parentPath, attempt, error: err });
-                  }
-                  if (attempt < maxVerifyAttempts) {
-                    await new Promise((r) => setTimeout(r, verifyPollMs));
-                  }
-                }
-
-                if (!sizeVerificationPassed) {
-                  log.warn("Batch verification failed — one or more entries did not pass size check", {
-                    archiveName: file.name,
-                  });
-                }
-                // Only mark all entries verified if uploads all succeeded AND sizes match
-                allEntriesVerified = allEntriesVerified && sizeVerificationPassed;
-              }
 
               // ── Phase 4: Log results and update counters ──────────────────────
               for (const result of uploadResults) {
@@ -800,39 +850,13 @@ export async function runJob(jobId: number): Promise<void> {
                   .where(eq(jobRuns.id, run.id));
               }
 
-              // Post-transfer action applies to the original archive.
-              // Always respect the configured postTransferAction even when an
-              // archiveEntryFilter excluded some entries — the user chose to filter
-              // and chose to delete/move, so honour both settings together.
-              // However, only proceed if ALL entries that were queued for upload
-              // transferred and verified successfully — otherwise retain the archive
-              // so no data is lost.
-              if (!allEntriesVerified) {
-                log.warn("Skipping post-transfer action — not all filtered entries were successfully transferred and verified", {
-                  archiveName: file.name,
-                  postTransferAction: job.postTransferAction,
-                  failedCount: failedResults.length,
-                });
-              } else {
-                if (entriesFilteredOut) {
-                  log.info("Archive had filtered-out entries — proceeding with post-transfer action anyway", {
-                    archiveName: file.name,
-                    postTransferAction: job.postTransferAction,
-                  });
-                }
-                try {
-                  if (job.postTransferAction === "delete") {
-                    log.info("Deleting source archive", { srcPath: srcFilePath });
-                    await deleteSourceAndConfirm(source, srcFilePath);
-                  } else if (job.postTransferAction === "move" && job.movePath) {
-                    const moveDest = path.posix.join(job.movePath, file.name);
-                    log.info("Moving source archive", { srcPath: srcFilePath, dstPath: moveDest });
-                    await source.moveFile(srcFilePath, moveDest);
-                  }
-                } catch (postErr) {
-                  log.error("Post-transfer action failed for archive", { archiveName: file.name, error: postErr });
-                }
+              // If any entries failed, throw so the outer retry loop can retry
+              if (failedResults.length > 0) {
+                const failedNames = failedResults.map((r) => r.outputName).join(", ");
+                throw new Error(`Failed to upload/verify ${failedResults.length} archive entries: ${failedNames}`);
               }
+
+              sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
               fileHandled = true;
               break;
@@ -871,25 +895,14 @@ export async function runJob(jobId: number): Promise<void> {
               status: "success",
             });
 
-            try {
-              if (job.postTransferAction === "delete") {
-                log.info("Deleting source file", { srcPath: srcFilePath });
-                await deleteSourceAndConfirm(source, srcFilePath);
-              } else if (job.postTransferAction === "move" && job.movePath) {
-                const moveDest = path.posix.join(job.movePath, file.name);
-                log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
-                await source.moveFile(srcFilePath, moveDest);
-              }
-            } catch (postErr) {
-              log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
-            }
-
             filesTransferred++;
             bytesTransferred += uploadSize;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
             fileHandled = true;
             break;
@@ -1001,26 +1014,14 @@ export async function runJob(jobId: number): Promise<void> {
               status: "success",
             });
 
-            // Post-transfer action
-            try {
-              if (job.postTransferAction === "delete") {
-                log.info("Deleting source file", { srcPath: srcFilePath });
-                await deleteSourceAndConfirm(source, srcFilePath);
-              } else if (job.postTransferAction === "move" && job.movePath) {
-                const moveDest = path.posix.join(job.movePath, file.name);
-                log.info("Moving source file", { srcPath: srcFilePath, dstPath: moveDest });
-                await source.moveFile(srcFilePath, moveDest);
-              }
-            } catch (postErr) {
-              log.error("Post-transfer action failed", { fileName: file.name, error: postErr });
-            }
-
             filesTransferred++;
             bytesTransferred += currentBytes;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
             fileHandled = true;
             break;
@@ -1062,6 +1063,7 @@ export async function runJob(jobId: number): Promise<void> {
               errorMessage:
                 fileError instanceof Error ? fileError.message : "Unknown error",
             });
+            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: false });
           }
           }
         }
@@ -1072,6 +1074,48 @@ export async function runJob(jobId: number): Promise<void> {
 
         if (!fileHandled) {
           continue;
+        }
+      }
+
+      // ── Deferred post-transfer actions ──────────────────────────────────
+      if (job.postTransferAction === "delete" || job.postTransferAction === "move") {
+        const successfulFiles = sourceFileResults.filter((r) => r.transferSuccess);
+        const failedFiles = sourceFileResults.filter((r) => !r.transferSuccess);
+
+        if (failedFiles.length > 0) {
+          log.warn("Retaining source files due to transfer failures", {
+            retainedCount: failedFiles.length,
+            retainedFiles: failedFiles.map((f) => f.fileName),
+          });
+        }
+
+        if (successfulFiles.length > 0) {
+          log.info("Executing deferred post-transfer actions", {
+            action: job.postTransferAction,
+            fileCount: successfulFiles.length,
+          });
+        }
+
+        const postTransferErrors: { fileName: string; error: unknown }[] = [];
+        for (const result of successfulFiles) {
+          try {
+            if (job.postTransferAction === "delete") {
+              log.info("Deleting source file", { srcPath: result.srcFilePath });
+              await deleteSourceAndConfirm(source, result.srcFilePath);
+            } else if (job.postTransferAction === "move" && job.movePath) {
+              const moveDest = path.posix.join(job.movePath, result.fileName);
+              log.info("Moving source file", { srcPath: result.srcFilePath, dstPath: moveDest });
+              await source.moveFile(result.srcFilePath, moveDest);
+            }
+          } catch (postErr) {
+            log.error("Post-transfer action failed", { fileName: result.fileName, error: postErr });
+            postTransferErrors.push({ fileName: result.fileName, error: postErr });
+          }
+        }
+
+        if (postTransferErrors.length > 0) {
+          const failedNames = postTransferErrors.map((e) => e.fileName).join(", ");
+          throw new Error(`Post-transfer action failed for ${postTransferErrors.length} file(s): ${failedNames}`);
         }
       }
 
