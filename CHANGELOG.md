@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/Go2Engle/FileBridge/compare/v0.8.2...v0.8.3) (2026-03-23)
+
+
+### Performance Improvements
+
+* improve transfer engine speed for large multi-file jobs ([#28](https://github.com/Go2Engle/FileBridge/issues/28)) ([93f3517](https://github.com/Go2Engle/FileBridge/commit/93f3517ad29debb3b985cb4e2fd1f7ba50000a58))
+
 ## [0.8.2](https://github.com/Go2Engle/FileBridge/compare/v0.8.1...v0.8.2) (2026-03-23)
 
 
