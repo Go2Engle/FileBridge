@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Go2Engle/FileBridge/compare/v0.8.1...v0.8.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* enhance post-transfer handling and verification for source files ([#26](https://github.com/Go2Engle/FileBridge/issues/26)) ([cecf87e](https://github.com/Go2Engle/FileBridge/commit/cecf87e84cd5d4cd09475eca719677351e2211ef))
+
 ## [0.8.1](https://github.com/Go2Engle/FileBridge/compare/v0.8.0...v0.8.1) (2026-03-17)
 
 
