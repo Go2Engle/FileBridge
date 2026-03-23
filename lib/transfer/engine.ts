@@ -327,6 +327,16 @@ function extractTarFromFile(filePath: string, isGzipped: boolean): Promise<Extra
   return new Promise((resolve, reject) => {
     const extract = tar.extract();
     const entries: ExtractedFile[] = [];
+    let settled = false;
+
+    function fail(err: Error) {
+      if (settled) return;
+      settled = true;
+      fileStream.destroy();
+      if (gunzipStream) gunzipStream.destroy();
+      extract.destroy();
+      reject(err);
+    }
 
     extract.on("entry", (header, stream, next) => {
       const chunks: Buffer[] = [];
@@ -341,12 +351,17 @@ function extractTarFromFile(filePath: string, isGzipped: boolean): Promise<Extra
       stream.resume();
     });
 
-    extract.on("finish", () => resolve(entries));
-    extract.on("error", reject);
+    extract.on("finish", () => { if (!settled) { settled = true; resolve(entries); } });
+    extract.on("error", fail);
 
     const fileStream = createReadStream(filePath);
+    fileStream.on("error", fail);
+
+    let gunzipStream: ReturnType<typeof createGunzip> | null = null;
     if (isGzipped) {
-      fileStream.pipe(createGunzip()).pipe(extract);
+      gunzipStream = createGunzip();
+      gunzipStream.on("error", fail);
+      fileStream.pipe(gunzipStream).pipe(extract);
     } else {
       fileStream.pipe(extract);
     }
@@ -373,7 +388,9 @@ async function downloadToTempFile(
   fileName: string,
 ): Promise<string> {
   const tmpDir = os.tmpdir();
-  const tmpPath = path.join(tmpDir, `filebridge-${jobId}-${Date.now()}-${fileName}`);
+  // Sanitize fileName: strip directory components and unsafe characters
+  const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+  const tmpPath = path.join(tmpDir, `filebridge-${jobId}-${Date.now()}-${safeName}`);
   await pipeline(stream, createWriteStream(tmpPath));
   return tmpPath;
 }
@@ -769,14 +786,16 @@ export async function runJob(jobId: number): Promise<void> {
 
       // ── Transfer log batcher: flush every 50 items or 5 seconds ──────
       const LOG_BATCH_SIZE = 50;
-      logFlushTimer = setInterval(() => { flushLogs().catch(() => {}); }, 5_000);
+      logFlushTimer = setInterval(() => {
+        flushLogs().catch((err) => { log.warn("Periodic log flush failed", { error: err }); });
+      }, 5_000);
 
       // ── Progress flusher: single job-level interval ──────────────────
       progressFlushTimer = setInterval(() => {
         db.update(jobRuns)
           .set({ filesTransferred, bytesTransferred })
           .where(eq(jobRuns.id, run.id))
-          .catch(() => {});
+          .catch((err) => { log.warn("Progress flush failed", { runId: run.id, filesTransferred, bytesTransferred, error: err }); });
       }, 500);
 
       for (const file of files) {
@@ -845,11 +864,12 @@ export async function runJob(jobId: number): Promise<void> {
             // Decrypt before extraction if PGP decrypt is enabled
             if (pgpDecryptPrivateKey) {
               log.info("Decrypting archive before extraction", { fileName: file.name });
-              const encryptedBuf = await fs.readFile(tmpPath);
-              const decryptedBuf = await pgpDecryptBuffer(encryptedBuf, pgpDecryptPrivateKey, pgpDecryptPassphrase);
-              await cleanupTempFile(tmpPath);
-              tmpPath = await downloadToTempFile(Readable.from(decryptedBuf), jobId, `decrypted-${file.name}`);
-              log.info("Archive decrypted", { decryptedSize: decryptedBuf.length });
+              const encryptedStream = createReadStream(tmpPath);
+              const decryptedStream = await pgpDecryptStream(encryptedStream, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+              const prevTmpPath = tmpPath;
+              tmpPath = await downloadToTempFile(decryptedStream, jobId, `decrypted-${file.name}`);
+              await cleanupTempFile(prevTmpPath);
+              log.info("Archive decrypted to temp file", { fileName: file.name });
             }
 
             const extracted = await extractArchiveFromFile(archiveCheckName, tmpPath);
@@ -1228,6 +1248,16 @@ export async function runJob(jobId: number): Promise<void> {
                 (r) => r.srcFilePath === pending.srcFilePath && r.transferSuccess
               );
               if (result) result.transferSuccess = false;
+
+              // Correct the transfer log: find the success entry and mark as failure
+              const logEntry = pendingLogs.find(
+                (l) => l.destinationPath === failedPath && l.status === "success"
+              );
+              if (logEntry) {
+                logEntry.status = "failure";
+                logEntry.errorMessage = err.message;
+                logEntry.fileSize = 0;
+              }
             }
           }
         }

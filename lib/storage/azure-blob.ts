@@ -9,6 +9,12 @@ import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
 import { createLogger } from "@/lib/logger";
 
+// ── Azure Blob upload tuning ─────────────────────────────────────────────────
+// Each concurrent block is buffered in memory. Peak memory ≈ blockSize × concurrency
+// (e.g. 8 MB × 8 = 64 MB per upload). Tune via env vars if memory is constrained.
+const UPLOAD_BLOCK_SIZE = Number(process.env.AZURE_UPLOAD_BLOCK_SIZE) || 8 * 1024 * 1024;   // 8 MB
+const UPLOAD_CONCURRENCY = Number(process.env.AZURE_UPLOAD_CONCURRENCY) || 8;
+
 const log = createLogger("azure-blob");
 
 export interface AzureBlobCredentials {
@@ -204,7 +210,7 @@ export class AzureBlobProvider implements StorageProvider {
     log.info("Uploading blob (stream)", { blobName });
     try {
       const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
-      await blockBlobClient.uploadStream(stream, 8 * 1024 * 1024, 8, {
+      await blockBlobClient.uploadStream(stream, UPLOAD_BLOCK_SIZE, UPLOAD_CONCURRENCY, {
         blobHTTPHeaders: {
           blobContentType: inferContentType(blobName),
         },

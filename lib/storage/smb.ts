@@ -166,7 +166,7 @@ export class SmbProvider implements StorageProvider {
         });
       }
 
-      // 3. Write stream chunks at sequential offsets, coalesced to ~1 MB
+      // 3. Write stream chunks at sequential offsets, coalesced to ~4 MB
       //    to reduce SMB2 round trips (default stream chunks are ~64 KB).
       const targetChunk = SmbProvider.STREAMING_WRITE_CHUNK;
       let offset = 0;
