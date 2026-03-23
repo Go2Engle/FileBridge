@@ -262,10 +262,11 @@ if (connDef && !connDef.sql.includes("'azure-blob'")) {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       credentials TEXT NOT NULL,
+      folder TEXT,
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
-    INSERT INTO connections_new SELECT * FROM connections;
+    INSERT INTO connections_new SELECT id, name, protocol, host, port, credentials, folder, created_at, updated_at FROM connections;
     DROP TABLE connections;
     ALTER TABLE connections_new RENAME TO connections;
   `);
@@ -286,10 +287,11 @@ if (connDef2 && !connDef2.sql.includes("'local'")) {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       credentials TEXT NOT NULL,
+      folder TEXT,
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
-    INSERT INTO connections_new SELECT * FROM connections;
+    INSERT INTO connections_new SELECT id, name, protocol, host, port, credentials, folder, created_at, updated_at FROM connections;
     DROP TABLE connections;
     ALTER TABLE connections_new RENAME TO connections;
   `);

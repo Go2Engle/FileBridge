@@ -27,6 +27,23 @@ import {
 
 const log = createLogger("engine");
 
+class JobAbortedError extends Error {
+  constructor() { super("Job was stopped by user"); this.name = "JobAbortedError"; }
+}
+
+const activeJobControllers = new Map<number, AbortController>();
+
+export function stopJob(jobId: number): boolean {
+  const controller = activeJobControllers.get(jobId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
+}
+
+function checkAbort(signal: AbortSignal) {
+  if (signal.aborted) throw new JobAbortedError();
+}
+
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) {
@@ -656,8 +673,13 @@ export async function runJob(jobId: number): Promise<void> {
     })
     .returning();
 
+  // Register abort controller so stopJob() can cancel this run
+  const controller = new AbortController();
+  activeJobControllers.set(jobId, controller);
+
   // From here on, all log lines will automatically include jobId + runId
-  return withJobContext(jobId, run.id, async () => {
+  try {
+    return await withJobContext(jobId, run.id, async () => {
     log.info("Job run created", { runId: run.id });
 
     // Mark job as running
@@ -683,10 +705,12 @@ export async function runJob(jobId: number): Promise<void> {
       log.info("Connecting to source", { protocol: srcConn.protocol });
       await source.connect();
       log.info("Source connected");
+      checkAbort(controller.signal);
 
       log.info("Connecting to destination", { protocol: dstConn.protocol });
       await dest.connect();
       log.info("Destination connected");
+      checkAbort(controller.signal);
 
       // Run pre-job hooks before any files are transferred
       const preHooks = getJobHooksWithDetail(jobId, "pre_job");
@@ -799,6 +823,7 @@ export async function runJob(jobId: number): Promise<void> {
       }, 500);
 
       for (const file of files) {
+        checkAbort(controller.signal);
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
 
         // Compute the output filename based on PGP settings
@@ -1345,7 +1370,12 @@ export async function runJob(jobId: number): Promise<void> {
 
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
     } catch (error) {
-      log.error("Job failed", { error });
+      const isAborted = error instanceof JobAbortedError;
+      if (isAborted) {
+        log.info("Job stopped by user", { jobId });
+      } else {
+        log.error("Job failed", { error });
+      }
 
       // Clean up batch timers and flush any remaining logs
       if (logFlushTimer) clearInterval(logFlushTimer);
@@ -1357,7 +1387,8 @@ export async function runJob(jobId: number): Promise<void> {
         await dest.disconnect();
       } catch {}
 
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const finalRunStatus = isAborted ? "cancelled" : "failure";
+      const errorMessage = isAborted ? "Stopped by user" : (error instanceof Error ? error.message : "Unknown error");
 
       // Run post-job hooks even on failure (best-effort — failures are logged, not re-thrown)
       const postHooksOnError = getJobHooksWithDetail(jobId, "post_job");
@@ -1377,7 +1408,7 @@ export async function runJob(jobId: number): Promise<void> {
         .update(jobRuns)
         .set({
           completedAt: new Date().toISOString(),
-          status: "failure",
+          status: finalRunStatus,
           errorMessage,
           currentFile: null,
           currentFileSize: null,
@@ -1388,12 +1419,17 @@ export async function runJob(jobId: number): Promise<void> {
       await db
         .update(jobs)
         .set({
-          status: previousStatus === "inactive" ? "inactive" : "error",
+          status: isAborted
+            ? (previousStatus === "inactive" ? "inactive" : "active")
+            : (previousStatus === "inactive" ? "inactive" : "error"),
           updatedAt: new Date().toISOString(),
         })
         .where(eq(jobs.id, jobId));
 
-      throw error;
+      if (!isAborted) throw error;
     }
   });
+  } finally {
+    activeJobControllers.delete(jobId);
+  }
 }
