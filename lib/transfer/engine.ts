@@ -140,6 +140,69 @@ async function verifyDestinationFileSize(
 }
 
 /**
+ * Verify multiple destination files in a single directory using one listFiles
+ * call per poll attempt instead of one per file.
+ */
+async function verifyDestinationFileSizesBatch(
+  dest: ReturnType<typeof createStorageProvider>,
+  entries: { dstFilePath: string; expectedSize: number }[],
+  destinationProtocol?: string
+): Promise<Map<string, Error>> {
+  if (entries.length === 0) return new Map();
+
+  // All entries share the same parent directory (archive extraction target)
+  const parentPath = path.posix.dirname(entries[0].dstFilePath);
+  const isSmbDestination = destinationProtocol === "smb";
+  const maxAttempts = isSmbDestination ? 10 : 5;
+  const pollIntervalMs = isSmbDestination ? 1000 : 500;
+
+  const pending = new Map(
+    entries.map((e) => [path.posix.basename(e.dstFilePath), e])
+  );
+  const errors = new Map<string, Error>();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const files = await dest.listFiles(parentPath);
+      const fileMap = new Map(files.map((f) => [f.name, f]));
+
+      for (const [fileName, entry] of [...pending]) {
+        const uploaded = fileMap.get(fileName);
+        if (uploaded && uploaded.size === entry.expectedSize) {
+          pending.delete(fileName);
+        } else if (uploaded) {
+          log.warn("Destination file size mismatch", {
+            dstPath: entry.dstFilePath,
+            expectedSize: entry.expectedSize,
+            actualSize: uploaded.size,
+            attempt,
+          });
+        }
+      }
+    } catch (err) {
+      log.warn("Destination size verification list failed — retrying", {
+        parentPath,
+        pendingCount: pending.size,
+        attempt,
+        error: err,
+      });
+    }
+
+    if (pending.size === 0) return errors;
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+  }
+
+  // Any still-pending entries are failures
+  for (const [, entry] of pending) {
+    errors.set(entry.dstFilePath, new Error(`Destination file size verification failed: ${entry.dstFilePath}`));
+  }
+  return errors;
+}
+
+/**
  * WARNING: Delta sync does not apply to archive extraction.
  * When extractArchives is enabled, files land at the destination under their
  * extracted names (e.g. "report.csv"), not the archive name ("data.zip").
@@ -700,29 +763,49 @@ export async function runJob(jobId: number): Promise<void> {
                 toUpload.push({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath });
               }
 
-              // ── Phase 2: Upload entries concurrently with per-entry verification ─
+              // ── Phase 2: Upload entries in batches, then bulk-verify per batch ──
               const ENTRY_UPLOAD_CONCURRENCY = 4;
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
                 const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
-                const batchResults = await Promise.all(
+
+                // Upload all entries in the batch concurrently
+                const batchUploaded = await Promise.all(
                   batch.map(async ({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath }) => {
                     try {
                       if (job.overwriteExisting) {
                         try { await dest.deleteFile(entryDstPath); } catch { /* doesn't exist */ }
                       }
                       await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
-                      await verifyDestinationFileSize(dest, entryDstPath, entryContent.length, dstConn.protocol);
-                      log.info("Extracted entry uploaded and verified", { entryName: entryOutputName, dstPath: entryDstPath });
                       return { outputName: entryOutputName, bytes: entryContent.length, srcEntry: entry.name, dstPath: entryDstPath };
                     } catch (entryError) {
-                      log.error("Failed to upload/verify extracted entry", { entryName: entryOutputName, error: entryError });
+                      log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
                       return { outputName: entryOutputName, bytes: 0, srcEntry: entry.name, dstPath: entryDstPath, error: entryError instanceof Error ? entryError : new Error(String(entryError)) };
                     }
                   })
                 );
-                uploadResults.push(...batchResults);
+
+                // Bulk-verify all successful uploads in this batch with a single listFiles poll loop
+                const successfulUploads = batchUploaded.filter((r) => !r.error);
+                const verifyErrors = await verifyDestinationFileSizesBatch(
+                  dest,
+                  successfulUploads.map((r) => ({ dstFilePath: r.dstPath, expectedSize: r.bytes })),
+                  dstConn.protocol,
+                );
+
+                for (const result of batchUploaded) {
+                  const verifyErr = verifyErrors.get(result.dstPath);
+                  if (verifyErr) {
+                    log.error("Failed to verify extracted entry", { entryName: result.outputName, error: verifyErr });
+                    uploadResults.push({ ...result, bytes: 0, error: verifyErr });
+                  } else if (result.error) {
+                    uploadResults.push(result);
+                  } else {
+                    log.info("Extracted entry uploaded and verified", { entryName: result.outputName, dstPath: result.dstPath });
+                    uploadResults.push(result);
+                  }
+                }
               }
 
               const successResults = uploadResults.filter((r) => !r.error);
