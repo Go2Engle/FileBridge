@@ -69,6 +69,7 @@ function inferContentType(blobName: string): string {
  * moveFile() performs a server-side copy then deletes the source blob.
  */
 export class AzureBlobProvider implements StorageProvider {
+  readonly supportsImmediateConsistency = true;
   private containerClient!: ContainerClient;
   private credentials: AzureBlobCredentials;
 
@@ -203,7 +204,7 @@ export class AzureBlobProvider implements StorageProvider {
     log.info("Uploading blob (stream)", { blobName });
     try {
       const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
-      await blockBlobClient.uploadStream(stream, 4 * 1024 * 1024, 4, {
+      await blockBlobClient.uploadStream(stream, 8 * 1024 * 1024, 8, {
         blobHTTPHeaders: {
           blobContentType: inferContentType(blobName),
         },

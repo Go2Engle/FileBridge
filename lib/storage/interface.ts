@@ -8,6 +8,13 @@ export interface FileInfo {
 }
 
 export interface StorageProvider {
+  /**
+   * When true, uploads are immediately visible and size-correct after
+   * `uploadFile()` resolves — no polling verification needed.
+   * Local filesystem and Azure Blob are strongly consistent; SFTP/SMB are not.
+   */
+  readonly supportsImmediateConsistency?: boolean;
+
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   listFiles(path: string, filter?: string): Promise<FileInfo[]>;

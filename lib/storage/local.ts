@@ -10,6 +10,7 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("local");
 
 export class LocalProvider implements StorageProvider {
+  readonly supportsImmediateConsistency = true;
   private basePath: string;
 
   constructor(basePath: string) {
@@ -104,7 +105,7 @@ export class LocalProvider implements StorageProvider {
   async downloadFile(remotePath: string): Promise<Readable> {
     const fullPath = this.resolvePath(remotePath);
     log.info("Downloading file (stream)", { fullPath });
-    return createReadStream(fullPath);
+    return createReadStream(fullPath, { highWaterMark: 256 * 1024 });
   }
 
   async uploadFile(stream: Readable, remotePath: string, _sizeHint?: number): Promise<void> {
@@ -112,7 +113,7 @@ export class LocalProvider implements StorageProvider {
     log.info("Uploading file (stream)", { fullPath });
     try {
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
-      await pipeline(stream, createWriteStream(fullPath));
+      await pipeline(stream, createWriteStream(fullPath, { highWaterMark: 256 * 1024 }));
     } catch (err) {
       log.error("uploadFile failed", { fullPath, error: err });
       throw err;

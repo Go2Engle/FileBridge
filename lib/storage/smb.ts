@@ -31,7 +31,7 @@ export interface SmbCredentials {
  */
 export class SmbProvider implements StorageProvider {
   private static readonly BUFFERED_UPLOAD_MAX_BYTES = 256 * 1024 * 1024; // 256 MB
-  private static readonly STREAMING_WRITE_CHUNK = 1024 * 1024; // 1 MB coalesced write chunks
+  private static readonly STREAMING_WRITE_CHUNK = 4 * 1024 * 1024; // 4 MB coalesced write chunks
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   private credentials: SmbCredentials;

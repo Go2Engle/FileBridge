@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { jobs, jobRuns, transferLogs } from "@/lib/db/schema";
+import { jobs, jobRuns, transferLogs, type NewTransferLog } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getConnection } from "@/lib/db/connections";
 import { getJobHooksWithDetail } from "@/lib/db/hooks";
@@ -7,8 +7,12 @@ import { executeHooks } from "@/lib/hooks/executor";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import path from "path";
+import os from "os";
+import fs from "fs/promises";
+import { createReadStream, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 import { Readable, Transform } from "stream";
-import { gunzipSync } from "zlib";
+import { createGunzip, gunzipSync } from "zlib";
 import yauzl from "yauzl";
 import * as tar from "tar-stream";
 import { createLogger, withJobContext } from "@/lib/logger";
@@ -288,6 +292,101 @@ function extractTar(content: Buffer): Promise<ExtractedFile[]> {
   });
 }
 
+// ── File-based archive extraction (avoids loading entire archive into RAM) ──
+
+function extractZipFromFile(filePath: string): Promise<ExtractedFile[]> {
+  return new Promise((resolve, reject) => {
+    yauzl.open(filePath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      const entries: ExtractedFile[] = [];
+      zipfile.readEntry();
+      zipfile.on("entry", (entry) => {
+        if (/\/$/.test(entry.fileName)) {
+          zipfile.readEntry();
+          return;
+        }
+        zipfile.openReadStream(entry, (streamErr, stream) => {
+          if (streamErr) return reject(streamErr);
+          const chunks: Buffer[] = [];
+          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+          stream.on("end", () => {
+            const name = path.posix.basename(entry.fileName);
+            if (name) entries.push({ name, content: Buffer.concat(chunks) });
+            zipfile.readEntry();
+          });
+          stream.on("error", reject);
+        });
+      });
+      zipfile.on("end", () => resolve(entries));
+      zipfile.on("error", reject);
+    });
+  });
+}
+
+function extractTarFromFile(filePath: string, isGzipped: boolean): Promise<ExtractedFile[]> {
+  return new Promise((resolve, reject) => {
+    const extract = tar.extract();
+    const entries: ExtractedFile[] = [];
+
+    extract.on("entry", (header, stream, next) => {
+      const chunks: Buffer[] = [];
+      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("end", () => {
+        if (header.type === "file") {
+          const name = path.posix.basename(header.name);
+          if (name) entries.push({ name, content: Buffer.concat(chunks) });
+        }
+        next();
+      });
+      stream.resume();
+    });
+
+    extract.on("finish", () => resolve(entries));
+    extract.on("error", reject);
+
+    const fileStream = createReadStream(filePath);
+    if (isGzipped) {
+      fileStream.pipe(createGunzip()).pipe(extract);
+    } else {
+      fileStream.pipe(extract);
+    }
+  });
+}
+
+async function extractArchiveFromFile(archiveName: string, filePath: string): Promise<ExtractedFile[] | null> {
+  const lower = archiveName.toLowerCase();
+  if (lower.endsWith(".zip")) {
+    return extractZipFromFile(filePath);
+  }
+  if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
+    return extractTarFromFile(filePath, true);
+  }
+  if (lower.endsWith(".tar")) {
+    return extractTarFromFile(filePath, false);
+  }
+  return null;
+}
+
+async function downloadToTempFile(
+  stream: Readable,
+  jobId: number,
+  fileName: string,
+): Promise<string> {
+  const tmpDir = os.tmpdir();
+  const tmpPath = path.join(tmpDir, `filebridge-${jobId}-${Date.now()}-${fileName}`);
+  await pipeline(stream, createWriteStream(tmpPath));
+  return tmpPath;
+}
+
+async function cleanupTempFile(tmpPath: string): Promise<void> {
+  try {
+    await fs.unlink(tmpPath);
+    log.debug("Temp file cleaned up", { tmpPath });
+  } catch {
+    log.warn("Failed to clean up temp file", { tmpPath });
+  }
+}
+
 export interface DryRunFile {
   name: string;
   size: number;
@@ -553,6 +652,16 @@ export async function runJob(jobId: number): Promise<void> {
     const source = createStorageProvider(srcConn);
     const dest = createStorageProvider(dstConn);
 
+    // Declared here so the catch block can clean them up if the job fails
+    let logFlushTimer: ReturnType<typeof setInterval> | null = null;
+    let progressFlushTimer: ReturnType<typeof setInterval> | null = null;
+    const pendingLogs: NewTransferLog[] = [];
+    async function flushLogs() {
+      if (pendingLogs.length === 0) return;
+      const batch = pendingLogs.splice(0);
+      await db.insert(transferLogs).values(batch);
+    }
+
     try {
       log.info("Connecting to source", { protocol: srcConn.protocol });
       await source.connect();
@@ -656,6 +765,19 @@ export async function runJob(jobId: number): Promise<void> {
       let bytesTransferred = 0;
       let filesSkipped = 0;
       const sourceFileResults: SourceFileResult[] = [];
+      const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string }[] = [];
+
+      // ── Transfer log batcher: flush every 50 items or 5 seconds ──────
+      const LOG_BATCH_SIZE = 50;
+      logFlushTimer = setInterval(() => { flushLogs().catch(() => {}); }, 5_000);
+
+      // ── Progress flusher: single job-level interval ──────────────────
+      progressFlushTimer = setInterval(() => {
+        db.update(jobRuns)
+          .set({ filesTransferred, bytesTransferred })
+          .where(eq(jobRuns.id, run.id))
+          .catch(() => {});
+      }, 500);
 
       for (const file of files) {
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
@@ -711,23 +833,26 @@ export async function runJob(jobId: number): Promise<void> {
         let directorySkipped = false;
         for (let transferAttempt = 1; transferAttempt <= maxTransferAttempts; transferAttempt++) {
           try {
-          // ── Archive path: buffer the stream so we can extract entries ─────────
+          // ── Archive path: download to temp file, then extract entries ──────────
           // When PGP decrypt is enabled, check if the decrypted name is an archive
           const archiveCheckName = pgpDecryptPrivateKey ? stripPgpExtension(file.name) : file.name;
           if (job.extractArchives && isArchive(archiveCheckName)) {
             const srcStream = await source.downloadFile(srcFilePath);
-            let content = await streamToBuffer(srcStream);
-            const actualSize = content.length;
-            log.info("Archive downloaded", { fileName: file.name, actualSize });
+            let tmpPath = await downloadToTempFile(srcStream, jobId, file.name);
+            log.info("Archive downloaded to temp file", { fileName: file.name, tmpPath });
 
+            try {
             // Decrypt before extraction if PGP decrypt is enabled
             if (pgpDecryptPrivateKey) {
               log.info("Decrypting archive before extraction", { fileName: file.name });
-              content = await pgpDecryptBuffer(content, pgpDecryptPrivateKey, pgpDecryptPassphrase);
-              log.info("Archive decrypted", { decryptedSize: content.length });
+              const encryptedBuf = await fs.readFile(tmpPath);
+              const decryptedBuf = await pgpDecryptBuffer(encryptedBuf, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+              await cleanupTempFile(tmpPath);
+              tmpPath = await downloadToTempFile(Readable.from(decryptedBuf), jobId, `decrypted-${file.name}`);
+              log.info("Archive decrypted", { decryptedSize: decryptedBuf.length });
             }
 
-            const extracted = await extractArchive(archiveCheckName, content);
+            const extracted = await extractArchiveFromFile(archiveCheckName, tmpPath);
             if (extracted && extracted.length > 0) {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
@@ -767,7 +892,7 @@ export async function runJob(jobId: number): Promise<void> {
               }
 
               // ── Phase 2: Upload entries in batches, then bulk-verify per batch ──
-              const ENTRY_UPLOAD_CONCURRENCY = 4;
+              const ENTRY_UPLOAD_CONCURRENCY = 8;
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
@@ -791,11 +916,13 @@ export async function runJob(jobId: number): Promise<void> {
 
                 // Bulk-verify all successful uploads in this batch with a single listFiles poll loop
                 const successfulUploads = batchUploaded.filter((r) => !r.error);
-                const verifyErrors = await verifyDestinationFileSizesBatch(
-                  dest,
-                  successfulUploads.map((r) => ({ dstFilePath: r.dstPath, expectedSize: r.bytes })),
-                  dstConn.protocol,
-                );
+                const verifyErrors = dest.supportsImmediateConsistency
+                  ? new Map<string, Error>()
+                  : await verifyDestinationFileSizesBatch(
+                      dest,
+                      successfulUploads.map((r) => ({ dstFilePath: r.dstPath, expectedSize: r.bytes })),
+                      dstConn.protocol,
+                    );
 
                 for (const result of batchUploaded) {
                   const verifyErr = verifyErrors.get(result.dstPath);
@@ -817,7 +944,7 @@ export async function runJob(jobId: number): Promise<void> {
               // ── Phase 4: Log results and update counters ──────────────────────
               for (const result of uploadResults) {
                 if (!result.error) {
-                  await db.insert(transferLogs).values({
+                  pendingLogs.push({
                     jobId,
                     jobRunId: run.id,
                     fileName: result.outputName,
@@ -830,7 +957,7 @@ export async function runJob(jobId: number): Promise<void> {
                   filesTransferred++;
                   bytesTransferred += result.bytes;
                 } else {
-                  await db.insert(transferLogs).values({
+                  pendingLogs.push({
                     jobId,
                     jobRunId: run.id,
                     fileName: result.outputName,
@@ -843,12 +970,7 @@ export async function runJob(jobId: number): Promise<void> {
                   });
                 }
               }
-              if (successResults.length > 0) {
-                await db
-                  .update(jobRuns)
-                  .set({ filesTransferred, bytesTransferred })
-                  .where(eq(jobRuns.id, run.id));
-              }
+              if (pendingLogs.length >= LOG_BATCH_SIZE) await flushLogs();
 
               // If any entries failed, throw so the outer retry loop can retry
               if (failedResults.length > 0) {
@@ -861,13 +983,13 @@ export async function runJob(jobId: number): Promise<void> {
               fileHandled = true;
               break;
             }
-            // Archive yielded no entries — upload as-is (fall through using buffered content)
+            // Archive yielded no entries — upload as-is from temp file
             log.info("Archive yielded no entries — transferring as-is", { fileName: file.name });
 
-            // Apply PGP encryption if enabled
-            let uploadContent = content;
+            // Read from temp file and apply PGP encryption if enabled
+            let uploadContent: Buffer = Buffer.from(await fs.readFile(tmpPath));
             if (pgpEncryptPublicKey) {
-              uploadContent = await pgpEncryptBuffer(content, pgpEncryptPublicKey);
+              uploadContent = await pgpEncryptBuffer(uploadContent, pgpEncryptPublicKey);
             }
             const uploadSize = uploadContent.length;
 
@@ -881,10 +1003,12 @@ export async function runJob(jobId: number): Promise<void> {
             }
 
             await dest.uploadFile(Readable.from(uploadContent), dstFilePath, uploadSize);
-            await verifyDestinationFileSize(dest, dstFilePath, uploadSize, dstConn.protocol);
+            if (!dest.supportsImmediateConsistency) {
+              pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath });
+            }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath });
 
-            await db.insert(transferLogs).values({
+            pendingLogs.push({
               jobId,
               jobRunId: run.id,
               fileName: outputFileName,
@@ -894,18 +1018,18 @@ export async function runJob(jobId: number): Promise<void> {
               transferredAt: new Date().toISOString(),
               status: "success",
             });
+            if (pendingLogs.length >= LOG_BATCH_SIZE) await flushLogs();
 
             filesTransferred++;
             bytesTransferred += uploadSize;
-            await db
-              .update(jobRuns)
-              .set({ filesTransferred, bytesTransferred })
-              .where(eq(jobRuns.id, run.id));
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
             fileHandled = true;
             break;
+            } finally {
+              await cleanupTempFile(tmpPath);
+            }
           } else {
             // ── Streaming path: pipe directly from source to destination ─────────
             const fileSize = file.size;
@@ -998,12 +1122,14 @@ export async function runJob(jobId: number): Promise<void> {
               if (currentBytes !== fileSize) {
                 throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
               }
-              await verifyDestinationFileSize(dest, dstFilePath, fileSize, dstConn.protocol);
+              if (!dest.supportsImmediateConsistency) {
+                pendingVerifications.push({ dstFilePath, expectedSize: fileSize, srcFilePath });
+              }
             }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath, plaintextBytes: currentBytes });
 
             // Log success
-            await db.insert(transferLogs).values({
+            pendingLogs.push({
               jobId,
               jobRunId: run.id,
               fileName: outputFileName,
@@ -1013,13 +1139,10 @@ export async function runJob(jobId: number): Promise<void> {
               transferredAt: new Date().toISOString(),
               status: "success",
             });
+            if (pendingLogs.length >= LOG_BATCH_SIZE) await flushLogs();
 
             filesTransferred++;
             bytesTransferred += currentBytes;
-            await db
-              .update(jobRuns)
-              .set({ filesTransferred, bytesTransferred })
-              .where(eq(jobRuns.id, run.id));
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1051,7 +1174,7 @@ export async function runJob(jobId: number): Promise<void> {
 
           if (transferAttempt >= maxTransferAttempts) {
             log.error("Failed to transfer file", { fileName: file.name, error: fileError });
-            await db.insert(transferLogs).values({
+            pendingLogs.push({
               jobId,
               jobRunId: run.id,
               fileName: file.name,
@@ -1063,6 +1186,7 @@ export async function runJob(jobId: number): Promise<void> {
               errorMessage:
                 fileError instanceof Error ? fileError.message : "Unknown error",
             });
+            if (pendingLogs.length >= LOG_BATCH_SIZE) await flushLogs();
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: false });
           }
           }
@@ -1074,6 +1198,38 @@ export async function runJob(jobId: number): Promise<void> {
 
         if (!fileHandled) {
           continue;
+        }
+      }
+
+      // ── Flush remaining batched data ──────────────────────────────────
+      if (logFlushTimer) clearInterval(logFlushTimer);
+      if (progressFlushTimer) clearInterval(progressFlushTimer);
+      await flushLogs();
+      await db
+        .update(jobRuns)
+        .set({ filesTransferred, bytesTransferred })
+        .where(eq(jobRuns.id, run.id));
+
+      // ── Batch-verify deferred destination file sizes ──────────────────
+      if (pendingVerifications.length > 0) {
+        log.info("Batch-verifying destination files", { count: pendingVerifications.length });
+        const verifyErrors = await verifyDestinationFileSizesBatch(
+          dest,
+          pendingVerifications.map((v) => ({ dstFilePath: v.dstFilePath, expectedSize: v.expectedSize })),
+          dstConn.protocol,
+        );
+        if (verifyErrors.size > 0) {
+          log.warn("Destination verification failures", { count: verifyErrors.size });
+          for (const [failedPath, err] of verifyErrors) {
+            log.error("Verification failed", { dstPath: failedPath, error: err.message });
+            const pending = pendingVerifications.find((v) => v.dstFilePath === failedPath);
+            if (pending) {
+              const result = sourceFileResults.find(
+                (r) => r.srcFilePath === pending.srcFilePath && r.transferSuccess
+              );
+              if (result) result.transferSuccess = false;
+            }
+          }
         }
       }
 
@@ -1160,6 +1316,11 @@ export async function runJob(jobId: number): Promise<void> {
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
     } catch (error) {
       log.error("Job failed", { error });
+
+      // Clean up batch timers and flush any remaining logs
+      if (logFlushTimer) clearInterval(logFlushTimer);
+      if (progressFlushTimer) clearInterval(progressFlushTimer);
+      try { await flushLogs(); } catch {}
 
       try {
         await source.disconnect();
