@@ -764,15 +764,13 @@ export async function runJob(jobId: number): Promise<void> {
                   .where(eq(jobRuns.id, run.id));
               }
 
-              // Track for deferred post-transfer action
-              const allEntriesOk = failedResults.length === 0;
-              if (!allEntriesOk) {
-                log.warn("Not all archive entries transferred/verified — source will be retained", {
-                  archiveName: file.name,
-                  failedCount: failedResults.length,
-                });
+              // If any entries failed, throw so the outer retry loop can retry
+              if (failedResults.length > 0) {
+                const failedNames = failedResults.map((r) => r.outputName).join(", ");
+                throw new Error(`Failed to upload/verify ${failedResults.length} archive entries: ${failedNames}`);
               }
-              sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: allEntriesOk });
+
+              sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
               fileHandled = true;
               break;
@@ -811,14 +809,14 @@ export async function runJob(jobId: number): Promise<void> {
               status: "success",
             });
 
-            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
-
             filesTransferred++;
             bytesTransferred += uploadSize;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
             fileHandled = true;
             break;
@@ -930,14 +928,14 @@ export async function runJob(jobId: number): Promise<void> {
               status: "success",
             });
 
-            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
-
             filesTransferred++;
             bytesTransferred += currentBytes;
             await db
               .update(jobRuns)
               .set({ filesTransferred, bytesTransferred })
               .where(eq(jobRuns.id, run.id));
+
+            sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
             fileHandled = true;
             break;
@@ -1012,6 +1010,7 @@ export async function runJob(jobId: number): Promise<void> {
           });
         }
 
+        const postTransferErrors: { fileName: string; error: unknown }[] = [];
         for (const result of successfulFiles) {
           try {
             if (job.postTransferAction === "delete") {
@@ -1024,7 +1023,13 @@ export async function runJob(jobId: number): Promise<void> {
             }
           } catch (postErr) {
             log.error("Post-transfer action failed", { fileName: result.fileName, error: postErr });
+            postTransferErrors.push({ fileName: result.fileName, error: postErr });
           }
+        }
+
+        if (postTransferErrors.length > 0) {
+          const failedNames = postTransferErrors.map((e) => e.fileName).join(", ");
+          throw new Error(`Post-transfer action failed for ${postTransferErrors.length} file(s): ${failedNames}`);
         }
       }
 
