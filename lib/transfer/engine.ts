@@ -156,9 +156,14 @@ async function verifyDestinationFileSizesBatch(
   const maxAttempts = isSmbDestination ? 10 : 5;
   const pollIntervalMs = isSmbDestination ? 1000 : 500;
 
-  const pending = new Map(
-    entries.map((e) => [path.posix.basename(e.dstFilePath), e])
-  );
+  const pending = new Map<string, { dstFilePath: string; expectedSize: number }>();
+  for (const e of entries) {
+    const base = path.posix.basename(e.dstFilePath);
+    if (pending.has(base)) {
+      throw new Error(`Duplicate basename in batch verification: "${base}" (paths: ${pending.get(base)!.dstFilePath}, ${e.dstFilePath})`);
+    }
+    pending.set(base, e);
+  }
   const errors = new Map<string, Error>();
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -727,7 +732,6 @@ export async function runJob(jobId: number): Promise<void> {
               log.info("Archive extracted", { archiveName: file.name, entryCount: extracted.length });
 
               const entryFilterRegex = globToRegex(job.archiveEntryFilter ?? "");
-              let entriesFilteredOut = false;
 
               // ── Phase 1: Prepare entries (filter, encrypt, skip) ───────────────
               interface PreparedEntry {
@@ -741,7 +745,6 @@ export async function runJob(jobId: number): Promise<void> {
               for (const entry of extracted) {
                 if (!entryFilterRegex.test(entry.name)) {
                   log.info("Skipping extracted entry — filtered by archiveEntryFilter", { entryName: entry.name });
-                  entriesFilteredOut = true;
                   filesSkipped++;
                   continue;
                 }
