@@ -16,7 +16,7 @@ export interface HookContext {
   jobName: string;
   runId: number;
   trigger: "pre_job" | "post_job";
-  status?: "success" | "failure";
+  status?: "success" | "failure" | "cancelled";
   filesTransferred?: number;
   bytesTransferred?: number;
   errorMessage?: string;

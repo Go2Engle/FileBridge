@@ -718,6 +718,7 @@ export async function runJob(jobId: number): Promise<void> {
         log.info("Running pre-job hooks", { count: preHooks.length });
         await executeHooks(preHooks, { jobId, jobName: job.name, runId: run.id, trigger: "pre_job" }, run.id);
         log.info("Pre-job hooks completed");
+        checkAbort(controller.signal);
       }
 
       // Load PGP keys if configured
@@ -744,6 +745,7 @@ export async function runJob(jobId: number): Promise<void> {
       log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
       let files = await source.listFiles(job.sourcePath, job.fileFilter);
       log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
+      checkAbort(controller.signal);
 
       // Filter hidden files (names starting with ".")
       if (job.skipHiddenFiles) {
@@ -796,6 +798,7 @@ export async function runJob(jobId: number): Promise<void> {
             for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
           }
           log.info("Destination files listed", { existingCount: existingDestFiles.size });
+          checkAbort(controller.signal);
         } catch {
           // Destination dir may not exist yet — that's fine, nothing to skip
           existingDestFiles = new Set();
@@ -1397,7 +1400,7 @@ export async function runJob(jobId: number): Promise<void> {
         try {
           await executeHooks(postHooksOnError, {
             jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-            status: "failure", errorMessage,
+            status: finalRunStatus, errorMessage,
           }, run.id);
         } catch {
           // Already logged inside executeHooks — don't mask the original error
