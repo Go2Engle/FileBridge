@@ -944,6 +944,7 @@ export async function runJob(jobId: number): Promise<void> {
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
+                checkAbort(controller.signal);
                 const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
 
                 // Upload all entries in the batch concurrently
