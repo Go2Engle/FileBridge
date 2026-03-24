@@ -1317,6 +1317,9 @@ export async function runJob(jobId: number): Promise<void> {
 
         const postTransferErrors: { fileName: string; error: unknown }[] = [];
         for (const result of successfulFiles) {
+          // Allow stop requests to interrupt deferred source-side actions between files.
+          // Note: this may intentionally leave a partially processed source set.
+          checkAbort(controller.signal);
           try {
             if (job.postTransferAction === "delete") {
               log.info("Deleting source file", { srcPath: result.srcFilePath });
