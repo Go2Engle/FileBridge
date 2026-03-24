@@ -50,11 +50,12 @@ const statusVariant: Record<
 
 const runStatusVariant: Record<
   JobRun["status"],
-  "success" | "warning" | "destructive"
+  "success" | "secondary" | "warning" | "destructive"
 > = {
   success: "success",
   running: "warning",
   failure: "destructive",
+  cancelled: "secondary",
 };
 
 interface JobDetailSheetProps {

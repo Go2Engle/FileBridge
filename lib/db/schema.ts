@@ -80,7 +80,7 @@ export const jobRuns = sqliteTable("job_runs", {
     .references(() => jobs.id),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
-  status: text("status", { enum: ["success", "failure", "running"] }).notNull(),
+  status: text("status", { enum: ["success", "failure", "running", "cancelled"] }).notNull(),
   errorMessage: text("error_message"),
   filesTransferred: integer("files_transferred").notNull().default(0),
   bytesTransferred: integer("bytes_transferred").notNull().default(0),
