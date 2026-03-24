@@ -1249,6 +1249,10 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
+      // Re-check cancellation after file loop to catch stop signals that arrive
+      // during transfer of the final file.
+      checkAbort(controller.signal);
+
       // ── Flush remaining batched data ──────────────────────────────────
       if (logFlushTimer) clearInterval(logFlushTimer);
       if (progressFlushTimer) clearInterval(progressFlushTimer);
@@ -1326,6 +1330,8 @@ export async function runJob(jobId: number): Promise<void> {
             postTransferErrors.push({ fileName: result.fileName, error: postErr });
           }
         }
+
+        checkAbort(controller.signal);
 
         if (postTransferErrors.length > 0) {
           const failedNames = postTransferErrors.map((e) => e.fileName).join(", ");
