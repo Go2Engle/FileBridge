@@ -528,9 +528,9 @@ export class SmbProvider implements StorageProvider {
           await this.reconnect();
           continue;
         }
-        if (code === "STATUS_SHARING_VIOLATION" && attempt < 5) {
-          const waitMs = 500;
-          log.info("STATUS_SHARING_VIOLATION on move — waiting for handle release", { smbSrc, waitMs, attempt });
+        if ((code === "STATUS_SHARING_VIOLATION" || code === "STATUS_ACCESS_DENIED") && attempt < 5) {
+          const waitMs = 500 * attempt;
+          log.info(`${code} on move — waiting for handle release`, { smbSrc, waitMs, attempt });
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
