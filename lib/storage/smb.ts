@@ -75,15 +75,23 @@ export class SmbProvider implements StorageProvider {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const constants = require("v9u-smb2/lib/structures/constants");
 
+      // Use the "open" handler instead of "create" so we can specify a
+      // read-only desiredAccess mask.  The "create" handler hardcodes
+      // 0x001701DF which includes WRITE_DAC, DELETE, FILE_WRITE_DATA etc.
+      // — Windows servers deny the request when the account only has
+      // read-level permissions on the file.
+      const readOnlyAccess =
+        constants.FILE_READ_DATA |
+        constants.FILE_READ_ATTRIBUTES |
+        constants.FILE_READ_EA |
+        constants.READ_CONTROL |
+        constants.SYNCHRONIZE;
+
       SMB2Request(
-        "create",
+        "open",
         {
           path: smbPath,
-          createDisposition: constants.FILE_OPEN,
-          shareAccess:
-            constants.FILE_SHARE_READ |
-            constants.FILE_SHARE_WRITE |
-            constants.FILE_SHARE_DELETE,
+          desiredAccess: readOnlyAccess,
         },
         this.client,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
