@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5](https://github.com/Go2Engle/FileBridge/compare/v0.8.4...v0.8.5) (2026-04-06)
+
+
+### Bug Fixes
+
+* use read-only access mask for SMB file downloads ([#33](https://github.com/Go2Engle/FileBridge/issues/33)) ([ccc36dd](https://github.com/Go2Engle/FileBridge/commit/ccc36ddf23e01fc30999d1581cf603ffc694b83e))
+
 ## [0.8.4](https://github.com/Go2Engle/FileBridge/compare/v0.8.3...v0.8.4) (2026-04-06)
 
 
