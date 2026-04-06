@@ -1128,6 +1128,10 @@ export async function runJob(jobId: number): Promise<void> {
               await dest.uploadFile(uploadStream, dstFilePath, uploadSizeHint);
             } finally {
               clearInterval(progressInterval);
+              // Explicitly release the source file handle so the SMB server sees the
+              // file as unlocked before the post-transfer move/delete runs. Without
+              // this, Windows SMB servers may return STATUS_ACCESS_DENIED on rename.
+              if (!srcStream.destroyed) srcStream.destroy();
               // Write final byte count (interval may not have fired for the last chunk)
               await db
                 .update(jobRuns)
