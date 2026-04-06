@@ -103,8 +103,12 @@ export class SmbProvider implements StorageProvider {
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           this.client.createReadStream(smbPath, { fd: file }, (streamErr: any, stream: Readable) => {
-            if (streamErr) reject(streamErr);
-            else resolve(stream);
+            if (streamErr) {
+              // Close the opened handle to avoid leaking it on the server
+              SMB2Request("close", file, this.client, () => reject(streamErr));
+            } else {
+              resolve(stream);
+            }
           });
         }
       );
@@ -294,7 +298,7 @@ export class SmbProvider implements StorageProvider {
         (openErr: any, file: any) => {
           if (openErr) { reject(openErr); return; }
 
-          const filename = Buffer.from(smbNew, "ucs2");
+          const filename = Buffer.from(smbNew, "utf16le");
           const renameInfo = Buffer.concat([
             new BigInt(1, 0).toBuffer(),   // ReplaceIfExists: false
             new BigInt(7, 0).toBuffer(),   // Reserved
