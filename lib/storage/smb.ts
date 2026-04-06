@@ -75,15 +75,23 @@ export class SmbProvider implements StorageProvider {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const constants = require("v9u-smb2/lib/structures/constants");
 
+      // Use the "open" handler instead of "create" so we can specify a
+      // read-only desiredAccess mask.  The "create" handler hardcodes
+      // 0x001701DF which includes WRITE_DAC, DELETE, FILE_WRITE_DATA etc.
+      // — Windows servers deny the request when the account only has
+      // read-level permissions on the file.
+      const readOnlyAccess =
+        constants.FILE_READ_DATA |
+        constants.FILE_READ_ATTRIBUTES |
+        constants.FILE_READ_EA |
+        constants.READ_CONTROL |
+        constants.SYNCHRONIZE;
+
       SMB2Request(
-        "create",
+        "open",
         {
           path: smbPath,
-          createDisposition: constants.FILE_OPEN,
-          shareAccess:
-            constants.FILE_SHARE_READ |
-            constants.FILE_SHARE_WRITE |
-            constants.FILE_SHARE_DELETE,
+          desiredAccess: readOnlyAccess,
         },
         this.client,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,8 +103,12 @@ export class SmbProvider implements StorageProvider {
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           this.client.createReadStream(smbPath, { fd: file }, (streamErr: any, stream: Readable) => {
-            if (streamErr) reject(streamErr);
-            else resolve(stream);
+            if (streamErr) {
+              // Close the opened handle to avoid leaking it on the server
+              SMB2Request("close", file, this.client, () => reject(streamErr));
+            } else {
+              resolve(stream);
+            }
           });
         }
       );
@@ -262,11 +274,53 @@ export class SmbProvider implements StorageProvider {
 
   private renameAsync(oldPath: string, newPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.client.rename(oldPath, newPath, (err: any) => {
-        if (err) reject(err);
-        else resolve();
-      });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const SMB2Request = require("v9u-smb2/lib/tools/smb2-forge").request;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const constants = require("v9u-smb2/lib/structures/constants");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const BigInt = require("v9u-smb2/lib/tools/bigint");
+
+      const smbOld = this.toSmbPath(oldPath);
+      const smbNew = this.toSmbPath(newPath);
+
+      // Use the "open" handler with a minimal desiredAccess instead of the
+      // library's rename() which goes through the "create" handler that
+      // hardcodes 0x001701DF (includes WRITE_DAC etc.). A rename only needs
+      // DELETE permission on the source file.
+      const renameAccess = constants.DELETE | constants.SYNCHRONIZE;
+
+      SMB2Request(
+        "open",
+        { path: smbOld, desiredAccess: renameAccess },
+        this.client,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (openErr: any, file: any) => {
+          if (openErr) { reject(openErr); return; }
+
+          const filename = Buffer.from(smbNew, "utf16le");
+          const renameInfo = Buffer.concat([
+            new BigInt(1, 0).toBuffer(),   // ReplaceIfExists: false
+            new BigInt(7, 0).toBuffer(),   // Reserved
+            new BigInt(8, 0).toBuffer(),   // RootDirectory
+            new BigInt(4, filename.length).toBuffer(), // FileNameLength
+            filename,
+          ]);
+
+          SMB2Request(
+            "set_info",
+            { FileId: file.FileId, FileInfoClass: "FileRenameInformation", Buffer: renameInfo },
+            this.client,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (setInfoErr: any) => {
+              SMB2Request("close", file, this.client, () => {
+                if (setInfoErr) reject(setInfoErr);
+                else resolve();
+              });
+            }
+          );
+        }
+      );
     });
   }
 
