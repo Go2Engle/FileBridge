@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/Go2Engle/FileBridge/compare/v0.8.3...v0.8.4) (2026-04-06)
+
+
+### Bug Fixes
+
+* handle STATUS_ACCESS_DENIED and STATUS_SHARING_VIOLATION during file move operations ([#31](https://github.com/Go2Engle/FileBridge/issues/31)) ([a46e5f4](https://github.com/Go2Engle/FileBridge/commit/a46e5f4275037dfa86f11388384f23ca89ebc3da))
+
 ## [0.8.3](https://github.com/Go2Engle/FileBridge/compare/v0.8.2...v0.8.3) (2026-03-23)
 
 
