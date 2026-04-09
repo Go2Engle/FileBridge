@@ -66,7 +66,7 @@ sqlite.exec(`
     job_id INTEGER NOT NULL REFERENCES jobs(id),
     started_at TEXT NOT NULL,
     completed_at TEXT,
-    status TEXT NOT NULL CHECK(status IN ('success', 'failure', 'running')),
+    status TEXT NOT NULL CHECK(status IN ('success', 'failure', 'running', 'cancelled')),
     error_message TEXT,
     files_transferred INTEGER NOT NULL DEFAULT 0,
     bytes_transferred INTEGER NOT NULL DEFAULT 0
@@ -262,10 +262,11 @@ if (connDef && !connDef.sql.includes("'azure-blob'")) {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       credentials TEXT NOT NULL,
+      folder TEXT,
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
-    INSERT INTO connections_new SELECT * FROM connections;
+    INSERT INTO connections_new SELECT id, name, protocol, host, port, credentials, folder, created_at, updated_at FROM connections;
     DROP TABLE connections;
     ALTER TABLE connections_new RENAME TO connections;
   `);
@@ -286,12 +287,53 @@ if (connDef2 && !connDef2.sql.includes("'local'")) {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       credentials TEXT NOT NULL,
+      folder TEXT,
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
-    INSERT INTO connections_new SELECT * FROM connections;
+    INSERT INTO connections_new SELECT id, name, protocol, host, port, credentials, folder, created_at, updated_at FROM connections;
     DROP TABLE connections;
     ALTER TABLE connections_new RENAME TO connections;
+  `);
+  sqlite.pragma("foreign_keys = ON");
+}
+
+// Migrate: update job_runs status CHECK to include 'cancelled'.
+// SQLite requires table recreation for CHECK-constraint changes.
+const jobRunsDef = sqlite
+  .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='job_runs'")
+  .get() as { sql: string } | undefined;
+if (jobRunsDef && !jobRunsDef.sql.includes("'cancelled'")) {
+  sqlite.pragma("foreign_keys = OFF");
+  sqlite.exec(`
+    CREATE TABLE job_runs_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL REFERENCES jobs(id),
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      status TEXT NOT NULL CHECK(status IN ('success', 'failure', 'running', 'cancelled')),
+      error_message TEXT,
+      files_transferred INTEGER NOT NULL DEFAULT 0,
+      bytes_transferred INTEGER NOT NULL DEFAULT 0,
+      total_files INTEGER,
+      total_bytes INTEGER,
+      current_file TEXT,
+      current_file_size INTEGER,
+      current_file_bytes_transferred INTEGER
+    );
+    INSERT INTO job_runs_new (
+      id, job_id, started_at, completed_at, status, error_message,
+      files_transferred, bytes_transferred, total_files, total_bytes,
+      current_file, current_file_size, current_file_bytes_transferred
+    )
+    SELECT
+      id, job_id, started_at, completed_at, status, error_message,
+      files_transferred, bytes_transferred, total_files, total_bytes,
+      current_file, current_file_size, current_file_bytes_transferred
+    FROM job_runs;
+    DROP TABLE job_runs;
+    ALTER TABLE job_runs_new RENAME TO job_runs;
+    CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id);
   `);
   sqlite.pragma("foreign_keys = ON");
 }

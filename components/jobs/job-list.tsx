@@ -16,7 +16,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  CircleAlert, PenLine, FlaskConical, Play, Plus, Search, Trash2, ToggleLeft, ToggleRight, Folder, ChevronDown, ChevronRight,
+  CircleAlert, PenLine, FlaskConical, Play, Plus, Search, Square, Trash2, ToggleLeft, ToggleRight, Folder, ChevronDown, ChevronRight,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -69,10 +69,11 @@ interface JobRowProps {
   onSetDryRun: (job: Job) => void;
   onToggle: (id: number, status: string) => void;
   onRun: (id: number) => void;
+  onStop: (id: number) => void;
   onDelete: (id: number) => void;
 }
 
-function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onRun, onDelete }: JobRowProps) {
+function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onRun, onStop, onDelete }: JobRowProps) {
   return (
     <TableRow
       id={id}
@@ -120,6 +121,21 @@ function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onR
               </TooltipTrigger>
               <TooltipContent>{job.status === "active" ? "Disable" : "Enable"}</TooltipContent>
             </Tooltip>
+            {job.status === "running" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => onStop(job.id)}
+                  >
+                    <Square className="h-4 w-4 fill-current" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Stop job</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -236,6 +252,15 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
       toast.success("Job triggered");
     },
     onError: () => toast.error("Failed to run job"),
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: (id: number) => axios.post(`/api/jobs/${id}/stop`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      toast.success("Stop signal sent");
+    },
+    onError: () => toast.error("Failed to stop job"),
   });
 
   const statusCounts = useMemo(() => {
@@ -436,6 +461,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                       onSetDryRun={setDryRunJob}
                       onToggle={(id, status) => toggleMutation.mutate({ id, status })}
                       onRun={(id) => runMutation.mutate(id)}
+                      onStop={(id) => stopMutation.mutate(id)}
                       onDelete={(id) => deleteMutation.mutate(id)}
                     />
                   ))}
@@ -468,6 +494,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                 onSetDryRun={setDryRunJob}
                 onToggle={(id, status) => toggleMutation.mutate({ id, status })}
                 onRun={(id) => runMutation.mutate(id)}
+                onStop={(id) => stopMutation.mutate(id)}
                 onDelete={(id) => deleteMutation.mutate(id)}
               />
             ))}

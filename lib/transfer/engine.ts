@@ -27,6 +27,23 @@ import {
 
 const log = createLogger("engine");
 
+class JobAbortedError extends Error {
+  constructor() { super("Job was stopped by user"); this.name = "JobAbortedError"; }
+}
+
+const activeJobControllers = new Map<number, AbortController>();
+
+export function stopJob(jobId: number): boolean {
+  const controller = activeJobControllers.get(jobId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
+}
+
+function checkAbort(signal: AbortSignal) {
+  if (signal.aborted) throw new JobAbortedError();
+}
+
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of stream) {
@@ -656,8 +673,13 @@ export async function runJob(jobId: number): Promise<void> {
     })
     .returning();
 
+  // Register abort controller so stopJob() can cancel this run
+  const controller = new AbortController();
+  activeJobControllers.set(jobId, controller);
+
   // From here on, all log lines will automatically include jobId + runId
-  return withJobContext(jobId, run.id, async () => {
+  try {
+    return await withJobContext(jobId, run.id, async () => {
     log.info("Job run created", { runId: run.id });
 
     // Mark job as running
@@ -683,10 +705,12 @@ export async function runJob(jobId: number): Promise<void> {
       log.info("Connecting to source", { protocol: srcConn.protocol });
       await source.connect();
       log.info("Source connected");
+      checkAbort(controller.signal);
 
       log.info("Connecting to destination", { protocol: dstConn.protocol });
       await dest.connect();
       log.info("Destination connected");
+      checkAbort(controller.signal);
 
       // Run pre-job hooks before any files are transferred
       const preHooks = getJobHooksWithDetail(jobId, "pre_job");
@@ -694,6 +718,7 @@ export async function runJob(jobId: number): Promise<void> {
         log.info("Running pre-job hooks", { count: preHooks.length });
         await executeHooks(preHooks, { jobId, jobName: job.name, runId: run.id, trigger: "pre_job" }, run.id);
         log.info("Pre-job hooks completed");
+        checkAbort(controller.signal);
       }
 
       // Load PGP keys if configured
@@ -720,6 +745,7 @@ export async function runJob(jobId: number): Promise<void> {
       log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
       let files = await source.listFiles(job.sourcePath, job.fileFilter);
       log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
+      checkAbort(controller.signal);
 
       // Filter hidden files (names starting with ".")
       if (job.skipHiddenFiles) {
@@ -772,6 +798,7 @@ export async function runJob(jobId: number): Promise<void> {
             for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
           }
           log.info("Destination files listed", { existingCount: existingDestFiles.size });
+          checkAbort(controller.signal);
         } catch {
           // Destination dir may not exist yet — that's fine, nothing to skip
           existingDestFiles = new Set();
@@ -799,6 +826,7 @@ export async function runJob(jobId: number): Promise<void> {
       }, 500);
 
       for (const file of files) {
+        checkAbort(controller.signal);
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
 
         // Compute the output filename based on PGP settings
@@ -916,6 +944,7 @@ export async function runJob(jobId: number): Promise<void> {
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
+                checkAbort(controller.signal);
                 const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
 
                 // Upload all entries in the batch concurrently
@@ -1229,6 +1258,10 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
+      // Re-check cancellation after file loop to catch stop signals that arrive
+      // during transfer of the final file.
+      checkAbort(controller.signal);
+
       // ── Flush remaining batched data ──────────────────────────────────
       if (logFlushTimer) clearInterval(logFlushTimer);
       if (progressFlushTimer) clearInterval(progressFlushTimer);
@@ -1292,6 +1325,9 @@ export async function runJob(jobId: number): Promise<void> {
 
         const postTransferErrors: { fileName: string; error: unknown }[] = [];
         for (const result of successfulFiles) {
+          // Allow stop requests to interrupt deferred source-side actions between files.
+          // Note: this may intentionally leave a partially processed source set.
+          checkAbort(controller.signal);
           try {
             if (job.postTransferAction === "delete") {
               log.info("Deleting source file", { srcPath: result.srcFilePath });
@@ -1306,6 +1342,8 @@ export async function runJob(jobId: number): Promise<void> {
             postTransferErrors.push({ fileName: result.fileName, error: postErr });
           }
         }
+
+        checkAbort(controller.signal);
 
         if (postTransferErrors.length > 0) {
           const failedNames = postTransferErrors.map((e) => e.fileName).join(", ");
@@ -1353,7 +1391,12 @@ export async function runJob(jobId: number): Promise<void> {
 
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
     } catch (error) {
-      log.error("Job failed", { error });
+      const isAborted = error instanceof JobAbortedError;
+      if (isAborted) {
+        log.info("Job stopped by user", { jobId });
+      } else {
+        log.error("Job failed", { error });
+      }
 
       // Clean up batch timers and flush any remaining logs
       if (logFlushTimer) clearInterval(logFlushTimer);
@@ -1365,7 +1408,8 @@ export async function runJob(jobId: number): Promise<void> {
         await dest.disconnect();
       } catch {}
 
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const finalRunStatus = isAborted ? "cancelled" : "failure";
+      const errorMessage = isAborted ? "Stopped by user" : (error instanceof Error ? error.message : "Unknown error");
 
       // Run post-job hooks even on failure (best-effort — failures are logged, not re-thrown)
       const postHooksOnError = getJobHooksWithDetail(jobId, "post_job");
@@ -1374,7 +1418,7 @@ export async function runJob(jobId: number): Promise<void> {
         try {
           await executeHooks(postHooksOnError, {
             jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-            status: "failure", errorMessage,
+            status: finalRunStatus, errorMessage,
           }, run.id);
         } catch {
           // Already logged inside executeHooks — don't mask the original error
@@ -1385,7 +1429,7 @@ export async function runJob(jobId: number): Promise<void> {
         .update(jobRuns)
         .set({
           completedAt: new Date().toISOString(),
-          status: "failure",
+          status: finalRunStatus,
           errorMessage,
           currentFile: null,
           currentFileSize: null,
@@ -1396,12 +1440,17 @@ export async function runJob(jobId: number): Promise<void> {
       await db
         .update(jobs)
         .set({
-          status: previousStatus === "inactive" ? "inactive" : "error",
+          status: isAborted
+            ? (previousStatus === "inactive" ? "inactive" : "active")
+            : (previousStatus === "inactive" ? "inactive" : "error"),
           updatedAt: new Date().toISOString(),
         })
         .where(eq(jobs.id, jobId));
 
-      throw error;
+      if (!isAborted) throw error;
     }
   });
+  } finally {
+    activeJobControllers.delete(jobId);
+  }
 }
