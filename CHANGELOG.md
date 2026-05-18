@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.6](https://github.com/Go2Engle/FileBridge/compare/v0.8.5...v0.8.6) (2026-05-18)
+
+
+### Bug Fixes
+
+* **smb:** add per-request timeout to prevent jobs hanging on dead connections ([#35](https://github.com/Go2Engle/FileBridge/issues/35)) ([6aa29d9](https://github.com/Go2Engle/FileBridge/commit/6aa29d9d26ccc6febab6dce45a5e66b935940b81))
+
 ## [0.8.5](https://github.com/Go2Engle/FileBridge/compare/v0.8.4...v0.8.5) (2026-04-06)
 
 
