@@ -772,8 +772,11 @@ export async function runJob(jobId: number): Promise<void> {
             for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
           }
           log.info("Destination files listed", { existingCount: existingDestFiles.size });
-        } catch {
-          // Destination dir may not exist yet — that's fine, nothing to skip
+        } catch (err) {
+          // Destination dir may not exist yet — that's fine, nothing to skip.
+          // But surface the failure so transient errors (ACCESS_DENIED, network
+          // hiccups) leave a trace rather than disappearing silently.
+          log.warn("Destination listFiles failed — assuming empty", { destinationPath: job.destinationPath, error: err });
           existingDestFiles = new Set();
         }
       }
