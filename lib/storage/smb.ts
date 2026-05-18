@@ -4,6 +4,10 @@ import { globToRegex } from "./interface";
 import { createLogger } from "@/lib/logger";
 // Activate SMB2 message signing support (patches v9u-smb2 at import time)
 import "./smb-signing";
+// Activate per-request timeouts so callbacks reject instead of hanging forever
+// when the SMB server stops responding. Must be imported AFTER smb-signing so
+// the timeout wrapper sits outside the signing wrapper.
+import "./smb-timeout";
 
 const log = createLogger("smb");
 
@@ -474,6 +478,7 @@ export class SmbProvider implements StorageProvider {
         const code = (err as { code?: string })?.code;
         const isStaleSession =
           code === "STATUS_FILE_CLOSED" ||
+          code === "SMB_REQUEST_TIMEOUT" ||
           code === "ERR_STREAM_WRITE_AFTER_END" ||
           (err instanceof Error && err.message?.includes("write after end"));
         if (isStaleSession && attempt < 3) {
@@ -533,8 +538,8 @@ export class SmbProvider implements StorageProvider {
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
-        if (code === "STATUS_FILE_CLOSED" && attempt < maxAttempts) {
-          log.info("STATUS_FILE_CLOSED on delete — reconnecting", { smbPath, attempt });
+        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT") && attempt < maxAttempts) {
+          log.info(`${code} on delete — reconnecting`, { smbPath, attempt });
           await this.reconnect();
           continue;
         }
@@ -577,8 +582,8 @@ export class SmbProvider implements StorageProvider {
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
-        if (code === "STATUS_FILE_CLOSED" && attempt < 5) {
-          log.info("STATUS_FILE_CLOSED on move — reconnecting", { smbSrc, attempt });
+        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT") && attempt < 5) {
+          log.info(`${code} on move — reconnecting`, { smbSrc, attempt });
           await this.reconnect();
           continue;
         }
