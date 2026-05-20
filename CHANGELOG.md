@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.7](https://github.com/Go2Engle/FileBridge/compare/v0.8.6...v0.8.7) (2026-05-20)
+
+
+### Bug Fixes
+
+* **jobs:** keep failed jobs retryable ([#37](https://github.com/Go2Engle/FileBridge/issues/37)) ([e07c621](https://github.com/Go2Engle/FileBridge/commit/e07c6219673b005c4f86b09eb8b42a899244d242))
+
 ## [0.8.6](https://github.com/Go2Engle/FileBridge/compare/v0.8.5...v0.8.6) (2026-05-18)
 
 
