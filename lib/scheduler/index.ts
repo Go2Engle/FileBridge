@@ -1,7 +1,7 @@
 import { schedule, validate } from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import { db } from "@/lib/db";
-import { jobs, settings } from "@/lib/db/schema";
+import { jobRuns, jobs, settings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { runJob } from "@/lib/transfer/engine";
 import { logAudit } from "@/lib/audit";
@@ -23,10 +23,23 @@ export async function getSchedulerTimezone(): Promise<string> {
 export async function initializeScheduler(): Promise<void> {
   log.info("Initializing");
 
-  // Reset any jobs that were stuck in 'running' state from a previous crash
+  // Reset any jobs/runs that were stuck in 'running' state from a previous crash.
+  // The job status alone is not enough: run history rows drive the UI's run
+  // state and otherwise remain "running" forever after a service restart.
+  const startupRecoveryMessage =
+    "FileBridge restarted while this run was still running; marking it failed during scheduler startup.";
+  await db
+    .update(jobRuns)
+    .set({
+      status: "failure",
+      completedAt: new Date().toISOString(),
+      errorMessage: startupRecoveryMessage,
+    })
+    .where(eq(jobRuns.status, "running"));
+
   await db
     .update(jobs)
-    .set({ status: "error" })
+    .set({ status: "active", updatedAt: new Date().toISOString() })
     .where(eq(jobs.status, "running"));
 
   // Load all active jobs and schedule them
