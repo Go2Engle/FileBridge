@@ -6,6 +6,7 @@ import { getJobHooksWithDetail } from "@/lib/db/hooks";
 import { executeHooks } from "@/lib/hooks/executor";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
+import { getPostRunJobStatus } from "@/lib/transfer/status";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
@@ -26,6 +27,66 @@ import {
 } from "@/lib/pgp";
 
 const log = createLogger("engine");
+
+const DEFAULT_TRANSFER_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const TRANSFER_IDLE_TIMEOUT_MS = (() => {
+  const configured = Number(process.env.FILEBRIDGE_TRANSFER_IDLE_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_TRANSFER_IDLE_TIMEOUT_MS;
+})();
+
+function createIdleTimeoutMonitor(
+  label: string,
+  onTimeout?: (err: Error) => void,
+): Transform {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let closed = false;
+
+  const monitor = new Transform({
+    transform(chunk, _encoding, callback) {
+      resetTimer();
+      callback(null, chunk);
+    },
+    final(callback) {
+      clearTimer();
+      callback();
+    },
+    destroy(err, callback) {
+      clearTimer();
+      callback(err);
+    },
+  });
+
+  function clearTimer() {
+    closed = true;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  function resetTimer() {
+    if (closed) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (closed) return;
+      const err = new Error(
+        `${label} stalled: no data received for ${TRANSFER_IDLE_TIMEOUT_MS}ms`,
+      );
+      log.error("Transfer stream idle timeout", {
+        label,
+        timeoutMs: TRANSFER_IDLE_TIMEOUT_MS,
+      });
+      onTimeout?.(err);
+      monitor.destroy(err);
+    }, TRANSFER_IDLE_TIMEOUT_MS);
+    timer.unref?.();
+  }
+
+  resetTimer();
+  return monitor;
+}
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -391,7 +452,24 @@ async function downloadToTempFile(
   // Sanitize fileName: strip directory components and unsafe characters
   const safeName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
   const tmpPath = path.join(tmpDir, `filebridge-${jobId}-${Date.now()}-${safeName}`);
-  await pipeline(stream, createWriteStream(tmpPath));
+  const idleMonitor = createIdleTimeoutMonitor(`download ${fileName}`, (err) => {
+    if (!stream.destroyed) stream.destroy(err);
+  });
+  const outputStream = createWriteStream(tmpPath);
+  try {
+    await pipeline(stream, idleMonitor, outputStream);
+  } catch (err) {
+    if (!idleMonitor.destroyed) idleMonitor.destroy();
+    if (!stream.destroyed) stream.destroy();
+    if (!outputStream.destroyed) outputStream.destroy();
+    try {
+      await fs.unlink(tmpPath);
+      log.debug("Partial temp file cleaned up", { tmpPath });
+    } catch {
+      // Nothing to clean up, or cleanup failed; preserve the original transfer error.
+    }
+    throw err;
+  }
   return tmpPath;
 }
 
@@ -1102,10 +1180,24 @@ export async function runJob(jobId: number): Promise<void> {
                 callback(null, chunk);
               },
             });
-            srcStream.pipe(tracker);
-            // Propagate errors bidirectionally
-            srcStream.on("error", (err) => tracker.destroy(err));
-            tracker.on("error", () => { if (!srcStream.destroyed) srcStream.destroy(); });
+            const idleMonitor = createIdleTimeoutMonitor(`transfer ${file.name}`, (err) => {
+              if (!srcStream.destroyed) srcStream.destroy(err);
+              if (originalSrcStream !== srcStream && !originalSrcStream.destroyed) {
+                originalSrcStream.destroy(err);
+              }
+            });
+            srcStream.pipe(idleMonitor).pipe(tracker);
+            // Propagate errors through the stream chain so uploadFile rejects
+            // instead of waiting indefinitely on a source that has gone idle.
+            srcStream.on("error", (err) => idleMonitor.destroy(err));
+            idleMonitor.on("error", (err) => tracker.destroy(err));
+            tracker.on("error", (err) => {
+              if (!idleMonitor.destroyed) idleMonitor.destroy(err);
+              if (!srcStream.destroyed) srcStream.destroy(err);
+              if (originalSrcStream !== srcStream && !originalSrcStream.destroyed) {
+                originalSrcStream.destroy(err);
+              }
+            });
 
             // Apply PGP encryption to the stream if configured
             let uploadStream: Readable = tracker;
@@ -1348,7 +1440,7 @@ export async function runJob(jobId: number): Promise<void> {
       await db
         .update(jobs)
         .set({
-          status: previousStatus === "inactive" ? "inactive" : "active",
+          status: getPostRunJobStatus(previousStatus),
           lastRunAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
@@ -1399,7 +1491,8 @@ export async function runJob(jobId: number): Promise<void> {
       await db
         .update(jobs)
         .set({
-          status: previousStatus === "inactive" ? "inactive" : "error",
+          status: getPostRunJobStatus(previousStatus),
+          lastRunAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
         .where(eq(jobs.id, jobId));
