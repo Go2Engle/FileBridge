@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { jobs, jobRuns, transferLogs, type NewTransferLog } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getConnection } from "@/lib/db/connections";
 import { getJobHooksWithDetail } from "@/lib/db/hooks";
 import { executeHooks } from "@/lib/hooks/executor";
@@ -696,24 +696,42 @@ export async function runJob(jobId: number): Promise<void> {
   }
   log.info("Job loaded", { jobId, jobName: job.name, status: job.status, schedule: job.schedule });
 
-  // Prevent concurrent runs
-  if (job.status === "running") {
+  // Remember the pre-run status so a manual run of an inactive job doesn't
+  // silently re-enable it when the run completes.
+  const previousStatus = job.status;
+
+  // Prevent concurrent runs: atomically claim the job by flipping its status
+  // to "running". A plain status check leaves a race window where a scheduled
+  // trigger and a manual run can both pass it and run the same job twice
+  // concurrently — the conditional update lets exactly one caller win.
+  const claimed = await db
+    .update(jobs)
+    .set({ status: "running", updatedAt: new Date().toISOString() })
+    .where(and(eq(jobs.id, jobId), ne(jobs.status, "running")))
+    .returning({ id: jobs.id });
+  if (claimed.length === 0) {
     log.info("Job already running — skipping", { jobId });
     return;
   }
 
-  // Remember the pre-run status so a manual run of an inactive job doesn't
-  // silently re-enable it when the run completes.
-  const previousStatus = job.status;
+  // If anything fails before the main try/catch takes ownership below,
+  // release the claim so the job isn't stuck "running" until restart.
+  const releaseClaim = () =>
+    db
+      .update(jobs)
+      .set({ status: getPostRunJobStatus(previousStatus), updatedAt: new Date().toISOString() })
+      .where(eq(jobs.id, jobId));
 
   // Load connections
   const srcConn = getConnection(job.sourceConnectionId);
   const dstConn = getConnection(job.destinationConnectionId);
 
   if (!srcConn) {
+    await releaseClaim();
     throw new Error(`Source connection ${job.sourceConnectionId} not found for job ${jobId}`);
   }
   if (!dstConn) {
+    await releaseClaim();
     throw new Error(`Destination connection ${job.destinationConnectionId} not found for job ${jobId}`);
   }
   log.info("Connections resolved", {
@@ -723,29 +741,46 @@ export async function runJob(jobId: number): Promise<void> {
   });
 
   // Create job run record
-  const [run] = await db
-    .insert(jobRuns)
-    .values({
-      jobId,
-      startedAt: new Date().toISOString(),
-      status: "running",
-      filesTransferred: 0,
-      bytesTransferred: 0,
-    })
-    .returning();
+  let run: typeof jobRuns.$inferSelect;
+  try {
+    [run] = await db
+      .insert(jobRuns)
+      .values({
+        jobId,
+        startedAt: new Date().toISOString(),
+        status: "running",
+        filesTransferred: 0,
+        bytesTransferred: 0,
+      })
+      .returning();
+  } catch (err) {
+    await releaseClaim();
+    throw err;
+  }
 
   // From here on, all log lines will automatically include jobId + runId
   return withJobContext(jobId, run.id, async () => {
     log.info("Job run created", { runId: run.id });
 
-    // Mark job as running
-    await db
-      .update(jobs)
-      .set({ status: "running", updatedAt: new Date().toISOString() })
-      .where(eq(jobs.id, jobId));
-
-    const source = createStorageProvider(srcConn);
-    const dest = createStorageProvider(dstConn);
+    let source: ReturnType<typeof createStorageProvider>;
+    let dest: ReturnType<typeof createStorageProvider>;
+    try {
+      source = createStorageProvider(srcConn);
+      dest = createStorageProvider(dstConn);
+    } catch (err) {
+      // Provider creation failed before the main try/catch took ownership —
+      // record the failure and release the claim so the job isn't stuck "running".
+      await db
+        .update(jobRuns)
+        .set({
+          completedAt: new Date().toISOString(),
+          status: "failure",
+          errorMessage: err instanceof Error ? err.message : "Unknown error",
+        })
+        .where(eq(jobRuns.id, run.id));
+      await releaseClaim();
+      throw err;
+    }
 
     // Declared here so the catch block can clean them up if the job fails
     let logFlushTimer: ReturnType<typeof setInterval> | null = null;
