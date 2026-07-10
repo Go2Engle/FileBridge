@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.8](https://github.com/Go2Engle/FileBridge/compare/v0.8.7...v0.8.8) (2026-07-10)
+
+
+### Bug Fixes
+
+* **sftp:** add keepalive and per-operation timeouts to prevent jobs hanging on dead connections ([#39](https://github.com/Go2Engle/FileBridge/issues/39)) ([682eb75](https://github.com/Go2Engle/FileBridge/commit/682eb75d6e0ec7e0f29fc64147465adb93093d4c))
+
 ## [0.8.7](https://github.com/Go2Engle/FileBridge/compare/v0.8.6...v0.8.7) (2026-05-20)
 
 
