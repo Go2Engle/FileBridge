@@ -2,6 +2,7 @@ import SftpClient from "ssh2-sftp-client";
 import type { Readable } from "stream";
 import type { StorageProvider, FileInfo } from "./interface";
 import { globToRegex } from "./interface";
+import { normalizePemKey } from "./pem";
 import path from "path";
 import { createLogger } from "@/lib/logger";
 
@@ -83,7 +84,9 @@ export class SftpProvider implements StorageProvider {
         port: this.port,
         username: this.credentials.username,
         password: this.credentials.password,
-        privateKey: this.credentials.privateKey,
+        privateKey: this.credentials.privateKey
+          ? normalizePemKey(this.credentials.privateKey)
+          : undefined,
         passphrase: this.credentials.passphrase,
         readyTimeout: 20000,
         // Detect silently-dropped connections (NAT/firewall idle timeouts)
