@@ -14,6 +14,7 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Loader2, PlugZap } from "lucide-react";
 import {
@@ -434,9 +435,21 @@ export function ConnectionForm({ open, onClose, editConnection }: ConnectionForm
                     <FormItem>
                       <FormLabel>Private Key (PEM)</FormLabel>
                       <FormControl>
-                        <Input placeholder="Optional — paste PEM content" {...field} />
+                        {/* Must be a textarea: a single-line input strips the
+                            newlines a PEM block needs to stay parseable. */}
+                        <Textarea
+                          rows={10}
+                          spellCheck={false}
+                          autoComplete="off"
+                          placeholder={"Optional — paste the full PEM block, e.g.\n-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----"}
+                          className="font-mono text-xs"
+                          {...field}
+                        />
                       </FormControl>
-                      <FormDescription>Use instead of or alongside password</FormDescription>
+                      <FormDescription>
+                        Use instead of or alongside password. Paste the whole key including the
+                        BEGIN and END lines.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
