@@ -83,6 +83,36 @@ When **Move** is selected, a **Move Path** field appears. This is the destinatio
 
 > **Tip**: If the move path is a subdirectory of the source path (e.g. source = `/data`, move path = `/data/processed`), FileBridge automatically excludes the `processed` subdirectory from the file listing to prevent an infinite loop.
 
+#### Rename on Move
+
+A **Rename on Move** field also appears when **Move** is selected. It is optional — leave it empty and the file keeps its original name, which is the default behavior.
+
+Fill it in when the source produces the same filename on every run (e.g. `report.csv` daily) and you need each archived copy preserved rather than overwritten. Click **Add date & time** to insert the common preset:
+
+```
+{name}_{date}_{time}{ext}     →     report_2026-08-13_031500.csv
+```
+
+Available tokens:
+
+| Token | Value |
+|---|---|
+| `{name}` | Filename without extension |
+| `{ext}` | Extension including the dot (empty if the file has none) |
+| `{date}` | `2026-08-13` |
+| `{time}` | `031500` |
+| `{datetime}` | `2026-08-13_031500` |
+| `{timestamp}` | `20260813031500` |
+| `{year}` `{month}` `{day}` | `2026` `08` `13` |
+| `{hour}` `{minute}` `{second}` | `03` `15` `00` |
+
+Notes:
+
+- Timestamps come from the **job run's start time** in the server's local timezone, so every file moved by a single run shares one consistent suffix.
+- Only the archived copy is renamed. The file delivered to the destination keeps its original name.
+- Path separators in a rendered name are replaced with `_`, so a template can't write outside the move folder.
+- An unrecognized token is left in the filename as-is, which makes typos easy to spot in the run log.
+
 ---
 
 ## Job Statuses

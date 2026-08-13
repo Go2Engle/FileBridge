@@ -422,6 +422,12 @@ function OverviewPanel({
             <div className="truncate">{job.movePath}</div>
           </>
         )}
+        {job.postTransferAction === "move" && job.moveFileNameTemplate && (
+          <>
+            <div className="text-muted-foreground">Rename on Move</div>
+            <div className="font-mono text-xs truncate">{job.moveFileNameTemplate}</div>
+          </>
+        )}
         <div className="text-muted-foreground">Options</div>
         <div className="flex flex-wrap gap-1.5">
           {job.overwriteExisting && <Badge variant="outline" className="text-xs">Overwrite</Badge>}

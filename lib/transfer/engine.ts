@@ -7,6 +7,7 @@ import { executeHooks } from "@/lib/hooks/executor";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import { getPostRunJobStatus } from "@/lib/transfer/status";
+import { renderMoveFileName } from "@/lib/transfer/filename-template";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
@@ -553,6 +554,10 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
   const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
   if (!job) throw new Error(`Job ${jobId} not found`);
 
+  // Stand-in for the run start time so previewed move destinations show the
+  // same single timestamp a real run would apply across all files.
+  const dryRunAt = new Date();
+
   const srcConn = getConnection(job.sourceConnectionId);
   const dstConn = getConnection(job.destinationConnectionId);
   if (!srcConn) throw new Error(`Source connection ${job.sourceConnectionId} not found`);
@@ -634,7 +639,10 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
       const wouldSkip = skipReason !== null;
       const moveDest =
         !wouldSkip && job.postTransferAction === "move" && job.movePath
-          ? path.posix.join(job.movePath, f.name)
+          ? path.posix.join(
+              job.movePath,
+              renderMoveFileName(job.moveFileNameTemplate, f.name, dryRunAt)
+            )
           : null;
 
       return {
@@ -1427,7 +1435,14 @@ export async function runJob(jobId: number): Promise<void> {
               log.info("Deleting source file", { srcPath: result.srcFilePath });
               await deleteSourceAndConfirm(source, result.srcFilePath);
             } else if (job.postTransferAction === "move" && job.movePath) {
-              const moveDest = path.posix.join(job.movePath, result.fileName);
+              // Stamp using the run's start time so every file in one run shares
+              // the same suffix, rather than drifting as the loop progresses.
+              const movedName = renderMoveFileName(
+                job.moveFileNameTemplate,
+                result.fileName,
+                new Date(run.startedAt)
+              );
+              const moveDest = path.posix.join(job.movePath, movedName);
               log.info("Moving source file", { srcPath: result.srcFilePath, dstPath: moveDest });
               await source.moveFile(result.srcFilePath, moveDest);
             }

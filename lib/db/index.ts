@@ -208,6 +208,7 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN pgp_decrypt INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE jobs ADD COLUMN pgp_decrypt_key_id INTEGER`,
   `ALTER TABLE jobs ADD COLUMN archive_entry_filter TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE jobs ADD COLUMN move_file_name_template TEXT NOT NULL DEFAULT ''`,
 ];
 
 for (const sql of migrations) {
