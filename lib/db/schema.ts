@@ -36,6 +36,11 @@ export const jobs = sqliteTable("jobs", {
     .notNull()
     .default("retain"),
   movePath: text("move_path"),
+  /**
+   * Optional filename template applied when a file is moved to movePath
+   * (e.g. "{name}_{date}_{time}{ext}"). Empty means keep the original name.
+   */
+  moveFileNameTemplate: text("move_file_name_template").notNull().default(""),
   overwriteExisting: integer("overwrite_existing", { mode: "boolean" })
     .notNull()
     .default(false),

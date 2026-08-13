@@ -27,6 +27,11 @@ import { FolderSearch, Terminal, Webhook } from "lucide-react";
 import { FolderBrowser } from "@/components/ui/folder-browser";
 import type { Connection, Job, Hook } from "@/lib/db/schema";
 import type { PgpKeyPublic } from "@/components/pgp-keys/pgp-key-list";
+import {
+  MOVE_TEMPLATE_TOKENS,
+  MOVE_TEMPLATE_TIMESTAMP_PRESET,
+  renderMoveFileName,
+} from "@/lib/transfer/filename-template";
 
 const jobSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -39,6 +44,7 @@ const jobSchema = z.object({
   schedule: z.string().min(1, "Schedule is required"),
   postTransferAction: z.enum(["retain", "delete", "move"]).default("retain"),
   movePath: z.string().optional(),
+  moveFileNameTemplate: z.string().default(""),
   overwriteExisting: z.boolean().default(false),
   skipHiddenFiles: z.boolean().default(true),
   extractArchives: z.boolean().default(false),
@@ -169,6 +175,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
       schedule: "0 * * * *",
       postTransferAction: "retain",
       movePath: "",
+      moveFileNameTemplate: "",
       overwriteExisting: false,
       skipHiddenFiles: true,
       extractArchives: false,
@@ -195,6 +202,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         schedule: editJob.schedule,
         postTransferAction: (editJob.postTransferAction as FormValues["postTransferAction"]) ?? "retain",
         movePath: editJob.movePath ?? "",
+        moveFileNameTemplate: editJob.moveFileNameTemplate ?? "",
         overwriteExisting: editJob.overwriteExisting ?? false,
         skipHiddenFiles: editJob.skipHiddenFiles ?? true,
         extractArchives: editJob.extractArchives ?? false,
@@ -223,6 +231,7 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
         schedule: "0 * * * *",
         postTransferAction: "retain",
         movePath: "",
+        moveFileNameTemplate: "",
         overwriteExisting: false,
         skipHiddenFiles: true,
         extractArchives: false,
@@ -239,6 +248,8 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
   }, [open, editJob, form]);
 
   const postAction = form.watch("postTransferAction");
+  const moveFileNameTemplate = form.watch("moveFileNameTemplate");
+  const fileFilterValue = form.watch("fileFilter");
   const sourceConnectionId = form.watch("sourceConnectionId");
   const destinationConnectionId = form.watch("destinationConnectionId");
   const extractArchives = form.watch("extractArchives");
@@ -248,6 +259,15 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
 
   const getConnectionName = (id: number) =>
     connections?.find((c) => c.id === id)?.name ?? "Connection";
+
+  // Live example of the archived filename, using the job's first filter pattern
+  // to pick a plausible extension.
+  const moveNamePreview = useMemo(() => {
+    const firstPattern = (fileFilterValue ?? "").split(",")[0]?.trim() ?? "";
+    const match = /\.([A-Za-z0-9]+)$/.exec(firstPattern);
+    const sample = `report.${match ? match[1] : "csv"}`;
+    return { sample, result: renderMoveFileName(moveFileNameTemplate, sample, new Date()) };
+  }, [moveFileNameTemplate, fileFilterValue]);
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -496,40 +516,91 @@ export function JobForm({ open, onClose, editJob }: JobFormProps) {
                 </div>
 
                 {postAction === "move" && (
-                  <FormField
-                    control={form.control}
-                    name="movePath"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Move Destination Path</FormLabel>
-                        <div className="flex gap-2">
-                          <FormControl>
-                            <Input placeholder="/archive/sent" {...field} />
-                          </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            disabled={!sourceConnectionId}
-                            title={sourceConnectionId ? "Browse source connection folders" : "Select a source connection first"}
-                            onClick={() =>
-                              setBrowsing({
-                                connectionId: sourceConnectionId,
-                                connectionName: getConnectionName(sourceConnectionId),
-                                field: "movePath",
-                              })
-                            }
-                          >
-                            <FolderSearch className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <FormDescription>
-                          Source files will be moved here after transfer
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="movePath"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Move Destination Path</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input placeholder="/archive/sent" {...field} />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={!sourceConnectionId}
+                              title={sourceConnectionId ? "Browse source connection folders" : "Select a source connection first"}
+                              onClick={() =>
+                                setBrowsing({
+                                  connectionId: sourceConnectionId,
+                                  connectionName: getConnectionName(sourceConnectionId),
+                                  field: "movePath",
+                                })
+                              }
+                            >
+                              <FolderSearch className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <FormDescription>
+                            Source files will be moved here after transfer
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="moveFileNameTemplate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rename on Move (optional)</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input
+                                placeholder="Leave empty to keep the original filename"
+                                className="font-mono"
+                                {...field}
+                              />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="shrink-0"
+                              onClick={() =>
+                                form.setValue(
+                                  "moveFileNameTemplate",
+                                  MOVE_TEMPLATE_TIMESTAMP_PRESET,
+                                  { shouldDirty: true }
+                                )
+                              }
+                            >
+                              Add date &amp; time
+                            </Button>
+                          </div>
+                          <FormDescription>
+                            {moveFileNameTemplate?.trim() ? (
+                              <>
+                                <span className="font-mono">{moveNamePreview.sample}</span>
+                                {" → "}
+                                <span className="font-mono text-foreground">
+                                  {moveNamePreview.result}
+                                </span>
+                                <br />
+                              </>
+                            ) : null}
+                            Stamped with the job run&apos;s start time, so files moved by the
+                            same run share one suffix. Available tokens:{" "}
+                            {MOVE_TEMPLATE_TOKENS.map((t) => t.token).join(" ")}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
                 )}
 
                 {/* Schedule */}
