@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/Go2Engle/FileBridge/compare/v0.8.9...v0.9.0) (2026-08-13)
+
+
+### Features
+
+* **jobs:** add optional filename template for the move post-transfer action ([#43](https://github.com/Go2Engle/FileBridge/issues/43)) ([25bacef](https://github.com/Go2Engle/FileBridge/commit/25bacefe4df5410bd3fbc36bc2f41ead4fec4085))
+
 ## [0.8.9](https://github.com/Go2Engle/FileBridge/compare/v0.8.8...v0.8.9) (2026-08-13)
 
 
