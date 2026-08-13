@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.9](https://github.com/Go2Engle/FileBridge/compare/v0.8.8...v0.8.9) (2026-08-13)
+
+
+### Bug Fixes
+
+* **sftp:** stop single-line input from stripping newlines out of PEM keys ([#41](https://github.com/Go2Engle/FileBridge/issues/41)) ([bf0d64b](https://github.com/Go2Engle/FileBridge/commit/bf0d64b1ed3beea4f8bf9253e5e92900ac3ff57e))
+
 ## [0.8.8](https://github.com/Go2Engle/FileBridge/compare/v0.8.7...v0.8.8) (2026-07-10)
 
 
