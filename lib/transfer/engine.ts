@@ -909,7 +909,7 @@ export async function runJob(jobId: number): Promise<void> {
 
       let filesSkipped = 0;
       const sourceFileResults: SourceFileResult[] = [];
-      const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string }[] = [];
+      const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string; outputName: string }[] = [];
 
       // ── Transfer log batcher: flush every 50 items or 5 seconds ──────
       const LOG_BATCH_SIZE = 50;
@@ -1152,7 +1152,7 @@ export async function runJob(jobId: number): Promise<void> {
 
             await dest.uploadFile(Readable.from(uploadContent), dstFilePath, uploadSize);
             if (!dest.supportsImmediateConsistency) {
-              pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath });
+              pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath, outputName: outputFileName });
             }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath });
 
@@ -1294,7 +1294,7 @@ export async function runJob(jobId: number): Promise<void> {
                 throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
               }
               if (!dest.supportsImmediateConsistency) {
-                pendingVerifications.push({ dstFilePath, expectedSize: fileSize, srcFilePath });
+                pendingVerifications.push({ dstFilePath, expectedSize: fileSize, srcFilePath, outputName: outputFileName });
               }
             }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath, plaintextBytes: currentBytes });
@@ -1400,6 +1400,10 @@ export async function runJob(jobId: number): Promise<void> {
                 (r) => r.srcFilePath === pending.srcFilePath && r.transferSuccess
               );
               if (result) result.transferSuccess = false;
+
+              // Keep the hook file list consistent with the transfer log
+              const idx = transferredFiles.indexOf(pending.outputName);
+              if (idx !== -1) transferredFiles.splice(idx, 1);
 
               // Correct the transfer log: find the success entry and mark as failure
               const logEntry = pendingLogs.find(

@@ -48,6 +48,15 @@ function truncate(s: string): string {
   return s.slice(0, MAX_OUTPUT_BYTES) + `\n...[truncated]`;
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<HookResult> {
   const start = Date.now();
   const method = config.method ?? "POST";
@@ -139,7 +148,7 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
     ? interpolate(config.subject, ctx)
     : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
   const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
-    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${f}`).join("\n")}`
+    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${config.html ? escapeHtml(f) : f}`).join("\n")}`
     : "";
   const body = config.body
     ? interpolate(config.body, ctx)

@@ -670,7 +670,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                           />
                         </FormControl>
                         <FormDescription className="text-xs">
-                          Available env vars: <code className="text-xs">FILEBRIDGE_JOB_ID</code>, <code className="text-xs">FILEBRIDGE_JOB_NAME</code>, <code className="text-xs">FILEBRIDGE_TRIGGER</code>, <code className="text-xs">FILEBRIDGE_STATUS</code>, <code className="text-xs">FILEBRIDGE_FILES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_BYTES_TRANSFERRED</code>
+                          Available env vars: <code className="text-xs">FILEBRIDGE_JOB_ID</code>, <code className="text-xs">FILEBRIDGE_JOB_NAME</code>, <code className="text-xs">FILEBRIDGE_TRIGGER</code>, <code className="text-xs">FILEBRIDGE_STATUS</code>, <code className="text-xs">FILEBRIDGE_FILES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_BYTES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_TRANSFERRED_FILES</code>
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

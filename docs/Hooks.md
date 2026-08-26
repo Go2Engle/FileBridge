@@ -48,6 +48,7 @@ Sends an HTTP request to any URL when a hook fires.
   "status": "success",
   "files_transferred": 3,
   "bytes_transferred": 204800,
+  "transferred_files": ["report-q3.csv", "metrics.json", "summary.txt"],
   "error_message": null
 }
 ```
