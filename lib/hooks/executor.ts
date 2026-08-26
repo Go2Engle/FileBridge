@@ -81,7 +81,9 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   let body: string | undefined;
   if (method !== "GET") {
     if (config.body) {
-      body = interpolate(String(config.body), ctx, { jsonSafe: true });
+      const effectiveContentType = headers["Content-Type"] ?? headers["content-type"] ?? "";
+      const isJsonBody = effectiveContentType.toLowerCase().includes("application/json");
+      body = interpolate(String(config.body), ctx, { jsonSafe: isJsonBody });
     } else {
       body = JSON.stringify({
         job_id: ctx.jobId,
@@ -149,15 +151,28 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
       : {}),
   });
 
+  const isHtml = config.html ?? false;
   const subject = config.subject
     ? interpolate(config.subject, ctx)
     : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
-  const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
-    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${config.html ? escapeHtml(f) : f}`).join(config.html ? "<br>" : "\n")}`
-    : "";
-  const body = config.body
-    ? interpolate(config.body, ctx, { html: config.html ?? false })
-    : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
+  let body: string;
+  if (config.body) {
+    body = interpolate(config.body, ctx, { html: isHtml });
+  } else if (isHtml) {
+    const fileListingHtml = (ctx.transferredFiles?.length ?? 0) > 0
+      ? `<p><strong>Files transferred:</strong></p><ul>${ctx.transferredFiles!.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>`
+      : "";
+    body = `<p><strong>Job:</strong> ${escapeHtml(ctx.jobName)}</p>`
+      + `<p><strong>Status:</strong> ${escapeHtml(ctx.status ?? "n/a")}</p>`
+      + `<p><strong>Files transferred:</strong> ${ctx.filesTransferred ?? 0}</p>`
+      + `<p><strong>Trigger:</strong> ${escapeHtml(ctx.trigger)}</p>`
+      + fileListingHtml;
+  } else {
+    const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
+      ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${f}`).join("\n")}`
+      : "";
+    body = `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
+  }
 
   try {
     await Promise.race([
@@ -165,7 +180,7 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
         from: config.from,
         to: config.to,
         subject,
-        ...(config.html ? { html: body } : { text: body }),
+        ...(isHtml ? { html: body } : { text: body }),
       }),
       new Promise<never>((_, reject) =>
         setTimeout(
