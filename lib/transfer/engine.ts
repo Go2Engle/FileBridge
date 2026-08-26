@@ -798,6 +798,7 @@ export async function runJob(jobId: number): Promise<void> {
     let filesTransferred = 0;
     let bytesTransferred = 0;
     const transferredFiles: string[] = [];
+    let verificationFailureCount = 0;
     const pendingLogs: NewTransferLog[] = [];
     async function flushLogs() {
       if (pendingLogs.length === 0) return;
@@ -1099,11 +1100,13 @@ export async function runJob(jobId: number): Promise<void> {
                     destinationPath: result.dstPath,
                     fileSize: result.bytes,
                     transferredAt: new Date().toISOString(),
-                    status: "success",
-                  });
-                  filesTransferred++;
-                  bytesTransferred += result.bytes;
-                  transferredFiles.push(result.outputName);
+          status: "success",
+          });
+          filesTransferred++;
+          bytesTransferred += result.bytes;
+          if (!transferredFiles.includes(result.outputName)) {
+            transferredFiles.push(result.outputName);
+          }
                 } else {
                   pendingLogs.push({
                     jobId,
@@ -1373,15 +1376,6 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
-      // ── Flush remaining batched data ──────────────────────────────────
-      if (logFlushTimer) clearInterval(logFlushTimer);
-      if (progressFlushTimer) clearInterval(progressFlushTimer);
-      await flushLogs();
-      await db
-        .update(jobRuns)
-        .set({ filesTransferred, bytesTransferred })
-        .where(eq(jobRuns.id, run.id));
-
       // ── Batch-verify deferred destination file sizes ──────────────────
       if (pendingVerifications.length > 0) {
         log.info("Batch-verifying destination files", { count: pendingVerifications.length });
@@ -1405,19 +1399,42 @@ export async function runJob(jobId: number): Promise<void> {
               const idx = transferredFiles.indexOf(pending.outputName);
               if (idx !== -1) transferredFiles.splice(idx, 1);
 
-              // Correct the transfer log: find the success entry and mark as failure
+              // Correct the transfer log: find the success entry and mark as failure.
+              // The pending batch is flushed *after* this reconciliation, so most
+              // records are persisted with the corrected status in one write.
               const logEntry = pendingLogs.find(
                 (l) => l.destinationPath === failedPath && l.status === "success"
               );
+              const fileBytes = logEntry?.fileSize ?? 0;
               if (logEntry) {
                 logEntry.status = "failure";
                 logEntry.errorMessage = err.message;
                 logEntry.fileSize = 0;
+              } else {
+                // Entry was already flushed in a previous batch — correct the row in place
+                await db
+                  .update(transferLogs)
+                  .set({ status: "failure", errorMessage: err.message, fileSize: 0 })
+                  .where(and(eq(transferLogs.jobId, jobId), eq(transferLogs.destinationPath, failedPath), eq(transferLogs.status, "success")));
               }
+
+              // Reconcile run counters with the corrected transfer log
+              filesTransferred = Math.max(0, filesTransferred - 1);
+              bytesTransferred = Math.max(0, bytesTransferred - fileBytes);
+              verificationFailureCount++;
             }
           }
         }
       }
+
+      // ── Flush remaining batched data (after verification reconciliation) ──
+      if (logFlushTimer) clearInterval(logFlushTimer);
+      if (progressFlushTimer) clearInterval(progressFlushTimer);
+      await flushLogs();
+      await db
+        .update(jobRuns)
+        .set({ filesTransferred, bytesTransferred })
+        .where(eq(jobRuns.id, run.id));
 
       // ── Deferred post-transfer actions ──────────────────────────────────
       if (job.postTransferAction === "delete" || job.postTransferAction === "move") {
@@ -1469,12 +1486,19 @@ export async function runJob(jobId: number): Promise<void> {
       }
 
       // Run post-job hooks after all files are transferred
+      if (verificationFailureCount > 0) {
+        log.warn("Post-job hooks will report verification failures", { count: verificationFailureCount });
+      }
       const postHooks = getJobHooksWithDetail(jobId, "post_job");
       if (postHooks.length > 0) {
         log.info("Running post-job hooks", { count: postHooks.length });
         await executeHooks(postHooks, {
           jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-          status: "success", filesTransferred, bytesTransferred, transferredFiles,
+          status: verificationFailureCount > 0 ? "failure" : "success",
+          filesTransferred, bytesTransferred, transferredFiles,
+          ...(verificationFailureCount > 0
+            ? { errorMessage: `${verificationFailureCount} file(s) failed post-transfer verification` }
+            : {}),
         }, run.id);
         log.info("Post-job hooks completed");
       }
@@ -1488,7 +1512,10 @@ export async function runJob(jobId: number): Promise<void> {
         .update(jobRuns)
         .set({
           completedAt: new Date().toISOString(),
-          status: "success",
+          status: verificationFailureCount > 0 ? "failure" : "success",
+          ...(verificationFailureCount > 0
+            ? { errorMessage: `${verificationFailureCount} file(s) failed post-transfer verification` }
+            : {}),
           filesTransferred,
           bytesTransferred,
           currentFile: null,

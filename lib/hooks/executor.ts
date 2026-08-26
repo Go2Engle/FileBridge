@@ -30,7 +30,10 @@ interface HookResult {
   durationMs: number;
 }
 
-function interpolate(template: string, ctx: HookContext): string {
+function interpolate(template: string, ctx: HookContext, opts?: { jsonSafe?: boolean }): string {
+  const transferredFilesValue = opts?.jsonSafe
+    ? JSON.stringify((ctx.transferredFiles ?? []).join("\n")).slice(1, -1)
+    : (ctx.transferredFiles ?? []).join("\n");
   return template
     .replace(/\{\{job_id\}\}/g, String(ctx.jobId))
     .replace(/\{\{job_name\}\}/g, ctx.jobName)
@@ -39,7 +42,7 @@ function interpolate(template: string, ctx: HookContext): string {
     .replace(/\{\{status\}\}/g, ctx.status ?? "")
     .replace(/\{\{files_transferred\}\}/g, String(ctx.filesTransferred ?? 0))
     .replace(/\{\{bytes_transferred\}\}/g, String(ctx.bytesTransferred ?? 0))
-    .replace(/\{\{transferred_files\}\}/g, (ctx.transferredFiles ?? []).join("\n"))
+    .replace(/\{\{transferred_files\}\}/g, () => transferredFilesValue)
     .replace(/\{\{error_message\}\}/g, ctx.errorMessage ?? "");
 }
 
@@ -76,7 +79,7 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   let body: string | undefined;
   if (method !== "GET") {
     if (config.body) {
-      body = interpolate(String(config.body), ctx);
+      body = interpolate(String(config.body), ctx, { jsonSafe: true });
     } else {
       body = JSON.stringify({
         job_id: ctx.jobId,

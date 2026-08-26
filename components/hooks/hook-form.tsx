@@ -240,7 +240,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
     }
   }
 
-  const TEMPLATE_VARS_HINT = "Variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{transferred_files}}, {{error_message}}";
+  const TEMPLATE_VARS_HINT = "Variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{transferred_files}} (post-job only; empty on pre-job), {{error_message}}";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -670,7 +670,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
                           />
                         </FormControl>
                         <FormDescription className="text-xs">
-                          Available env vars: <code className="text-xs">FILEBRIDGE_JOB_ID</code>, <code className="text-xs">FILEBRIDGE_JOB_NAME</code>, <code className="text-xs">FILEBRIDGE_TRIGGER</code>, <code className="text-xs">FILEBRIDGE_STATUS</code>, <code className="text-xs">FILEBRIDGE_FILES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_BYTES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_TRANSFERRED_FILES</code>
+                          Available env vars: <code className="text-xs">FILEBRIDGE_JOB_ID</code>, <code className="text-xs">FILEBRIDGE_JOB_NAME</code>, <code className="text-xs">FILEBRIDGE_TRIGGER</code>, <code className="text-xs">FILEBRIDGE_STATUS</code>, <code className="text-xs">FILEBRIDGE_FILES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_BYTES_TRANSFERRED</code>, <code className="text-xs">FILEBRIDGE_TRANSFERRED_FILES</code> (post-job only)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
