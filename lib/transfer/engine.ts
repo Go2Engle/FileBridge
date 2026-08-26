@@ -1173,7 +1173,9 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += uploadSize;
-            transferredFiles.push(outputFileName);
+            if (!transferredFiles.includes(outputFileName)) {
+              transferredFiles.push(outputFileName);
+            }
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1317,7 +1319,9 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += currentBytes;
-            transferredFiles.push(outputFileName);
+            if (!transferredFiles.includes(outputFileName)) {
+              transferredFiles.push(outputFileName);
+            }
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1405,7 +1409,7 @@ export async function runJob(jobId: number): Promise<void> {
               const logEntry = pendingLogs.find(
                 (l) => l.destinationPath === failedPath && l.status === "success"
               );
-              const fileBytes = logEntry?.fileSize ?? 0;
+              const fileBytes = logEntry?.fileSize ?? pending.expectedSize;
               if (logEntry) {
                 logEntry.status = "failure";
                 logEntry.errorMessage = err.message;

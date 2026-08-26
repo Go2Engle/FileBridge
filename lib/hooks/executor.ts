@@ -30,9 +30,11 @@ interface HookResult {
   durationMs: number;
 }
 
-function interpolate(template: string, ctx: HookContext, opts?: { jsonSafe?: boolean }): string {
+function interpolate(template: string, ctx: HookContext, opts?: { jsonSafe?: boolean; html?: boolean }): string {
   const transferredFilesValue = opts?.jsonSafe
     ? JSON.stringify((ctx.transferredFiles ?? []).join("\n")).slice(1, -1)
+    : opts?.html
+    ? (ctx.transferredFiles ?? []).map((f) => escapeHtml(f)).join("<br>")
     : (ctx.transferredFiles ?? []).join("\n");
   return template
     .replace(/\{\{job_id\}\}/g, String(ctx.jobId))
@@ -151,10 +153,10 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
     ? interpolate(config.subject, ctx)
     : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
   const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
-    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${config.html ? escapeHtml(f) : f}`).join("\n")}`
+    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${config.html ? escapeHtml(f) : f}`).join(config.html ? "<br>" : "\n")}`
     : "";
   const body = config.body
-    ? interpolate(config.body, ctx)
+    ? interpolate(config.body, ctx, { html: config.html ?? false })
     : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
 
   try {
