@@ -240,7 +240,7 @@ export function HookForm({ open, onClose, editHook }: HookFormProps) {
     }
   }
 
-  const TEMPLATE_VARS_HINT = "Variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{error_message}}";
+  const TEMPLATE_VARS_HINT = "Variables: {{job_id}}, {{job_name}}, {{trigger}}, {{status}}, {{files_transferred}}, {{bytes_transferred}}, {{transferred_files}}, {{error_message}}";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

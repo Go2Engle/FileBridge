@@ -19,6 +19,7 @@ export interface HookContext {
   status?: "success" | "failure";
   filesTransferred?: number;
   bytesTransferred?: number;
+  transferredFiles?: string[];
   errorMessage?: string;
 }
 
@@ -38,6 +39,7 @@ function interpolate(template: string, ctx: HookContext): string {
     .replace(/\{\{status\}\}/g, ctx.status ?? "")
     .replace(/\{\{files_transferred\}\}/g, String(ctx.filesTransferred ?? 0))
     .replace(/\{\{bytes_transferred\}\}/g, String(ctx.bytesTransferred ?? 0))
+    .replace(/\{\{transferred_files\}\}/g, (ctx.transferredFiles ?? []).join("\n"))
     .replace(/\{\{error_message\}\}/g, ctx.errorMessage ?? "");
 }
 
@@ -75,6 +77,7 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
         status: ctx.status ?? null,
         files_transferred: ctx.filesTransferred ?? null,
         bytes_transferred: ctx.bytesTransferred ?? null,
+        transferred_files: ctx.transferredFiles ?? null,
         error_message: ctx.errorMessage ?? null,
       });
     }
@@ -135,9 +138,12 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
   const subject = config.subject
     ? interpolate(config.subject, ctx)
     : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
+  const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
+    ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${f}`).join("\n")}`
+    : "";
   const body = config.body
     ? interpolate(config.body, ctx)
-    : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}`;
+    : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
 
   try {
     await Promise.race([
@@ -183,6 +189,7 @@ async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResu
     FILEBRIDGE_STATUS: ctx.status ?? "",
     FILEBRIDGE_FILES_TRANSFERRED: String(ctx.filesTransferred ?? 0),
     FILEBRIDGE_BYTES_TRANSFERRED: String(ctx.bytesTransferred ?? 0),
+    FILEBRIDGE_TRANSFERRED_FILES: (ctx.transferredFiles ?? []).join("\n"),
     FILEBRIDGE_ERROR_MESSAGE: ctx.errorMessage ?? "",
   };
 

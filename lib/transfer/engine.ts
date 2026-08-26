@@ -793,6 +793,11 @@ export async function runJob(jobId: number): Promise<void> {
     // Declared here so the catch block can clean them up if the job fails
     let logFlushTimer: ReturnType<typeof setInterval> | null = null;
     let progressFlushTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Declared here so the failure path can report them in post-job hooks
+    let filesTransferred = 0;
+    let bytesTransferred = 0;
+    const transferredFiles: string[] = [];
     const pendingLogs: NewTransferLog[] = [];
     async function flushLogs() {
       if (pendingLogs.length === 0) return;
@@ -902,8 +907,6 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
-      let filesTransferred = 0;
-      let bytesTransferred = 0;
       let filesSkipped = 0;
       const sourceFileResults: SourceFileResult[] = [];
       const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string }[] = [];
@@ -1100,6 +1103,7 @@ export async function runJob(jobId: number): Promise<void> {
                   });
                   filesTransferred++;
                   bytesTransferred += result.bytes;
+                  transferredFiles.push(result.outputName);
                 } else {
                   pendingLogs.push({
                     jobId,
@@ -1166,6 +1170,7 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += uploadSize;
+            transferredFiles.push(outputFileName);
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1309,6 +1314,7 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += currentBytes;
+            transferredFiles.push(outputFileName);
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1464,7 +1470,7 @@ export async function runJob(jobId: number): Promise<void> {
         log.info("Running post-job hooks", { count: postHooks.length });
         await executeHooks(postHooks, {
           jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-          status: "success", filesTransferred, bytesTransferred,
+          status: "success", filesTransferred, bytesTransferred, transferredFiles,
         }, run.id);
         log.info("Post-job hooks completed");
       }
@@ -1517,10 +1523,10 @@ export async function runJob(jobId: number): Promise<void> {
       if (postHooksOnError.length > 0) {
         log.info("Running post-job hooks (failure path)", { count: postHooksOnError.length });
         try {
-          await executeHooks(postHooksOnError, {
-            jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-            status: "failure", errorMessage,
-          }, run.id);
+            await executeHooks(postHooksOnError, {
+              jobId, jobName: job.name, runId: run.id, trigger: "post_job",
+              status: "failure", filesTransferred, bytesTransferred, transferredFiles, errorMessage,
+            }, run.id);
         } catch {
           // Already logged inside executeHooks — don't mask the original error
         }
