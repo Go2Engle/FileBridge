@@ -48,6 +48,7 @@ Sends an HTTP request to any URL when a hook fires.
   "status": "success",
   "files_transferred": 3,
   "bytes_transferred": 204800,
+  "transferred_files": ["report-q3.csv", "metrics.json", "summary.txt"],
   "error_message": null
 }
 ```
@@ -97,6 +98,7 @@ Job context is passed as environment variables:
 | `FILEBRIDGE_STATUS` | `success` or `failure` (empty for pre-job) |
 | `FILEBRIDGE_FILES_TRANSFERRED` | Count of files transferred |
 | `FILEBRIDGE_BYTES_TRANSFERRED` | Total bytes transferred |
+| `FILEBRIDGE_TRANSFERRED_FILES` | Newline-separated list of transferred file names (post_job only) |
 | `FILEBRIDGE_ERROR_MESSAGE` | Error message if the job failed, otherwise empty |
 
 **Example — run a script:**
@@ -129,6 +131,7 @@ Webhook body templates and email subject/body fields support `{{variable}}` plac
 | `{{status}}` | `success` or `failure` |
 | `{{files_transferred}}` | `3` |
 | `{{bytes_transferred}}` | `204800` |
+| `{{transferred_files}}` | Newline-separated list of transferred file names (post_job only) |
 | `{{error_message}}` | Error text, or empty string |
 
 ---

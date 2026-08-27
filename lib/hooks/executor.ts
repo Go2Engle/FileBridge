@@ -19,6 +19,7 @@ export interface HookContext {
   status?: "success" | "failure";
   filesTransferred?: number;
   bytesTransferred?: number;
+  transferredFiles?: string[];
   errorMessage?: string;
 }
 
@@ -29,7 +30,12 @@ interface HookResult {
   durationMs: number;
 }
 
-function interpolate(template: string, ctx: HookContext): string {
+function interpolate(template: string, ctx: HookContext, opts?: { jsonSafe?: boolean; html?: boolean }): string {
+  const transferredFilesValue = opts?.jsonSafe
+    ? JSON.stringify((ctx.transferredFiles ?? []).join("\n")).slice(1, -1)
+    : opts?.html
+    ? (ctx.transferredFiles ?? []).map((f) => escapeHtml(f)).join("<br>")
+    : (ctx.transferredFiles ?? []).join("\n");
   return template
     .replace(/\{\{job_id\}\}/g, String(ctx.jobId))
     .replace(/\{\{job_name\}\}/g, ctx.jobName)
@@ -38,12 +44,22 @@ function interpolate(template: string, ctx: HookContext): string {
     .replace(/\{\{status\}\}/g, ctx.status ?? "")
     .replace(/\{\{files_transferred\}\}/g, String(ctx.filesTransferred ?? 0))
     .replace(/\{\{bytes_transferred\}\}/g, String(ctx.bytesTransferred ?? 0))
+    .replace(/\{\{transferred_files\}\}/g, () => transferredFilesValue)
     .replace(/\{\{error_message\}\}/g, ctx.errorMessage ?? "");
 }
 
 function truncate(s: string): string {
   if (s.length <= MAX_OUTPUT_BYTES) return s;
   return s.slice(0, MAX_OUTPUT_BYTES) + `\n...[truncated]`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<HookResult> {
@@ -65,7 +81,9 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
   let body: string | undefined;
   if (method !== "GET") {
     if (config.body) {
-      body = interpolate(String(config.body), ctx);
+      const effectiveContentType = headers["Content-Type"] ?? headers["content-type"] ?? "";
+      const isJsonBody = effectiveContentType.toLowerCase().includes("application/json");
+      body = interpolate(String(config.body), ctx, { jsonSafe: isJsonBody });
     } else {
       body = JSON.stringify({
         job_id: ctx.jobId,
@@ -75,6 +93,7 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
         status: ctx.status ?? null,
         files_transferred: ctx.filesTransferred ?? null,
         bytes_transferred: ctx.bytesTransferred ?? null,
+        transferred_files: ctx.transferredFiles ?? null,
         error_message: ctx.errorMessage ?? null,
       });
     }
@@ -132,12 +151,28 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
       : {}),
   });
 
+  const isHtml = config.html ?? false;
   const subject = config.subject
     ? interpolate(config.subject, ctx)
     : `FileBridge · ${ctx.jobName}${ctx.status ? ` — ${ctx.status}` : ""}`;
-  const body = config.body
-    ? interpolate(config.body, ctx)
-    : `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}`;
+  let body: string;
+  if (config.body) {
+    body = interpolate(config.body, ctx, { html: isHtml });
+  } else if (isHtml) {
+    const fileListingHtml = (ctx.transferredFiles?.length ?? 0) > 0
+      ? `<p><strong>Files transferred:</strong></p><ul>${ctx.transferredFiles!.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>`
+      : "";
+    body = `<p><strong>Job:</strong> ${escapeHtml(ctx.jobName)}</p>`
+      + `<p><strong>Status:</strong> ${escapeHtml(ctx.status ?? "n/a")}</p>`
+      + `<p><strong>Files transferred:</strong> ${ctx.filesTransferred ?? 0}</p>`
+      + `<p><strong>Trigger:</strong> ${escapeHtml(ctx.trigger)}</p>`
+      + fileListingHtml;
+  } else {
+    const fileListing = (ctx.transferredFiles?.length ?? 0) > 0
+      ? `\n\nFiles transferred:\n${ctx.transferredFiles!.map((f) => `- ${f}`).join("\n")}`
+      : "";
+    body = `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
+  }
 
   try {
     await Promise.race([
@@ -145,7 +180,7 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
         from: config.from,
         to: config.to,
         subject,
-        ...(config.html ? { html: body } : { text: body }),
+        ...(isHtml ? { html: body } : { text: body }),
       }),
       new Promise<never>((_, reject) =>
         setTimeout(
@@ -183,6 +218,7 @@ async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResu
     FILEBRIDGE_STATUS: ctx.status ?? "",
     FILEBRIDGE_FILES_TRANSFERRED: String(ctx.filesTransferred ?? 0),
     FILEBRIDGE_BYTES_TRANSFERRED: String(ctx.bytesTransferred ?? 0),
+    FILEBRIDGE_TRANSFERRED_FILES: (ctx.transferredFiles ?? []).join("\n"),
     FILEBRIDGE_ERROR_MESSAGE: ctx.errorMessage ?? "",
   };
 

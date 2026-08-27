@@ -151,11 +151,12 @@ These are **not** defined in `inputs`. They are substituted **each time the hook
 | `{{status}}` | `success` or `failure` |
 | `{{files_transferred}}` | Count of files transferred |
 | `{{bytes_transferred}}` | Total bytes in bytes |
+| `{{transferred_files}}` | Newline-separated list of transferred file names (post_job only) |
 | `{{error_message}}` | Error text, or empty string |
 
 Runtime variables in `config.body`, `config.subject`, and `config.command` are left as-is at import time and expanded later at execution time.
 
-**Rule of thumb:** If the placeholder appears in `inputs`, it is an import-time variable. If it is one of the eight listed above, it is a runtime variable. All other unknown placeholders are left as-is.
+**Rule of thumb:** If the placeholder appears in `inputs`, it is an import-time variable. If it is one of the nine listed above, it is a runtime variable. All other unknown placeholders are left as-is.
 
 ---
 

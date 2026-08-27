@@ -793,6 +793,12 @@ export async function runJob(jobId: number): Promise<void> {
     // Declared here so the catch block can clean them up if the job fails
     let logFlushTimer: ReturnType<typeof setInterval> | null = null;
     let progressFlushTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Declared here so the failure path can report them in post-job hooks
+    let filesTransferred = 0;
+    let bytesTransferred = 0;
+    const transferredFiles: string[] = [];
+    let verificationFailureCount = 0;
     const pendingLogs: NewTransferLog[] = [];
     async function flushLogs() {
       if (pendingLogs.length === 0) return;
@@ -902,11 +908,9 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
-      let filesTransferred = 0;
-      let bytesTransferred = 0;
       let filesSkipped = 0;
       const sourceFileResults: SourceFileResult[] = [];
-      const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string }[] = [];
+      const pendingVerifications: { dstFilePath: string; expectedSize: number; srcFilePath: string; outputName: string }[] = [];
 
       // ── Transfer log batcher: flush every 50 items or 5 seconds ──────
       const LOG_BATCH_SIZE = 50;
@@ -1096,10 +1100,13 @@ export async function runJob(jobId: number): Promise<void> {
                     destinationPath: result.dstPath,
                     fileSize: result.bytes,
                     transferredAt: new Date().toISOString(),
-                    status: "success",
-                  });
-                  filesTransferred++;
-                  bytesTransferred += result.bytes;
+          status: "success",
+          });
+          filesTransferred++;
+          bytesTransferred += result.bytes;
+          if (!transferredFiles.includes(result.outputName)) {
+            transferredFiles.push(result.outputName);
+          }
                 } else {
                   pendingLogs.push({
                     jobId,
@@ -1148,7 +1155,7 @@ export async function runJob(jobId: number): Promise<void> {
 
             await dest.uploadFile(Readable.from(uploadContent), dstFilePath, uploadSize);
             if (!dest.supportsImmediateConsistency) {
-              pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath });
+              pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath, outputName: outputFileName });
             }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath });
 
@@ -1166,6 +1173,9 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += uploadSize;
+            if (!transferredFiles.includes(outputFileName)) {
+              transferredFiles.push(outputFileName);
+            }
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1289,7 +1299,7 @@ export async function runJob(jobId: number): Promise<void> {
                 throw new Error(`Stream byte mismatch for ${file.name}: expected ${fileSize}, transferred ${currentBytes}`);
               }
               if (!dest.supportsImmediateConsistency) {
-                pendingVerifications.push({ dstFilePath, expectedSize: fileSize, srcFilePath });
+                pendingVerifications.push({ dstFilePath, expectedSize: fileSize, srcFilePath, outputName: outputFileName });
               }
             }
             log.info("File uploaded", { fileName: outputFileName, dstPath: dstFilePath, plaintextBytes: currentBytes });
@@ -1309,6 +1319,9 @@ export async function runJob(jobId: number): Promise<void> {
 
             filesTransferred++;
             bytesTransferred += currentBytes;
+            if (!transferredFiles.includes(outputFileName)) {
+              transferredFiles.push(outputFileName);
+            }
 
             sourceFileResults.push({ srcFilePath, fileName: file.name, transferSuccess: true });
 
@@ -1367,15 +1380,6 @@ export async function runJob(jobId: number): Promise<void> {
         }
       }
 
-      // ── Flush remaining batched data ──────────────────────────────────
-      if (logFlushTimer) clearInterval(logFlushTimer);
-      if (progressFlushTimer) clearInterval(progressFlushTimer);
-      await flushLogs();
-      await db
-        .update(jobRuns)
-        .set({ filesTransferred, bytesTransferred })
-        .where(eq(jobRuns.id, run.id));
-
       // ── Batch-verify deferred destination file sizes ──────────────────
       if (pendingVerifications.length > 0) {
         log.info("Batch-verifying destination files", { count: pendingVerifications.length });
@@ -1395,19 +1399,46 @@ export async function runJob(jobId: number): Promise<void> {
               );
               if (result) result.transferSuccess = false;
 
-              // Correct the transfer log: find the success entry and mark as failure
+              // Keep the hook file list consistent with the transfer log
+              const idx = transferredFiles.indexOf(pending.outputName);
+              if (idx !== -1) transferredFiles.splice(idx, 1);
+
+              // Correct the transfer log: find the success entry and mark as failure.
+              // The pending batch is flushed *after* this reconciliation, so most
+              // records are persisted with the corrected status in one write.
               const logEntry = pendingLogs.find(
                 (l) => l.destinationPath === failedPath && l.status === "success"
               );
+              const fileBytes = logEntry?.fileSize ?? pending.expectedSize;
               if (logEntry) {
                 logEntry.status = "failure";
                 logEntry.errorMessage = err.message;
                 logEntry.fileSize = 0;
+              } else {
+                // Entry was already flushed in a previous batch — correct the row in place
+                await db
+                  .update(transferLogs)
+                  .set({ status: "failure", errorMessage: err.message, fileSize: 0 })
+                  .where(and(eq(transferLogs.jobId, jobId), eq(transferLogs.destinationPath, failedPath), eq(transferLogs.status, "success")));
               }
+
+              // Reconcile run counters with the corrected transfer log
+              filesTransferred = Math.max(0, filesTransferred - 1);
+              bytesTransferred = Math.max(0, bytesTransferred - fileBytes);
+              verificationFailureCount++;
             }
           }
         }
       }
+
+      // ── Flush remaining batched data (after verification reconciliation) ──
+      if (logFlushTimer) clearInterval(logFlushTimer);
+      if (progressFlushTimer) clearInterval(progressFlushTimer);
+      await flushLogs();
+      await db
+        .update(jobRuns)
+        .set({ filesTransferred, bytesTransferred })
+        .where(eq(jobRuns.id, run.id));
 
       // ── Deferred post-transfer actions ──────────────────────────────────
       if (job.postTransferAction === "delete" || job.postTransferAction === "move") {
@@ -1459,12 +1490,19 @@ export async function runJob(jobId: number): Promise<void> {
       }
 
       // Run post-job hooks after all files are transferred
+      if (verificationFailureCount > 0) {
+        log.warn("Post-job hooks will report verification failures", { count: verificationFailureCount });
+      }
       const postHooks = getJobHooksWithDetail(jobId, "post_job");
       if (postHooks.length > 0) {
         log.info("Running post-job hooks", { count: postHooks.length });
         await executeHooks(postHooks, {
           jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-          status: "success", filesTransferred, bytesTransferred,
+          status: verificationFailureCount > 0 ? "failure" : "success",
+          filesTransferred, bytesTransferred, transferredFiles,
+          ...(verificationFailureCount > 0
+            ? { errorMessage: `${verificationFailureCount} file(s) failed post-transfer verification` }
+            : {}),
         }, run.id);
         log.info("Post-job hooks completed");
       }
@@ -1478,7 +1516,10 @@ export async function runJob(jobId: number): Promise<void> {
         .update(jobRuns)
         .set({
           completedAt: new Date().toISOString(),
-          status: "success",
+          status: verificationFailureCount > 0 ? "failure" : "success",
+          ...(verificationFailureCount > 0
+            ? { errorMessage: `${verificationFailureCount} file(s) failed post-transfer verification` }
+            : {}),
           filesTransferred,
           bytesTransferred,
           currentFile: null,
@@ -1517,10 +1558,10 @@ export async function runJob(jobId: number): Promise<void> {
       if (postHooksOnError.length > 0) {
         log.info("Running post-job hooks (failure path)", { count: postHooksOnError.length });
         try {
-          await executeHooks(postHooksOnError, {
-            jobId, jobName: job.name, runId: run.id, trigger: "post_job",
-            status: "failure", errorMessage,
-          }, run.id);
+            await executeHooks(postHooksOnError, {
+              jobId, jobName: job.name, runId: run.id, trigger: "post_job",
+              status: "failure", filesTransferred, bytesTransferred, transferredFiles, errorMessage,
+            }, run.id);
         } catch {
           // Already logged inside executeHooks — don't mask the original error
         }
