@@ -144,6 +144,14 @@ Any job can be triggered immediately from the Jobs page by clicking **Run Now**.
 
 If a job is already `running`, a second trigger (scheduled or manual) is ignored. This prevents overlapping executions of the same job.
 
+### Stopping a Stuck Run
+
+Administrators can select **Kill Running Job** from the Jobs table or the live job detail panel. FileBridge cancels active hooks and transfer streams, closes the source and destination connections, and marks the current run as `failure` with the reason `Job stopped by an administrator`.
+
+The job then returns to the state it had before the run: scheduled jobs return to `active`, while manually-run disabled jobs return to `inactive`. This means a stopped scheduled job remains eligible for its next cron trigger and can also be run manually. Any partially-written destination from the active transfer is removed on a best-effort basis before the job is released.
+
+If the database says a job is running but there is no active execution in the server process, the same control recovers the stale job and returns it to `active` without requiring a service restart.
+
 ---
 
 ## Dry Run

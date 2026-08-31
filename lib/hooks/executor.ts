@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { hookRuns } from "@/lib/db/schema";
 import type { Hook, WebhookConfig, ShellConfig, EmailConfig } from "@/lib/db/schema";
 import { createLogger } from "@/lib/logger";
+import { throwIfJobCancelled } from "@/lib/transfer/cancellation";
 
 const execAsync = promisify(exec);
 const log = createLogger("hooks");
@@ -62,7 +63,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<HookResult> {
+async function runWebhook(config: WebhookConfig, ctx: HookContext, signal?: AbortSignal): Promise<HookResult> {
   const start = Date.now();
   const method = config.method ?? "POST";
   const timeoutMs = config.timeoutMs ?? 10_000;
@@ -101,6 +102,8 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const cancelWebhook = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", cancelWebhook, { once: true });
 
   try {
     const res = await fetch(url, {
@@ -110,7 +113,6 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
       signal: controller.signal,
     });
 
-    clearTimeout(timer);
     const durationMs = Date.now() - start;
     const responseText = await res.text().catch(() => "");
     const output = truncate(responseText);
@@ -126,7 +128,6 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
 
     return { success: true, output, errorMessage: null, durationMs };
   } catch (err) {
-    clearTimeout(timer);
     const durationMs = Date.now() - start;
     const isAbort = err instanceof Error && err.name === "AbortError";
     return {
@@ -135,10 +136,13 @@ async function runWebhook(config: WebhookConfig, ctx: HookContext): Promise<Hook
       errorMessage: isAbort ? `Webhook timed out after ${timeoutMs}ms` : String(err),
       durationMs,
     };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", cancelWebhook);
   }
 }
 
-async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResult> {
+async function runEmail(config: EmailConfig, ctx: HookContext, signal?: AbortSignal): Promise<HookResult> {
   const start = Date.now();
   const timeoutMs = config.timeoutMs ?? 10_000;
 
@@ -174,6 +178,8 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
     body = `Job: ${ctx.jobName}\nStatus: ${ctx.status ?? "n/a"}\nFiles transferred: ${ctx.filesTransferred ?? 0}\nTrigger: ${ctx.trigger}${fileListing}`;
   }
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let cancelEmail: (() => void) | undefined;
   try {
     await Promise.race([
       transporter.sendMail({
@@ -182,12 +188,16 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
         subject,
         ...(isHtml ? { html: body } : { text: body }),
       }),
-      new Promise<never>((_, reject) =>
-        setTimeout(
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
           () => reject(new Error(`Email timed out after ${timeoutMs}ms`)),
-          timeoutMs
-        )
-      ),
+          timeoutMs,
+        );
+      }),
+      ...(signal ? [new Promise<never>((_, reject) => {
+        cancelEmail = () => reject(signal.reason ?? new Error("Job stopped"));
+        signal.addEventListener("abort", cancelEmail, { once: true });
+      })] : []),
     ]);
     return {
       success: true,
@@ -196,16 +206,20 @@ async function runEmail(config: EmailConfig, ctx: HookContext): Promise<HookResu
       durationMs: Date.now() - start,
     };
   } catch (err) {
+    transporter.close();
     return {
       success: false,
       output: null,
       errorMessage: String(err),
       durationMs: Date.now() - start,
     };
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    if (cancelEmail) signal?.removeEventListener("abort", cancelEmail);
   }
 }
 
-async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResult> {
+async function runShell(config: ShellConfig, ctx: HookContext, signal?: AbortSignal): Promise<HookResult> {
   const start = Date.now();
   const timeoutMs = config.timeoutMs ?? 30_000;
 
@@ -227,6 +241,7 @@ async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResu
       timeout: timeoutMs,
       cwd: config.workingDir ? String(config.workingDir) : undefined,
       env,
+      signal,
     });
     const combined = [stdout, stderr].filter(Boolean).join("\n").trim();
     return {
@@ -259,9 +274,11 @@ async function runShell(config: ShellConfig, ctx: HookContext): Promise<HookResu
 export async function executeHooks(
   hooksToRun: Hook[],
   ctx: HookContext,
-  jobRunId: number
+  jobRunId: number,
+  signal?: AbortSignal,
 ): Promise<void> {
   for (const hook of hooksToRun) {
+    if (signal) throwIfJobCancelled(signal);
     if (!hook.enabled) {
       log.info("Hook skipped (disabled)", { hookId: hook.id, hookName: hook.name });
       continue;
@@ -292,10 +309,12 @@ export async function executeHooks(
 
     const result =
       hook.type === "webhook"
-        ? await runWebhook(config as WebhookConfig, ctx)
+        ? await runWebhook(config as WebhookConfig, ctx, signal)
         : hook.type === "email"
-        ? await runEmail(config as EmailConfig, ctx)
-        : await runShell(config as ShellConfig, ctx);
+        ? await runEmail(config as EmailConfig, ctx, signal)
+        : await runShell(config as ShellConfig, ctx, signal);
+
+    if (signal) throwIfJobCancelled(signal);
 
     const runStatus = result.success ? "success" : "failure";
 

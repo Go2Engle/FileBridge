@@ -7,6 +7,12 @@ import { executeHooks } from "@/lib/hooks/executor";
 import { createStorageProvider } from "@/lib/storage/registry";
 import { globToRegex } from "@/lib/storage/interface";
 import { getPostRunJobStatus } from "@/lib/transfer/status";
+import {
+  isJobCancelledError,
+  registerActiveJob,
+  throwIfJobCancelled,
+  withJobCancellation,
+} from "@/lib/transfer/cancellation";
 import { renderMoveFileName } from "@/lib/transfer/filename-template";
 import path from "path";
 import os from "os";
@@ -718,9 +724,12 @@ export async function runJob(jobId: number): Promise<void> {
     .where(and(eq(jobs.id, jobId), ne(jobs.status, "running")))
     .returning({ id: jobs.id });
   if (claimed.length === 0) {
-    log.info("Job already running — skipping", { jobId });
+    log.info("Job already running - skipping", { jobId });
     return;
   }
+
+  const cancellation = registerActiveJob(jobId);
+  const { signal } = cancellation;
 
   // If anything fails before the main try/catch takes ownership below,
   // release the claim so the job isn't stuck "running" until restart.
@@ -736,10 +745,12 @@ export async function runJob(jobId: number): Promise<void> {
 
   if (!srcConn) {
     await releaseClaim();
+    cancellation.finish();
     throw new Error(`Source connection ${job.sourceConnectionId} not found for job ${jobId}`);
   }
   if (!dstConn) {
     await releaseClaim();
+    cancellation.finish();
     throw new Error(`Destination connection ${job.destinationConnectionId} not found for job ${jobId}`);
   }
   log.info("Connections resolved", {
@@ -763,6 +774,7 @@ export async function runJob(jobId: number): Promise<void> {
       .returning();
   } catch (err) {
     await releaseClaim();
+    cancellation.finish();
     throw err;
   }
 
@@ -787,17 +799,38 @@ export async function runJob(jobId: number): Promise<void> {
         })
         .where(eq(jobRuns.id, run.id));
       await releaseClaim();
+      cancellation.finish();
       throw err;
     }
 
     // Declared here so the catch block can clean them up if the job fails
     let logFlushTimer: ReturnType<typeof setInterval> | null = null;
     let progressFlushTimer: ReturnType<typeof setInterval> | null = null;
+    const activeStreams = new Set<Readable>();
+    const cancellationError = () =>
+      signal.reason instanceof Error ? signal.reason : new Error("Job stopped by an administrator");
+    const trackStream = <T extends Readable>(stream: T): T => {
+      activeStreams.add(stream);
+      stream.once("close", () => activeStreams.delete(stream));
+      return stream;
+    };
+    const abortActiveOperations = () => {
+      const error = cancellationError();
+      log.warn("Stopping active job operations", { jobId, runId: run.id });
+      for (const stream of activeStreams) {
+        if (!stream.destroyed) stream.destroy(error);
+      }
+      // Closing network clients rejects provider calls that do not natively
+      // accept AbortSignal (notably SFTP and SMB operations).
+      void Promise.allSettled([source.disconnect(), dest.disconnect()]);
+    };
+    signal.addEventListener("abort", abortActiveOperations, { once: true });
 
     // Declared here so the failure path can report them in post-job hooks
     let filesTransferred = 0;
     let bytesTransferred = 0;
     const transferredFiles: string[] = [];
+    const partialDestinationPaths = new Set<string>();
     let verificationFailureCount = 0;
     const pendingLogs: NewTransferLog[] = [];
     async function flushLogs() {
@@ -807,19 +840,20 @@ export async function runJob(jobId: number): Promise<void> {
     }
 
     try {
+      throwIfJobCancelled(signal);
       log.info("Connecting to source", { protocol: srcConn.protocol });
-      await source.connect();
+      await withJobCancellation(source.connect(), signal);
       log.info("Source connected");
 
       log.info("Connecting to destination", { protocol: dstConn.protocol });
-      await dest.connect();
+      await withJobCancellation(dest.connect(), signal);
       log.info("Destination connected");
 
       // Run pre-job hooks before any files are transferred
       const preHooks = getJobHooksWithDetail(jobId, "pre_job");
       if (preHooks.length > 0) {
         log.info("Running pre-job hooks", { count: preHooks.length });
-        await executeHooks(preHooks, { jobId, jobName: job.name, runId: run.id, trigger: "pre_job" }, run.id);
+        await executeHooks(preHooks, { jobId, jobName: job.name, runId: run.id, trigger: "pre_job" }, run.id, signal);
         log.info("Pre-job hooks completed");
       }
 
@@ -845,7 +879,7 @@ export async function runJob(jobId: number): Promise<void> {
       }
 
       log.info("Listing source files", { sourcePath: job.sourcePath, fileFilter: job.fileFilter });
-      let files = await source.listFiles(job.sourcePath, job.fileFilter);
+      let files = await withJobCancellation(source.listFiles(job.sourcePath, job.fileFilter), signal);
       log.info("Source files listed", { fileCount: files.length, fileFilter: job.fileFilter });
 
       // Filter hidden files (names starting with ".")
@@ -893,7 +927,7 @@ export async function runJob(jobId: number): Promise<void> {
       const destFileTimes: Map<string, Date> = new Map();
       if (!job.overwriteExisting || job.deltaSync) {
         try {
-          const destListing = await dest.listFiles(job.destinationPath);
+          const destListing = await withJobCancellation(dest.listFiles(job.destinationPath), signal);
           existingDestFiles = new Set(destListing.map((f) => f.name));
           if (job.deltaSync) {
             for (const f of destListing) destFileTimes.set(f.name, f.modifiedAt);
@@ -927,6 +961,7 @@ export async function runJob(jobId: number): Promise<void> {
       }, 500);
 
       for (const file of files) {
+        throwIfJobCancelled(signal);
         const srcFilePath = path.posix.join(job.sourcePath, file.name);
 
         // Compute the output filename based on PGP settings
@@ -980,11 +1015,12 @@ export async function runJob(jobId: number): Promise<void> {
         let directorySkipped = false;
         for (let transferAttempt = 1; transferAttempt <= maxTransferAttempts; transferAttempt++) {
           try {
+          throwIfJobCancelled(signal);
           // ── Archive path: download to temp file, then extract entries ──────────
           // When PGP decrypt is enabled, check if the decrypted name is an archive
           const archiveCheckName = pgpDecryptPrivateKey ? stripPgpExtension(file.name) : file.name;
           if (job.extractArchives && isArchive(archiveCheckName)) {
-            const srcStream = await source.downloadFile(srcFilePath);
+            const srcStream = trackStream(await withJobCancellation(source.downloadFile(srcFilePath), signal));
             let tmpPath = await downloadToTempFile(srcStream, jobId, file.name);
             log.info("Archive downloaded to temp file", { fileName: file.name, tmpPath });
 
@@ -992,8 +1028,10 @@ export async function runJob(jobId: number): Promise<void> {
             // Decrypt before extraction if PGP decrypt is enabled
             if (pgpDecryptPrivateKey) {
               log.info("Decrypting archive before extraction", { fileName: file.name });
-              const encryptedStream = createReadStream(tmpPath);
-              const decryptedStream = await pgpDecryptStream(encryptedStream, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+              const encryptedStream = trackStream(createReadStream(tmpPath));
+              const decryptedStream = trackStream(
+                await pgpDecryptStream(encryptedStream, pgpDecryptPrivateKey, pgpDecryptPassphrase),
+              );
               const prevTmpPath = tmpPath;
               tmpPath = await downloadToTempFile(decryptedStream, jobId, `decrypted-${file.name}`);
               await cleanupTempFile(prevTmpPath);
@@ -1044,6 +1082,7 @@ export async function runJob(jobId: number): Promise<void> {
               const uploadResults: { outputName: string; bytes: number; srcEntry: string; dstPath: string; error?: Error }[] = [];
 
               for (let i = 0; i < toUpload.length; i += ENTRY_UPLOAD_CONCURRENCY) {
+                throwIfJobCancelled(signal);
                 const batch = toUpload.slice(i, i + ENTRY_UPLOAD_CONCURRENCY);
 
                 // Upload all entries in the batch concurrently
@@ -1051,11 +1090,19 @@ export async function runJob(jobId: number): Promise<void> {
                   batch.map(async ({ entry, content: entryContent, outputName: entryOutputName, dstPath: entryDstPath }) => {
                     try {
                       if (job.overwriteExisting) {
-                        try { await dest.deleteFile(entryDstPath); } catch { /* doesn't exist */ }
+                        try {
+                          await withJobCancellation(dest.deleteFile(entryDstPath), signal);
+                        } catch (error) {
+                          if (isJobCancelledError(error)) throw error;
+                          // File does not exist yet.
+                        }
                       }
-                      await dest.uploadFile(Readable.from(entryContent), entryDstPath, entryContent.length);
+                      const entryStream = trackStream(Readable.from(entryContent));
+                      partialDestinationPaths.add(entryDstPath);
+                      await withJobCancellation(dest.uploadFile(entryStream, entryDstPath, entryContent.length), signal);
                       return { outputName: entryOutputName, bytes: entryContent.length, srcEntry: entry.name, dstPath: entryDstPath };
                     } catch (entryError) {
+                      if (isJobCancelledError(entryError)) throw entryError;
                       log.error("Failed to upload extracted entry", { entryName: entryOutputName, error: entryError });
                       return { outputName: entryOutputName, bytes: 0, srcEntry: entry.name, dstPath: entryDstPath, error: entryError instanceof Error ? entryError : new Error(String(entryError)) };
                     }
@@ -1066,11 +1113,11 @@ export async function runJob(jobId: number): Promise<void> {
                 const successfulUploads = batchUploaded.filter((r) => !r.error);
                 const verifyErrors = dest.supportsImmediateConsistency
                   ? new Map<string, Error>()
-                  : await verifyDestinationFileSizesBatch(
+                  : await withJobCancellation(verifyDestinationFileSizesBatch(
                       dest,
                       successfulUploads.map((r) => ({ dstFilePath: r.dstPath, expectedSize: r.bytes })),
                       dstConn.protocol,
-                    );
+                    ), signal);
 
                 for (const result of batchUploaded) {
                   const verifyErr = verifyErrors.get(result.dstPath);
@@ -1081,6 +1128,7 @@ export async function runJob(jobId: number): Promise<void> {
                     uploadResults.push(result);
                   } else {
                     log.info("Extracted entry uploaded and verified", { entryName: result.outputName, dstPath: result.dstPath });
+                    partialDestinationPaths.delete(result.dstPath);
                     uploadResults.push(result);
                   }
                 }
@@ -1146,14 +1194,18 @@ export async function runJob(jobId: number): Promise<void> {
 
             if (job.overwriteExisting || job.deltaSync) {
               try {
-                await dest.deleteFile(dstFilePath);
+                await withJobCancellation(dest.deleteFile(dstFilePath), signal);
                 log.debug("Deleted existing destination file", { dstPath: dstFilePath });
-              } catch {
-                // File doesn't exist yet — that's fine
+              } catch (error) {
+                if (isJobCancelledError(error)) throw error;
+                // File doesn't exist yet - that's fine
               }
             }
 
-            await dest.uploadFile(Readable.from(uploadContent), dstFilePath, uploadSize);
+            const uploadStream = trackStream(Readable.from(uploadContent));
+            partialDestinationPaths.add(dstFilePath);
+            await withJobCancellation(dest.uploadFile(uploadStream, dstFilePath, uploadSize), signal);
+            partialDestinationPaths.delete(dstFilePath);
             if (!dest.supportsImmediateConsistency) {
               pendingVerifications.push({ dstFilePath, expectedSize: uploadSize, srcFilePath, outputName: outputFileName });
             }
@@ -1207,20 +1259,25 @@ export async function runJob(jobId: number): Promise<void> {
             // upload consumer attaches.
             if (job.overwriteExisting || job.deltaSync) {
               try {
-                await dest.deleteFile(dstFilePath);
+                await withJobCancellation(dest.deleteFile(dstFilePath), signal);
                 log.debug("Deleted existing destination file", { dstPath: dstFilePath });
-              } catch {
-                // File doesn't exist yet — that's fine
+              } catch (error) {
+                if (isJobCancelledError(error)) throw error;
+                // File doesn't exist yet - that's fine
               }
             }
 
-            const originalSrcStream: Readable = await source.downloadFile(srcFilePath, fileSize);
+            const originalSrcStream: Readable = trackStream(
+              await withJobCancellation(source.downloadFile(srcFilePath, fileSize), signal),
+            );
             let srcStream: Readable = originalSrcStream;
 
             // Apply PGP decryption to the stream if configured
             if (pgpDecryptPrivateKey) {
               log.info("Applying PGP decryption to stream", { fileName: file.name });
-              srcStream = await pgpDecryptStream(originalSrcStream, pgpDecryptPrivateKey, pgpDecryptPassphrase);
+              srcStream = trackStream(
+                await pgpDecryptStream(originalSrcStream, pgpDecryptPrivateKey, pgpDecryptPassphrase),
+              );
             }
 
             // Transform counts bytes inside _transform — stays paused until the
@@ -1233,12 +1290,12 @@ export async function runJob(jobId: number): Promise<void> {
                 callback(null, chunk);
               },
             });
-            const idleMonitor = createIdleTimeoutMonitor(`transfer ${file.name}`, (err) => {
+            const idleMonitor = trackStream(createIdleTimeoutMonitor(`transfer ${file.name}`, (err) => {
               if (!srcStream.destroyed) srcStream.destroy(err);
               if (originalSrcStream !== srcStream && !originalSrcStream.destroyed) {
                 originalSrcStream.destroy(err);
               }
-            });
+            }));
             srcStream.pipe(idleMonitor).pipe(tracker);
             // Propagate errors through the stream chain so uploadFile rejects
             // instead of waiting indefinitely on a source that has gone idle.
@@ -1253,11 +1310,11 @@ export async function runJob(jobId: number): Promise<void> {
             });
 
             // Apply PGP encryption to the stream if configured
-            let uploadStream: Readable = tracker;
+            let uploadStream: Readable = trackStream(tracker);
             let uploadSizeHint: number | undefined = fileSize;
             if (pgpEncryptPublicKey) {
               log.info("Applying PGP encryption to stream", { fileName: file.name });
-              uploadStream = await pgpEncryptStream(tracker, pgpEncryptPublicKey);
+              uploadStream = trackStream(await pgpEncryptStream(tracker, pgpEncryptPublicKey));
               uploadSizeHint = undefined; // Encrypted size unknown
             }
             if (hasPgpDecrypt && !hasPgpEncrypt) {
@@ -1274,7 +1331,9 @@ export async function runJob(jobId: number): Promise<void> {
             }, 500);
 
             try {
-              await dest.uploadFile(uploadStream, dstFilePath, uploadSizeHint);
+              partialDestinationPaths.add(dstFilePath);
+              await withJobCancellation(dest.uploadFile(uploadStream, dstFilePath, uploadSizeHint), signal);
+              partialDestinationPaths.delete(dstFilePath);
             } finally {
               clearInterval(progressInterval);
               // Explicitly release the source file handle so the SMB server sees the
@@ -1329,6 +1388,7 @@ export async function runJob(jobId: number): Promise<void> {
             break;
           }
           } catch (fileError) {
+          if (isJobCancelledError(fileError)) throw fileError;
           // Skip directories that slipped through the listing filter
           if (isDirectoryError(fileError)) {
             log.info("Skipping directory entry", { fileName: file.name });
@@ -1382,12 +1442,13 @@ export async function runJob(jobId: number): Promise<void> {
 
       // ── Batch-verify deferred destination file sizes ──────────────────
       if (pendingVerifications.length > 0) {
+        throwIfJobCancelled(signal);
         log.info("Batch-verifying destination files", { count: pendingVerifications.length });
-        const verifyErrors = await verifyDestinationFileSizesBatch(
+        const verifyErrors = await withJobCancellation(verifyDestinationFileSizesBatch(
           dest,
           pendingVerifications.map((v) => ({ dstFilePath: v.dstFilePath, expectedSize: v.expectedSize })),
           dstConn.protocol,
-        );
+        ), signal);
         if (verifyErrors.size > 0) {
           log.warn("Destination verification failures", { count: verifyErrors.size });
           for (const [failedPath, err] of verifyErrors) {
@@ -1461,10 +1522,11 @@ export async function runJob(jobId: number): Promise<void> {
 
         const postTransferErrors: { fileName: string; error: unknown }[] = [];
         for (const result of successfulFiles) {
+          throwIfJobCancelled(signal);
           try {
             if (job.postTransferAction === "delete") {
               log.info("Deleting source file", { srcPath: result.srcFilePath });
-              await deleteSourceAndConfirm(source, result.srcFilePath);
+              await withJobCancellation(deleteSourceAndConfirm(source, result.srcFilePath), signal);
             } else if (job.postTransferAction === "move" && job.movePath) {
               // Stamp using the run's start time so every file in one run shares
               // the same suffix, rather than drifting as the loop progresses.
@@ -1475,9 +1537,10 @@ export async function runJob(jobId: number): Promise<void> {
               );
               const moveDest = path.posix.join(job.movePath, movedName);
               log.info("Moving source file", { srcPath: result.srcFilePath, dstPath: moveDest });
-              await source.moveFile(result.srcFilePath, moveDest);
+              await withJobCancellation(source.moveFile(result.srcFilePath, moveDest), signal);
             }
           } catch (postErr) {
+            if (isJobCancelledError(postErr)) throw postErr;
             log.error("Post-transfer action failed", { fileName: result.fileName, error: postErr });
             postTransferErrors.push({ fileName: result.fileName, error: postErr });
           }
@@ -1503,13 +1566,12 @@ export async function runJob(jobId: number): Promise<void> {
           ...(verificationFailureCount > 0
             ? { errorMessage: `${verificationFailureCount} file(s) failed post-transfer verification` }
             : {}),
-        }, run.id);
+        }, run.id, signal);
         log.info("Post-job hooks completed");
       }
 
       log.info("Disconnecting");
-      await source.disconnect();
-      await dest.disconnect();
+      await Promise.allSettled([source.disconnect(), dest.disconnect()]);
 
       // Complete the job run
       await db
@@ -1539,22 +1601,58 @@ export async function runJob(jobId: number): Promise<void> {
 
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
     } catch (error) {
-      log.error("Job failed", { error });
+      const wasCancelled = isJobCancelledError(error);
+      if (wasCancelled) {
+        log.warn("Job stopped by administrator");
+      } else {
+        log.error("Job failed", { error });
+      }
 
       // Clean up batch timers and flush any remaining logs
       if (logFlushTimer) clearInterval(logFlushTimer);
       if (progressFlushTimer) clearInterval(progressFlushTimer);
       try { await flushLogs(); } catch {}
 
-      try {
-        await source.disconnect();
-        await dest.disconnect();
-      } catch {}
+      await Promise.allSettled([source.disconnect(), dest.disconnect()]);
+
+      if (wasCancelled && partialDestinationPaths.size > 0) {
+        // A cancelled stream may have left a truncated destination object. Use
+        // a fresh connection for best-effort cleanup so overwrite-disabled jobs
+        // do not mistake that partial file for a completed transfer next time.
+        const cleanupDest = createStorageProvider(dstConn);
+        try {
+          await Promise.race([
+            cleanupDest.connect(),
+            new Promise<never>((_, reject) => {
+              const timer = setTimeout(() => reject(new Error("Cancellation cleanup connection timed out")), 10_000);
+              timer.unref?.();
+            }),
+          ]);
+          for (const destinationPath of partialDestinationPaths) {
+            try {
+              await Promise.race([
+                cleanupDest.deleteFile(destinationPath),
+                new Promise<never>((_, reject) => {
+                  const timer = setTimeout(() => reject(new Error("Cancellation cleanup delete timed out")), 10_000);
+                  timer.unref?.();
+                }),
+              ]);
+              log.info("Removed partial destination after cancellation", { destinationPath });
+            } catch (cleanupError) {
+              log.warn("Could not remove partial destination after cancellation", { destinationPath, error: cleanupError });
+            }
+          }
+        } catch (cleanupError) {
+          log.warn("Could not connect for cancellation cleanup", { error: cleanupError });
+        } finally {
+          await cleanupDest.disconnect().catch(() => {});
+        }
+      }
 
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
       // Run post-job hooks even on failure (best-effort — failures are logged, not re-thrown)
-      const postHooksOnError = getJobHooksWithDetail(jobId, "post_job");
+      const postHooksOnError = wasCancelled ? [] : getJobHooksWithDetail(jobId, "post_job");
       if (postHooksOnError.length > 0) {
         log.info("Running post-job hooks (failure path)", { count: postHooksOnError.length });
         try {
@@ -1588,7 +1686,10 @@ export async function runJob(jobId: number): Promise<void> {
         })
         .where(eq(jobs.id, jobId));
 
-      throw error;
+      if (!wasCancelled) throw error;
+    } finally {
+      signal.removeEventListener("abort", abortActiveOperations);
+      cancellation.finish();
     }
   });
 }
