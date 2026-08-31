@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/Go2Engle/FileBridge/compare/v0.9.0...v0.10.0) (2026-08-31)
+
+
+### Features
+
+* **hooks:** add support for transferred file names in post-job hooks ([#45](https://github.com/Go2Engle/FileBridge/issues/45)) ([9caeca2](https://github.com/Go2Engle/FileBridge/commit/9caeca263f6a32d3dd81d267fbdb67afb195365d))
+* **jobs:** add safe cancellation for running jobs ([#48](https://github.com/Go2Engle/FileBridge/issues/48)) ([1c58f30](https://github.com/Go2Engle/FileBridge/commit/1c58f30cbfe36025a6ba0e06ea45a94e19e939cf))
+
+
+### Bug Fixes
+
+* **scheduler:** remove stale job schedules ([#47](https://github.com/Go2Engle/FileBridge/issues/47)) ([617b067](https://github.com/Go2Engle/FileBridge/commit/617b06721e7df1ba90577309dd9beedc2c88d2f6))
+
 ## [0.9.0](https://github.com/Go2Engle/FileBridge/compare/v0.8.9...v0.9.0) (2026-08-13)
 
 
