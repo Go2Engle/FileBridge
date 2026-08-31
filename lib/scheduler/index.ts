@@ -1,4 +1,4 @@
-import { schedule, validate } from "node-cron";
+import { getTasks, schedule, validate } from "node-cron";
 import type { ScheduledTask } from "node-cron";
 import { db } from "@/lib/db";
 import { jobRuns, jobs, settings } from "@/lib/db/schema";
@@ -8,7 +8,56 @@ import { logAudit } from "@/lib/audit";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("scheduler");
-const scheduledTasks = new Map<number, ScheduledTask>();
+const TASK_NAME_PREFIX = "filebridge-job-";
+
+// Next.js can evaluate this module in more than one server bundle. Keep the
+// task map on globalThis so the instrumentation and API-route copies share the
+// same scheduler state within the FileBridge process.
+const schedulerGlobal = globalThis as typeof globalThis & {
+  __fileBridgeSchedulerState?: {
+    scheduledTasks: Map<number, ScheduledTask>;
+  };
+};
+const schedulerState = (schedulerGlobal.__fileBridgeSchedulerState ??= {
+  scheduledTasks: new Map<number, ScheduledTask>(),
+});
+const scheduledTasks = schedulerState.scheduledTasks;
+
+function taskName(jobId: number): string {
+  return `${TASK_NAME_PREFIX}${jobId}`;
+}
+
+function destroyTask(task: ScheduledTask): void {
+  const result = task.destroy();
+  if (result instanceof Promise) {
+    void result.catch((error) => log.error("Failed to destroy scheduled task", { error }));
+  }
+}
+
+function destroyJobTasks(jobId: number): void {
+  const tasks = new Set<ScheduledTask>();
+  const trackedTask = scheduledTasks.get(jobId);
+  if (trackedTask) tasks.add(trackedTask);
+
+  // node-cron keeps its own registry. The stable task name lets us clean up
+  // duplicates left by a separately evaluated scheduler module.
+  for (const task of getTasks().values()) {
+    if (task.name === taskName(jobId)) tasks.add(task);
+  }
+
+  for (const task of tasks) destroyTask(task);
+  scheduledTasks.delete(jobId);
+}
+
+function destroyAllJobTasks(): void {
+  const tasks = new Set<ScheduledTask>(scheduledTasks.values());
+  for (const task of getTasks().values()) {
+    if (task.name?.startsWith(TASK_NAME_PREFIX)) tasks.add(task);
+  }
+
+  for (const task of tasks) destroyTask(task);
+  scheduledTasks.clear();
+}
 
 export async function getSchedulerTimezone(): Promise<string> {
   try {
@@ -50,6 +99,9 @@ export async function initializeScheduler(): Promise<void> {
 
   const timezone = await getSchedulerTimezone();
 
+  // Reconcile the complete in-memory state, including tasks for jobs that are
+  // now inactive/deleted and duplicate tasks created by another module copy.
+  destroyAllJobTasks();
   for (const job of activeJobs) {
     scheduleJobWithTimezone(job.id, job.schedule, timezone);
   }
@@ -58,7 +110,7 @@ export async function initializeScheduler(): Promise<void> {
 }
 
 function scheduleJobWithTimezone(jobId: number, cronExpression: string, timezone: string): void {
-  unscheduleJob(jobId);
+  destroyJobTasks(jobId);
 
   if (!validate(cronExpression)) {
     log.error("Invalid cron expression", { jobId, cronExpression });
@@ -73,6 +125,18 @@ function scheduleJobWithTimezone(jobId: number, cronExpression: string, timezone
       const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) });
       if (!job || job.status !== "active") {
         log.info("Skipping job — not active", { jobId, status: job?.status ?? "deleted" });
+        return;
+      }
+
+      // A stale task can survive a schedule edit if it was registered by a
+      // different Next.js module instance. Never let that old cron callback
+      // execute after the persisted schedule has changed.
+      if (job.schedule !== cronExpression) {
+        log.info("Skipping stale scheduled task", {
+          jobId,
+          taskSchedule: cronExpression,
+          currentSchedule: job.schedule,
+        });
         return;
       }
       log.info("Triggering scheduled job", { jobId });
@@ -90,7 +154,7 @@ function scheduleJobWithTimezone(jobId: number, cronExpression: string, timezone
         log.error("Scheduled job failed", { jobId, error });
       }
     },
-    { timezone }
+    { timezone, name: taskName(jobId), noOverlap: true }
   );
 
   scheduledTasks.set(jobId, task);
@@ -103,10 +167,11 @@ export async function scheduleJob(jobId: number, cronExpression: string): Promis
 }
 
 export function unscheduleJob(jobId: number): void {
-  const task = scheduledTasks.get(jobId);
-  if (task) {
-    task.stop();
-    scheduledTasks.delete(jobId);
+  const hadTask =
+    scheduledTasks.has(jobId) ||
+    Array.from(getTasks().values()).some((task) => task.name === taskName(jobId));
+  destroyJobTasks(jobId);
+  if (hadTask) {
     log.info("Job unscheduled", { jobId });
   }
 }
@@ -123,6 +188,7 @@ export async function rescheduleAllJobs(): Promise<void> {
 
   const timezone = await getSchedulerTimezone();
 
+  destroyAllJobTasks();
   for (const job of activeJobs) {
     scheduleJobWithTimezone(job.id, job.schedule, timezone);
   }

@@ -93,7 +93,7 @@ export async function PUT(
 
     // Update scheduler
     if (row.status === "active") {
-      scheduleJob(row.id, row.schedule);
+      await scheduleJob(row.id, row.schedule);
     } else {
       unscheduleJob(row.id);
     }
@@ -147,7 +147,7 @@ export async function PATCH(
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     if (row.status === "active") {
-      scheduleJob(row.id, row.schedule);
+      await scheduleJob(row.id, row.schedule);
     } else {
       unscheduleJob(row.id);
     }
