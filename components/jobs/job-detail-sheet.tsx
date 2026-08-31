@@ -23,7 +23,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  Play, PenLine, CircleAlert, CircleCheckBig, CircleX, Clock, FileText,
+  Play, CircleStop, PenLine, CircleAlert, CircleCheckBig, CircleX, Clock, FileText,
   ArrowLeft, Loader2, Search, Webhook,
 } from "lucide-react";
 import axios from "axios";
@@ -109,6 +109,20 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
     onError: () => toast.error("Failed to run job"),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => axios.post(`/api/jobs/${id}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["job", job?.id] });
+      queryClient.invalidateQueries({ queryKey: ["job-runs", job?.id] });
+      toast.success("Job stop requested");
+    },
+    onError: (error) => {
+      const message = axios.isAxiosError(error) && error.response?.data?.error;
+      toast.error(message || "Failed to stop job");
+    },
+  });
+
   const latestRun = runs?.[0];
   const connMap = new Map(connections?.map((c) => [c.id, c.name]) ?? []);
 
@@ -191,6 +205,25 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
                 )}
                 Run Now
               </Button>
+              {isRunning && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    if (confirm(`Stop the running job "${currentJob.name}"? The current run will be marked failed, but the job will remain available for future runs.`)) {
+                      cancelMutation.mutate(currentJob.id);
+                    }
+                  }}
+                  disabled={cancelMutation.isPending}
+                >
+                  {cancelMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <CircleStop className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Kill Running Job
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"

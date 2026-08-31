@@ -232,7 +232,19 @@ Triggers an immediate execution of the job.
 ```
 
 - `dryRun: false` — Runs the job for real (returns `{ success: true }`)
-- `dryRun: true` — Returns a dry run preview (returns `DryRunResult` — see [Transfer Engine](Transfer-Engine#dry-run))
+- `dryRun: true` - Returns a dry run preview (returns `DryRunResult` - see [Transfer Engine](Transfer-Engine#dry-run))
+
+---
+
+### `POST /api/jobs/[id]/cancel`
+
+Stops a currently running job. Admin access is required.
+
+- Returns `202` when cancellation was delivered to a live execution. The job remains `running` until stream and connection cleanup completes.
+- Returns `200` when a stale `running` database record was recovered immediately.
+- Returns `409` when the job is not running.
+
+The current run is marked as failed. Scheduled jobs remain enabled for their next run; disabled jobs that were started manually remain disabled.
 
 ---
 
