@@ -64,7 +64,7 @@ describe("POST /api/jobs/[id]/run", () => {
     await POST(makeRequest(), makeParams("1"));
     // Give the async fire-and-forget a tick to settle
     await new Promise((r) => setTimeout(r, 10));
-    expect(runJob).toHaveBeenCalledWith(1);
+    expect(runJob).toHaveBeenCalledWith(1, expect.objectContaining({ trigger: "manual" }));
   });
 
   it("still responds 200 even when the job does not exist in DB", async () => {

@@ -14,6 +14,7 @@ import {
   KeyRound,
   Webhook,
   Lock,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AuthButton } from "@/components/auth-button";
@@ -36,6 +37,7 @@ const navItems = [
 const adminNavItems = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/authentication", label: "Authentication", icon: KeyRound },
+  { href: "/admin/datadog", label: "Datadog", icon: Activity },
 ];
 
 export function Sidebar() {

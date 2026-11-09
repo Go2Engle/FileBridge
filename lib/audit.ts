@@ -6,6 +6,8 @@ import type { Session } from "next-auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("audit");
+/** One structured line per audit entry so log collectors get the audit trail. */
+const auditLog = createLogger("audit-log");
 
 type AuditAction = NewAuditLog["action"];
 type AuditResource = NewAuditLog["resource"];
@@ -73,6 +75,18 @@ export async function logAudit(opts: LogAuditOptions): Promise<void> {
       ipAddress: opts.ipAddress ?? null,
       details: opts.details ?? null,
     });
+    auditLog.info(
+      `${opts.userId} ${opts.action} ${opts.resource}${opts.resourceName ? ` "${opts.resourceName}"` : ""}`,
+      {
+        evt: { name: "audit", category: opts.resource, action: opts.action },
+        usr: { id: opts.userId },
+        ...(opts.ipAddress ? { network: { client: { ip: opts.ipAddress } } } : {}),
+        resource: opts.resource,
+        ...(opts.resourceId != null ? { resourceId: opts.resourceId } : {}),
+        ...(opts.resourceName ? { resourceName: opts.resourceName } : {}),
+        ...(opts.details ? { details: opts.details } : {}),
+      },
+    );
   } catch (err) {
     log.error("Failed to write audit log", { error: err });
   }

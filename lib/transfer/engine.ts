@@ -34,6 +34,21 @@ import {
 } from "@/lib/pgp";
 
 const log = createLogger("engine");
+/**
+ * Structured, human-meaningful job events (run started/finished, per-file
+ * results). Emitted as normal log lines — so any collector of FileBridge's
+ * stdout (e.g. a Datadog Agent tailing journald) picks them up — and
+ * classified as "job" logs by the built-in Datadog forwarder.
+ */
+const jobLog = createLogger("job-log");
+
+export type JobTrigger = "manual" | "scheduled";
+
+export interface RunJobOptions {
+  trigger?: JobTrigger;
+  /** User email for manual runs, "scheduler" for scheduled runs. */
+  triggeredBy?: string;
+}
 
 const DEFAULT_TRANSFER_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const TRANSFER_IDLE_TIMEOUT_MS = (() => {
@@ -699,7 +714,8 @@ export async function dryRunJob(jobId: number): Promise<DryRunResult> {
   }
 }
 
-export async function runJob(jobId: number): Promise<void> {
+export async function runJob(jobId: number, options: RunJobOptions = {}): Promise<void> {
+  const trigger: JobTrigger = options.trigger ?? "manual";
   log.info("Starting job", { jobId });
 
   // Load job
@@ -779,8 +795,22 @@ export async function runJob(jobId: number): Promise<void> {
   }
 
   // From here on, all log lines will automatically include jobId + runId
+  const runSummaryBase = () => ({
+    trigger,
+    ...(options.triggeredBy ? { triggeredBy: options.triggeredBy } : {}),
+    schedule: job.schedule,
+    startedAt: run.startedAt,
+    source: { connection: srcConn.name, protocol: srcConn.protocol, host: srcConn.host, path: job.sourcePath },
+    destination: { connection: dstConn.name, protocol: dstConn.protocol, host: dstConn.host, path: job.destinationPath },
+  });
+
   return withJobContext(jobId, run.id, async () => {
     log.info("Job run created", { runId: run.id });
+    jobLog.info(`Job run started: ${job.name}`, {
+      evt: { name: "job_run_start" },
+      outcome: "running",
+      ...runSummaryBase(),
+    });
 
     let source: ReturnType<typeof createStorageProvider>;
     let dest: ReturnType<typeof createStorageProvider>;
@@ -837,6 +867,22 @@ export async function runJob(jobId: number): Promise<void> {
       if (pendingLogs.length === 0) return;
       const batch = pendingLogs.splice(0);
       await db.insert(transferLogs).values(batch);
+      for (const entry of batch) {
+        const failed = entry.status === "failure";
+        jobLog[failed ? "error" : "info"](
+          failed ? `File transfer failed: ${entry.fileName}` : `File transferred: ${entry.fileName}`,
+          {
+            evt: { name: "file_transfer", outcome: failed ? "failure" : "success" },
+            outcome: failed ? "failure" : "success",
+            fileName: entry.fileName,
+            sourcePath: entry.sourcePath,
+            destinationPath: entry.destinationPath,
+            fileSize: entry.fileSize,
+            transferredAt: entry.transferredAt,
+            ...(entry.errorMessage ? { errorMessage: entry.errorMessage } : {}),
+          },
+        );
+      }
     }
 
     try {
@@ -1608,6 +1654,24 @@ export async function runJob(jobId: number): Promise<void> {
       }
 
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
+      {
+        const completedAt = new Date().toISOString();
+        const failed = verificationFailureCount > 0;
+        jobLog[failed ? "error" : "info"](
+          failed ? `Job run completed with verification failures: ${job.name}` : `Job run succeeded: ${job.name}`,
+          {
+            evt: { name: "job_run", outcome: failed ? "failure" : "success" },
+            outcome: failed ? "failure" : "success",
+            ...runSummaryBase(),
+            completedAt,
+            durationMs: Date.parse(completedAt) - Date.parse(run.startedAt),
+            filesTransferred,
+            filesSkipped,
+            bytesTransferred,
+            verificationFailureCount,
+          },
+        );
+      }
     } catch (error) {
       const wasCancelled = isJobCancelledError(error);
       if (wasCancelled) {
@@ -1697,10 +1761,28 @@ export async function runJob(jobId: number): Promise<void> {
           .where(eq(jobs.id, jobId));
       }
 
+      {
+        const completedAt = new Date().toISOString();
+        const outcome = wasCancelled ? "cancelled" : "failure";
+        jobLog[wasCancelled ? "warn" : "error"](
+          `Job run ${wasCancelled ? "stopped" : "failed"}: ${job.name}`,
+          {
+            evt: { name: "job_run", outcome },
+            outcome,
+            ...runSummaryBase(),
+            completedAt,
+            durationMs: Date.parse(completedAt) - Date.parse(run.startedAt),
+            filesTransferred,
+            bytesTransferred,
+            errorMessage,
+          },
+        );
+      }
+
       if (!wasCancelled) throw error;
     } finally {
       signal.removeEventListener("abort", abortActiveOperations);
       cancellation.finish();
     }
-  });
+  }, { jobName: job.name, trigger });
 }

@@ -182,7 +182,7 @@ describe("job scheduler", () => {
 
     await callback();
 
-    expect(mocks.runJob).toHaveBeenCalledWith(7);
+    expect(mocks.runJob).toHaveBeenCalledWith(7, { trigger: "scheduled", triggeredBy: "scheduler" });
     expect(mocks.logAudit).toHaveBeenCalledOnce();
   });
 });
