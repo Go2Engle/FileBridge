@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/Go2Engle/FileBridge/compare/v0.10.0...v0.11.0) (2026-11-09)
+
+
+### Features
+
+* **logging:** add job names and run events to logs, plus Datadog forwarding ([9c7cf86](https://github.com/Go2Engle/FileBridge/commit/9c7cf86ded17231035917a1b77860b7dc7a1a1ed))
+
+
+### Bug Fixes
+
+* **jobs:** make "Kill running job" stop runs wedged on dead SMB sessions ([9c7cf86](https://github.com/Go2Engle/FileBridge/commit/9c7cf86ded17231035917a1b77860b7dc7a1a1ed))
+
 ## [0.10.0](https://github.com/Go2Engle/FileBridge/compare/v0.9.0...v0.10.0) (2026-08-31)
 
 
