@@ -3,6 +3,9 @@ export async function register() {
     const { validateEnv } = await import("./lib/env");
     validateEnv();
 
+    const { initDatadogFromSettings } = await import("./lib/datadog/config");
+    initDatadogFromSettings();
+
     const { initializeScheduler } = await import("./lib/scheduler/index");
     await initializeScheduler();
 

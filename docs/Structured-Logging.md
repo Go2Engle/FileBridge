@@ -29,7 +29,7 @@ Each log line is a JSON object:
 | `level` | Numeric pino level (10=trace, 20=debug, 30=info, 40=warn, 50=error, 60=fatal) |
 | `time` | ISO 8601 timestamp |
 | `service` | Always `"filebridge"` |
-| `component` | Source component: `engine`, `scheduler`, `sftp`, `smb`, `azure-blob`, `audit`, `backup`, `env` |
+| `component` | Source component: `engine`, `scheduler`, `sftp`, `smb`, `azure-blob`, `audit`, `backup`, `env`, plus `job-log` and `audit-log` for the structured events below |
 | `msg` | Human-readable message |
 
 ### Context Fields (when present)
@@ -39,6 +39,8 @@ Each log line is a JSON object:
 | `requestId` | UUID from `X-Request-ID` header — correlates all logs for a single HTTP request |
 | `jobId` | Database ID of the job being executed |
 | `runId` | Database ID of the specific job run |
+| `jobName` | Name of the job being executed |
+| `trigger` | What started the run: `scheduled` or `manual` |
 
 ---
 
@@ -117,7 +119,39 @@ return withJobContext(jobId, run.id, async () => {
 });
 ```
 
-This means a single log query filtered by `jobId = 7` and `runId = 42` returns the complete story of that execution across every component.
+This means a single log query filtered by `jobId = 7` and `runId = 42` returns the complete story of that execution across every component. The engine also passes `{ jobName, trigger }`, so every line of a run carries the job's name and whether it was scheduled or run manually.
+
+---
+
+## Job and Audit Events
+
+On top of the step-by-step engine logs, FileBridge writes one structured event per meaningful outcome, so log platforms can report on jobs without parsing free-text messages:
+
+| `component` | `evt.name` | Emitted when | Key fields |
+|---|---|---|---|
+| `job-log` | `job_run_start` | A run starts | `jobName`, `trigger`, `triggeredBy`, `schedule`, `startedAt`, `source` / `destination` (connection, protocol, host, path) |
+| `job-log` | `job_run` | A run finishes | everything above plus `outcome` (`success`, `failure`, `cancelled`), `completedAt`, `durationMs`, `filesTransferred`, `filesSkipped`, `bytesTransferred`, `errorMessage` |
+| `job-log` | `file_transfer` | Each file succeeds or fails | `outcome`, `fileName`, `sourcePath`, `destinationPath`, `fileSize`, `transferredAt`, `errorMessage` |
+| `job-log` | `hook_run` | Each pre/post-job hook runs | `outcome`, `hookName`, `hookType`, `hookTrigger`, `durationMs`, `errorMessage` |
+| `audit-log` | `audit` | Every audit-trail entry | `usr.id`, `evt.action`, `resource`, `resourceName`, `details` |
+
+Example (Datadog): `service:filebridge @evt.name:job_run @outcome:failure` lists failed runs with their job names and durations.
+
+---
+
+## Sending Logs Directly to Datadog
+
+Admins can forward logs straight to the Datadog HTTP logs intake from **Admin → Datadog** — useful where no Datadog Agent collects FileBridge's stdout.
+
+- **Site and API key** — the API key is encrypted at rest with `ENCRYPTION_KEY` and never returned to the browser.
+- **Service, environment, hostname, extra tags** — applied to every forwarded log (`env` becomes the `env:` tag).
+- **Minimum level** — `debug` also requires `LOG_LEVEL=debug`.
+- **What to send** — *Application logs* (everything else), *Job logs* (`component: job-log`) and *Audit trail* (`component: audit-log`) can be toggled independently.
+- **Send test log** validates the key and sends one log using the unsaved form values.
+
+Logs are batched (every 5 s or 500 entries, gzip, up to 1,000 per request) and retried on network errors, `429` and `5xx`. The in-memory queue is capped at 20,000 entries; when full, the oldest entries are dropped. The page shows sent, queued and dropped counts and the last delivery error. Redaction is applied before forwarding.
+
+> If a Datadog Agent already collects FileBridge's stdout, you already receive every event above. Enabling direct forwarding as well sends duplicates — turn off *Application logs* here or stop the Agent's collection.
 
 ---
 
@@ -177,7 +211,7 @@ FileBridge's stdout NDJSON output is directly ingestable by:
 
 | Platform | How |
 |---|---|
-| **Datadog** | Datadog Agent's `logs` collection on stdout — zero config needed |
+| **Datadog** | Datadog Agent's `logs` collection on stdout — zero config needed — or built-in forwarding from **Admin → Datadog** (see above) |
 | **Grafana Loki** | Promtail with `pipeline_stages` parsing the JSON |
 | **AWS CloudWatch** | CloudWatch Logs agent / ECS log driver (`awslogs`) |
 | **Azure Monitor** | Container Insights or Azure Log Analytics with the JSON parser |

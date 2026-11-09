@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   cancelActiveJob: vi.fn(),
+  detachActiveJob: vi.fn(),
   findFirst: vi.fn(),
   update: vi.fn(),
   logAudit: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("@/lib/auth/rbac", () => ({
 
 vi.mock("@/lib/transfer/cancellation", () => ({
   cancelActiveJob: mocks.cancelActiveJob,
+  detachActiveJob: mocks.detachActiveJob,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -35,7 +37,7 @@ vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { POST } from "@/app/api/jobs/[id]/cancel/route";
+import { CANCEL_GRACE_MS, POST } from "@/app/api/jobs/[id]/cancel/route";
 import { requireRole } from "@/lib/auth/rbac";
 
 function request(): NextRequest {
@@ -69,12 +71,33 @@ describe("POST /api/jobs/[id]/cancel", () => {
     expect(mocks.cancelActiveJob).not.toHaveBeenCalled();
   });
 
-  it("requests cancellation of the live engine task", async () => {
-    mocks.cancelActiveJob.mockReturnValueOnce(new Promise<void>(() => {}));
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("waits for the live engine task to stop cleanly", async () => {
+    mocks.cancelActiveJob.mockReturnValueOnce(Promise.resolve());
     const response = await POST(request(), params());
-    expect(response.status).toBe(202);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ recovery: "cancelled" });
     expect(mocks.cancelActiveJob).toHaveBeenCalledWith(1);
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.detachActiveJob).not.toHaveBeenCalled();
+  });
+
+  it("force-resets the job when the engine does not stop within the grace period", async () => {
+    vi.useFakeTimers();
+    mocks.cancelActiveJob.mockReturnValueOnce(new Promise<void>(() => {}));
+    const pending = POST(request(), params());
+    await vi.advanceTimersByTimeAsync(CANCEL_GRACE_MS + 1);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ recovery: "forced" });
+    expect(mocks.update).toHaveBeenCalledTimes(2);
+    expect(mocks.detachActiveJob).toHaveBeenCalledWith(1);
+    expect(mocks.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ details: { trigger: "manual_stop", recovery: "forced" } }),
+    );
   });
 
   it("recovers a stale running row when no engine task exists", async () => {

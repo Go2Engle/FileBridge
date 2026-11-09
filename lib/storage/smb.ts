@@ -38,6 +38,12 @@ export class SmbProvider implements StorageProvider {
   private static readonly STREAMING_WRITE_CHUNK = 4 * 1024 * 1024; // 4 MB coalesced write chunks
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
+  /**
+   * Set when the engine explicitly disconnects (job finished or cancelled).
+   * Retry loops check this so an in-flight operation does not silently
+   * reconnect and keep retrying after the job was stopped.
+   */
+  private closed = false;
   private credentials: SmbCredentials;
   private host: string;
   constructor(host: string, _port: number, credentials: SmbCredentials) {
@@ -375,14 +381,40 @@ export class SmbProvider implements StorageProvider {
    * the session (e.g. idle timeout). A fresh client resolves this immediately.
    */
   private async reconnect(): Promise<void> {
+    this.assertOpen();
     log.info("Reconnecting to reset stale session state", { host: this.host });
-    await this.disconnect();
+    this.closeClient();
     await this.connect();
+  }
+
+  private assertOpen(): void {
+    if (this.closed) {
+      const err: Error & { code?: string } = new Error(
+        "SMB provider was disconnected; aborting retry",
+      );
+      err.code = "SMB_CLIENT_CLOSED";
+      throw err;
+    }
+  }
+
+  private closeClient(): void {
+    if (this.client) {
+      try {
+        // close() can throw if authentication never completed and internal state is uninitialized
+        this.client.close();
+        log.info("Disconnected", { host: this.host });
+      } catch {
+        // Silently ignore — happens when auth failed before a session was established
+      } finally {
+        this.client = null;
+      }
+    }
   }
 
   // ── StorageProvider implementation ────────────────────────────────────────
 
   async connect(): Promise<void> {
+    this.closed = false;
     const share = `\\\\${this.host}\\${this.credentials.share}`;
     log.info("Creating SMB client", {
       host: this.host,
@@ -411,17 +443,8 @@ export class SmbProvider implements StorageProvider {
   }
 
   async disconnect(): Promise<void> {
-    if (this.client) {
-      try {
-        // close() can throw if authentication never completed and internal state is uninitialized
-        this.client.close();
-        log.info("Disconnected", { host: this.host });
-      } catch {
-        // Silently ignore — happens when auth failed before a session was established
-      } finally {
-        this.client = null;
-      }
-    }
+    this.closed = true;
+    this.closeClient();
   }
 
   async listFiles(remotePath: string, filter = ""): Promise<FileInfo[]> {
@@ -533,6 +556,7 @@ export class SmbProvider implements StorageProvider {
     log.info("Deleting file", { smbPath });
     const maxAttempts = 10;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.assertOpen();
       try {
         await this.unlinkAsync(smbPath);
         return;
@@ -577,6 +601,7 @@ export class SmbProvider implements StorageProvider {
     const smbDst = this.toSmbPath(destinationPath);
     log.info("Moving file", { smbSrc, smbDst });
     for (let attempt = 1; attempt <= 5; attempt++) {
+      this.assertOpen();
       try {
         await this.renameAsync(smbSrc, smbDst);
         return;

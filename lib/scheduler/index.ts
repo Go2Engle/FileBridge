@@ -149,7 +149,7 @@ function scheduleJobWithTimezone(jobId: number, cronExpression: string, timezone
         details: { trigger: "scheduled", schedule: job.schedule },
       });
       try {
-        await runJob(jobId);
+        await runJob(jobId, { trigger: "scheduled", triggeredBy: "scheduler" });
       } catch (error) {
         log.error("Scheduled job failed", { jobId, error });
       }

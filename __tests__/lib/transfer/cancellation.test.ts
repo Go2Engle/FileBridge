@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cancelActiveJob,
+  detachActiveJob,
   isJobCancelledError,
   registerActiveJob,
   throwIfJobCancelled,
@@ -33,5 +34,20 @@ describe("job cancellation registry", () => {
     cancelActiveJob(102);
     await expect(pending).rejects.toSatisfy(isJobCancelledError);
     handle.finish();
+  });
+
+  it("detaches a wedged run so a new run owns the job", async () => {
+    const zombie = registerActiveJob(103);
+    const completion = cancelActiveJob(103);
+    detachActiveJob(103);
+    await completion; // detach resolves waiters
+    expect(zombie.isCurrent()).toBe(false);
+
+    const fresh = registerActiveJob(103);
+    expect(fresh.isCurrent()).toBe(true);
+    zombie.finish(); // late unwind of the zombie must not evict the new run
+    expect(fresh.isCurrent()).toBe(true);
+    expect(cancelActiveJob(103)).not.toBeNull();
+    fresh.finish();
   });
 });

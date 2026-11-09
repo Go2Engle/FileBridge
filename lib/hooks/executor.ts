@@ -9,6 +9,7 @@ import { throwIfJobCancelled } from "@/lib/transfer/cancellation";
 
 const execAsync = promisify(exec);
 const log = createLogger("hooks");
+const jobLog = createLogger("job-log");
 
 const MAX_OUTPUT_BYTES = 4096;
 
@@ -338,6 +339,25 @@ export async function executeHooks(
       output: result.output,
       errorMessage: result.errorMessage,
     });
+
+    // Hook output is intentionally not forwarded — it can contain arbitrary
+    // script/webhook response content.
+    jobLog[runStatus === "success" ? "info" : "error"](
+      `Hook ${runStatus === "success" ? "succeeded" : "failed"}: ${hook.name} (${ctx.trigger})`,
+      {
+        evt: { name: "hook_run", outcome: runStatus },
+        outcome: runStatus,
+        jobId: ctx.jobId,
+        jobName: ctx.jobName,
+        runId: jobRunId,
+        hookId: hook.id,
+        hookName: hook.name,
+        hookType: hook.type,
+        hookTrigger: ctx.trigger,
+        durationMs: result.durationMs,
+        ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
+      },
+    );
 
     if (!result.success) {
       throw new Error(

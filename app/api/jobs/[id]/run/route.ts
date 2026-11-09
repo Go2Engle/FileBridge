@@ -34,7 +34,7 @@ export async function POST(
   });
 
   // Run asynchronously — don't block the response
-  runJob(jobId).catch((err) =>
+  runJob(jobId, { trigger: "manual", triggeredBy: getUserId(session) }).catch((err) =>
     log.error("Manual job run failed", { jobId, requestId: req.headers.get("x-request-id") ?? undefined, error: err })
   );
 

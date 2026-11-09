@@ -1,5 +1,6 @@
 import pino from "pino";
 import { AsyncLocalStorage } from "async_hooks";
+import { shipPinoLine } from "@/lib/datadog/shipper";
 
 // ---------------------------------------------------------------------------
 // Async context store — propagates log context through async call stacks
@@ -9,6 +10,8 @@ interface LogContext {
   requestId?: string;
   jobId?: number;
   runId?: number;
+  jobName?: string;
+  trigger?: string;
 }
 
 const store = new AsyncLocalStorage<LogContext>();
@@ -42,13 +45,32 @@ const REDACT_PATHS = [
 // - JSON output to stdout (NDJSON — ingested natively by Datadog, Grafana
 //   Loki/Promtail, AWS CloudWatch, Azure Monitor, etc.)
 // - Control log verbosity via LOG_LEVEL env var (default: info)
+// - Every line is also offered to the Datadog shipper, which forwards it when
+//   log forwarding is enabled in Admin → Datadog (no-op otherwise). Lines are
+//   already redacted at this point.
 // ---------------------------------------------------------------------------
-const baseLogger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: { service: "filebridge" },
-  redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
-  timestamp: pino.stdTimeFunctions.isoTime,
-});
+const datadogStream = {
+  write(line: string) {
+    try {
+      shipPinoLine(line);
+    } catch {
+      // Never let log forwarding break logging
+    }
+  },
+};
+
+const baseLogger = pino(
+  {
+    level: process.env.LOG_LEVEL ?? "info",
+    base: { service: "filebridge" },
+    redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
+    timestamp: pino.stdTimeFunctions.isoTime,
+  },
+  pino.multistream([
+    { level: "trace", stream: pino.destination({ dest: 1, sync: true }) },
+    { level: "trace", stream: datadogStream },
+  ]),
+);
 
 // ---------------------------------------------------------------------------
 // Logger factory — returns a thin wrapper that automatically merges the
@@ -93,13 +115,15 @@ export function withRequestContext<T>(requestId: string, fn: () => T): T {
 }
 
 /**
- * Run `fn` with jobId + runId attached to all log lines emitted inside it.
+ * Run `fn` with jobId + runId (and optionally jobName + trigger) attached to
+ * all log lines emitted inside it — including provider (SMB/SFTP/…) lines.
  * Call this at the start of `runJob()` in the transfer engine.
  */
 export function withJobContext<T>(
   jobId: number,
   runId: number,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  extra: { jobName?: string; trigger?: string } = {}
 ): Promise<T> {
-  return store.run({ jobId, runId }, fn) as Promise<T>;
+  return store.run({ jobId, runId, ...extra }, fn) as Promise<T>;
 }
