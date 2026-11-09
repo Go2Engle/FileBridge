@@ -240,8 +240,14 @@ Triggers an immediate execution of the job.
 
 Stops a currently running job. Admin access is required.
 
-- Returns `202` when cancellation was delivered to a live execution. The job remains `running` until stream and connection cleanup completes.
-- Returns `200` when a stale `running` database record was recovered immediately.
+Returns `200` with `{ "message": "...", "recovery": "..." }` once the job is no longer running:
+
+| `recovery` | Meaning |
+|---|---|
+| `cancelled` | The live execution stopped cleanly within the grace period (15 s): streams and connections were closed and the run was recorded as failed by the engine. |
+| `forced` | The execution did not stop within the grace period (for example, it was blocked on an unresponsive server). The run and job were reset immediately and the hung task was detached; it exits on its next cancellation check and can no longer change the job's status. |
+| `stale_reset` | The database said `running` but there was no live execution (for example, after a service restart). The record was recovered immediately. |
+
 - Returns `409` when the job is not running.
 
 The current run is marked as failed. Scheduled jobs remain enabled for their next run; disabled jobs that were started manually remain disabled.

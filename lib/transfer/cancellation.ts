@@ -25,6 +25,11 @@ const activeJobRuns =
 export interface JobCancellationHandle {
   signal: AbortSignal;
   finish: () => void;
+  /**
+   * False once the handle was detached by a force-stop. A detached (zombie)
+   * run must not touch the job row, which may already belong to a new run.
+   */
+  isCurrent: () => boolean;
 }
 
 export function registerActiveJob(jobId: number): JobCancellationHandle {
@@ -39,6 +44,7 @@ export function registerActiveJob(jobId: number): JobCancellationHandle {
   let finished = false;
   return {
     signal: controller.signal,
+    isCurrent: () => activeJobRuns.get(jobId) === entry,
     finish: () => {
       if (finished) return;
       finished = true;
@@ -57,6 +63,24 @@ export function cancelActiveJob(jobId: number): Promise<void> | null {
     entry.controller.abort(new JobCancelledError());
   }
   return entry.completion;
+}
+
+/**
+ * Forget the in-process handle for a job without waiting for the engine to
+ * unwind. Used by the cancel API's force-stop fallback after the grace period:
+ * the abort signal stays set, so a hung engine task fails fast on its next
+ * cancellation check, while a fresh run is free to register a new handle.
+ * The old handle's finish() is identity-checked and won't evict the new one.
+ */
+export function detachActiveJob(jobId: number): void {
+  const entry = activeJobRuns.get(jobId);
+  if (!entry) return;
+  activeJobRuns.delete(jobId);
+  entry.resolveCompletion();
+}
+
+export function isJobActive(jobId: number): boolean {
+  return activeJobRuns.has(jobId);
 }
 
 export function throwIfJobCancelled(signal: AbortSignal): void {

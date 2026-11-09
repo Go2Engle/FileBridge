@@ -150,6 +150,8 @@ Administrators can select **Kill Running Job** from the Jobs table or the live j
 
 The job then returns to the state it had before the run: scheduled jobs return to `active`, while manually-run disabled jobs return to `inactive`. This means a stopped scheduled job remains eligible for its next cron trigger and can also be run manually. Any partially-written destination from the active transfer is removed on a best-effort basis before the job is released.
 
+If the run does not stop within 15 seconds — for example because it is blocked on a server that has stopped responding — FileBridge force-stops it: the run is marked failed with `Job stopped by an administrator (forced after engine did not respond)`, the job is released immediately, and the stuck task is detached so it cannot affect later runs. The UI tells you whether the job stopped cleanly or was force-stopped.
+
 If the database says a job is running but there is no active execution in the server process, the same control recovers the stale job and returns it to `active` without requiring a service restart.
 
 ---

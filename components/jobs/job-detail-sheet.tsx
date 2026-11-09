@@ -111,11 +111,13 @@ export function JobDetailSheet({ job, open, onClose, onEdit }: JobDetailSheetPro
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => axios.post(`/api/jobs/${id}/cancel`),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["job", job?.id] });
       queryClient.invalidateQueries({ queryKey: ["job-runs", job?.id] });
-      toast.success("Job stop requested");
+      const { message, recovery } = res.data ?? {};
+      if (recovery === "forced") toast.warning(message ?? "Job force-stopped");
+      else toast.success(message ?? "Job stopped");
     },
     onError: (error) => {
       const message = axios.isAxiosError(error) && error.response?.data?.error;

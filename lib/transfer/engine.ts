@@ -1405,11 +1405,16 @@ export async function runJob(jobId: number): Promise<void> {
           });
 
           try {
-            await dest.deleteFile(dstFilePath);
+            // Must stay cancellable: a dead SMB/SFTP session can make this
+            // best-effort delete retry for many minutes, which previously
+            // left "Kill running job" with no visible effect.
+            await withJobCancellation(dest.deleteFile(dstFilePath), signal);
             log.warn("Deleted destination file after failed transfer", { fileName: file.name, dstPath: dstFilePath });
-          } catch {
+          } catch (cleanupError) {
+            if (isJobCancelledError(cleanupError)) throw cleanupError;
             // Best effort cleanup only
           }
+          throwIfJobCancelled(signal);
 
           if (transferAttempt >= maxTransferAttempts) {
             log.error("Failed to transfer file", { fileName: file.name, error: fileError });
@@ -1590,14 +1595,17 @@ export async function runJob(jobId: number): Promise<void> {
         })
         .where(eq(jobRuns.id, run.id));
 
-      await db
-        .update(jobs)
-        .set({
-          status: getPostRunJobStatus(previousStatus),
-          lastRunAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(jobs.id, jobId));
+      // Skip if a force-stop already released the job (it may be running again).
+      if (cancellation.isCurrent()) {
+        await db
+          .update(jobs)
+          .set({
+            status: getPostRunJobStatus(previousStatus),
+            lastRunAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(jobs.id, jobId));
+      }
 
       log.info("Job completed", { filesTransferred, filesSkipped, bytesTransferred });
     } catch (error) {
@@ -1677,14 +1685,17 @@ export async function runJob(jobId: number): Promise<void> {
         })
         .where(eq(jobRuns.id, run.id));
 
-      await db
-        .update(jobs)
-        .set({
-          status: getPostRunJobStatus(previousStatus),
-          lastRunAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(jobs.id, jobId));
+      // Skip if a force-stop already released the job (it may be running again).
+      if (cancellation.isCurrent()) {
+        await db
+          .update(jobs)
+          .set({
+            status: getPostRunJobStatus(previousStatus),
+            lastRunAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(jobs.id, jobId));
+      }
 
       if (!wasCancelled) throw error;
     } finally {

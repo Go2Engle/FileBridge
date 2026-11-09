@@ -70,10 +70,11 @@ interface JobRowProps {
   onToggle: (id: number, status: string) => void;
   onRun: (id: number) => void;
   onCancel: (id: number) => void;
+  isStopping?: boolean;
   onDelete: (id: number) => void;
 }
 
-function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onRun, onCancel, onDelete }: JobRowProps) {
+function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onRun, onCancel, isStopping, onDelete }: JobRowProps) {
   return (
     <TableRow
       id={id}
@@ -128,16 +129,17 @@ function JobRow({ job, isAdmin, id, onSelect, onEdit, onSetDryRun, onToggle, onR
                     variant="ghost"
                     size="icon"
                     className="text-destructive hover:text-destructive"
+                    disabled={isStopping}
                     onClick={() => {
                       if (confirm(`Stop the running job "${job.name}"? The current run will be marked failed, but the job will remain available for future runs.`)) {
                         onCancel(job.id);
                       }
                     }}
                   >
-                    <CircleStop className="h-4 w-4" />
+                    <CircleStop className={isStopping ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Kill running job</TooltipContent>
+                <TooltipContent>{isStopping ? "Stopping…" : "Kill running job"}</TooltipContent>
               </Tooltip>
             )}
             <Tooltip>
@@ -260,9 +262,11 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => axios.post(`/api/jobs/${id}/cancel`),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      toast.success("Job stop requested");
+      const { message, recovery } = res.data ?? {};
+      if (recovery === "forced") toast.warning(message ?? "Job force-stopped");
+      else toast.success(message ?? "Job stopped");
     },
     onError: (error) => {
       const message = axios.isAxiosError(error) && error.response?.data?.error;
@@ -469,6 +473,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                       onToggle={(id, status) => toggleMutation.mutate({ id, status })}
                       onRun={(id) => runMutation.mutate(id)}
                       onCancel={(id) => cancelMutation.mutate(id)}
+                isStopping={cancelMutation.isPending && cancelMutation.variables === job.id}
                       onDelete={(id) => deleteMutation.mutate(id)}
                     />
                   ))}
@@ -502,6 +507,7 @@ export function JobList({ onNew, onEdit, onSelect }: JobListProps) {
                 onToggle={(id, status) => toggleMutation.mutate({ id, status })}
                 onRun={(id) => runMutation.mutate(id)}
                 onCancel={(id) => cancelMutation.mutate(id)}
+                isStopping={cancelMutation.isPending && cancelMutation.variables === job.id}
                 onDelete={(id) => deleteMutation.mutate(id)}
               />
             ))}
