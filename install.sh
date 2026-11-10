@@ -412,6 +412,10 @@ install_app() {
   # Write version marker used by upgrade detection
   echo "$version" > "${APP_DIR}/FILEBRIDGE_VERSION"
 
+  # Next.js writes its prerender/ISR cache to .next/cache at runtime. The
+  # standalone bundle doesn't ship this directory, so create it here.
+  mkdir -p "${APP_DIR}/.next/cache"
+
   if [ "$OS" = "linux" ]; then
     chown -R root:filebridge "$APP_DIR"
     chmod 750 "$APP_DIR"
@@ -419,6 +423,9 @@ install_app() {
     find "$APP_DIR" -mindepth 1 -type f -exec chmod 644 {} +
     # server.js needs to be executable
     chmod 755 "${APP_DIR}/server.js" 2>/dev/null || true
+    # The rest of APP_DIR stays root-owned; only the cache is writable by the service
+    chown filebridge:filebridge "${APP_DIR}/.next/cache"
+    chmod 750 "${APP_DIR}/.next/cache"
   fi
   stop_spinner "ok"
 }
@@ -457,7 +464,7 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-ReadWritePaths=${DATA_DIR} ${BACKUP_DIR} ${LOG_DIR}
+ReadWritePaths=${DATA_DIR} ${BACKUP_DIR} ${LOG_DIR} -${APP_DIR}/.next/cache
 
 [Install]
 WantedBy=multi-user.target
