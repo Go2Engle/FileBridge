@@ -1,5 +1,8 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { installProcessErrorHandlers } = await import("./lib/process-errors");
+    installProcessErrorHandlers();
+
     const { validateEnv } = await import("./lib/env");
     validateEnv();
 
