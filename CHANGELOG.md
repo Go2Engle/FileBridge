@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/Go2Engle/FileBridge/compare/v0.11.1...v0.11.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **docker:** create writable .next/cache for the Next.js prerender cache ([#53](https://github.com/Go2Engle/FileBridge/issues/53)) ([38d9124](https://github.com/Go2Engle/FileBridge/commit/38d91249615fee8dae180b302c0036531c54d93b))
+
 ## [0.11.1](https://github.com/Go2Engle/FileBridge/compare/v0.11.0...v0.11.1) (2026-11-10)
 
 
