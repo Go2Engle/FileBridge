@@ -379,9 +379,19 @@ export class SmbProvider implements StorageProvider {
    * Tear down and re-establish the SMB client.
    * Used when STATUS_FILE_CLOSED is returned, indicating the server closed
    * the session (e.g. idle timeout). A fresh client resolves this immediately.
+   *
+   * `staleClient` is the client the failing operation was using. Several
+   * operations run concurrently on one provider (batched uploads/deletes); if
+   * another one already replaced that client, just retry on the current one
+   * instead of tearing down the fresh connection it is now using.
    */
-  private async reconnect(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async reconnect(staleClient?: any): Promise<void> {
     this.assertOpen();
+    if (staleClient && this.client && this.client !== staleClient) {
+      log.info("Session already re-established by a concurrent operation", { host: this.host });
+      return;
+    }
     log.info("Reconnecting to reset stale session state", { host: this.host });
     this.closeClient();
     await this.connect();
@@ -397,18 +407,35 @@ export class SmbProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Tear down the TCP connection of the current client.
+   *
+   * NOTE: v9u-smb2's `client.close(file, cb)` closes a *file handle*, not the
+   * connection. Calling it with no arguments sent a bogus CLOSE request with
+   * no callback, left the socket open forever, and (via the request-timeout
+   * wrapper) crashed the process 60s later with "cb is not a function".
+   * `disconnect()` is the connection-level teardown.
+   */
   private closeClient(): void {
-    if (this.client) {
-      try {
-        // close() can throw if authentication never completed and internal state is uninitialized
-        this.client.close();
-        log.info("Disconnected", { host: this.host });
-      } catch {
-        // Silently ignore — happens when auth failed before a session was established
-      } finally {
-        this.client = null;
-      }
+    const client = this.client;
+    if (!client) return;
+    this.client = null;
+    try {
+      // Clears the library's auto-close timer and ends the socket when the
+      // session was fully established.
+      client.disconnect();
+    } catch (err) {
+      log.warn("SMB disconnect threw", { host: this.host, err });
     }
+    try {
+      // disconnect() is a no-op when the handshake never completed (still
+      // connecting, or auth failed), so destroy the socket explicitly. Its
+      // "close" event fails any request still pending on it.
+      client.socket?.destroy();
+    } catch {
+      // Socket already gone
+    }
+    log.info("Disconnected", { host: this.host });
   }
 
   // ── StorageProvider implementation ────────────────────────────────────────
@@ -493,6 +520,7 @@ export class SmbProvider implements StorageProvider {
     // Retry on STATUS_FILE_CLOSED / ERR_STREAM_WRITE_AFTER_END: the server
     // may have closed the session while idle; reconnect creates a fresh one.
     for (let attempt = 1; attempt <= 3; attempt++) {
+      const client = this.client;
       try {
         const stream = await this.createReadStreamAsync(smbPath);
         this.patchDestroyForDoubleClose(stream);
@@ -502,11 +530,12 @@ export class SmbProvider implements StorageProvider {
         const isStaleSession =
           code === "STATUS_FILE_CLOSED" ||
           code === "SMB_REQUEST_TIMEOUT" ||
+          code === "SMB_CONNECTION_CLOSED" ||
           code === "ERR_STREAM_WRITE_AFTER_END" ||
           (err instanceof Error && err.message?.includes("write after end"));
         if (isStaleSession && attempt < 3) {
           log.info("Session expired during download — reconnecting", { smbPath, code, attempt });
-          await this.reconnect();
+          await this.reconnect(client);
           continue;
         }
         log.error("downloadFile failed", { smbPath, error: err });
@@ -557,14 +586,15 @@ export class SmbProvider implements StorageProvider {
     const maxAttempts = 10;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       this.assertOpen();
+      const client = this.client;
       try {
         await this.unlinkAsync(smbPath);
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
-        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT") && attempt < maxAttempts) {
+        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT" || code === "SMB_CONNECTION_CLOSED") && attempt < maxAttempts) {
           log.info(`${code} on delete — reconnecting`, { smbPath, attempt });
-          await this.reconnect();
+          await this.reconnect(client);
           continue;
         }
         if (code === "STATUS_SHARING_VIOLATION" && attempt < maxAttempts) {
@@ -602,14 +632,15 @@ export class SmbProvider implements StorageProvider {
     log.info("Moving file", { smbSrc, smbDst });
     for (let attempt = 1; attempt <= 5; attempt++) {
       this.assertOpen();
+      const client = this.client;
       try {
         await this.renameAsync(smbSrc, smbDst);
         return;
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
-        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT") && attempt < 5) {
+        if ((code === "STATUS_FILE_CLOSED" || code === "SMB_REQUEST_TIMEOUT" || code === "SMB_CONNECTION_CLOSED") && attempt < 5) {
           log.info(`${code} on move — reconnecting`, { smbSrc, attempt });
-          await this.reconnect();
+          await this.reconnect(client);
           continue;
         }
         if ((code === "STATUS_SHARING_VIOLATION" || code === "STATUS_ACCESS_DENIED") && attempt < 5) {
