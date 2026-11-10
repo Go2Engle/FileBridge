@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/Go2Engle/FileBridge/compare/v0.11.0...v0.11.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **smb:** close connections properly and stop timeout crash after runs ([#51](https://github.com/Go2Engle/FileBridge/issues/51)) ([08bd843](https://github.com/Go2Engle/FileBridge/commit/08bd843a156114ba0bff9ec9a3aaecbb57f9ebb0))
+
 ## [0.11.0](https://github.com/Go2Engle/FileBridge/compare/v0.10.0...v0.11.0) (2026-11-09)
 
 
