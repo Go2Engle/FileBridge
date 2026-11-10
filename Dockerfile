@@ -82,6 +82,11 @@ RUN addgroup --system --gid 1001 nodejs \
 # Create the SQLite data directory and give nextjs user ownership
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
+# Next.js writes its prerender/ISR cache to .next/cache at runtime. The
+# standalone output doesn't include it, so create it up front and make it
+# writable by nextjs (mount an emptyDir/volume here if the root FS is read-only).
+RUN mkdir -p /app/.next/cache && chown -R nextjs:nodejs /app/.next
+
 # Copy static public assets
 COPY --from=builder /app/public ./public
 
